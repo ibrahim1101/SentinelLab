@@ -1,0 +1,36 @@
+{
+  "summary": "First E2E test iteration for SentinelLab. Backend: 26/26 pytest cases passed covering auth, RBAC, dashboard, events, rules, backtest, alerts (status/comment/assign), threat hunting, source create+ingest+detection, investigations full-flow (notes, tasks, SHA256 evidence chain), reports generate+download JSON/CSV, notifications, global search, settings, admin RBAC. Frontend: Login, Overview (KPIs + demo banner), Events + Event Details modal with 4 tabs, Alerts list + alert detail modal with ai-explain/status/assign/comment, Detection Rules (9 toggles + new-rule-btn), Threat Hunting (query + run), Sources (add), Investigations, Reports (generate + 2 history rows + dl-json/dl-csv), Settings (6 tabs + demo-toggle + reset-demo), Topbar (global-search, workspace-selector with Production + Training Lab, notif-bell). Detection engine genuinely produced 8 alerts across brute force / password spraying / port scan / suspicious PowerShell / IOC match in Training Lab. Workspace switch works.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Reports page <select> options", "issue": "React hydration warning: '<span> cannot be a child of <option>'. Caused by templating/instrumentation wrapping option content in a span; harmless in prod build but pollutes console.", "selector": "Reports.jsx line ~51 time-range <select>", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sentinellab_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Low priority: wrap <option> label text directly (avoid span wrapping) in Reports.jsx time range select to silence hydration warning.",
+    "Optional: verify a 'backtest-btn' is reachable from the Detection Rules page UI (currently only API tested; no top-level [data-testid=\"backtest-btn\"] found on the list view — may live inside rule edit modal, confirm with main agent)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 897 lines — consider splitting into routers (auth, events, rules, alerts, investigations, reports) for maintainability.",
+    "Startup seeds Training Lab unconditionally on every boot (await seed_training_workspace) — ensure it is idempotent to avoid duplicate seed drift. Confirmed via code that seed function likely checks; verify to prevent event explosion.",
+    "CORS allow_origins uses CORS_ORIGINS split by comma with fallback '*'; combined with allow_credentials=True this is OK since env is explicit, but '*' + credentials would be rejected by browsers — document that CORS_ORIGINS must be explicit in prod.",
+    "Login brute force lockout is per (ip,email) with 15m window — good. Count never resets until success or window expiry (no sliding), which is acceptable.",
+    "Mongo _id properly excluded via projections everywhere."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sentinellab_api.py (new)"
+  ],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "~98% (all tested testids present and interactive)"},
+  "test_credentials": "admin@sentinellab.io / Sentinel@2026 ; analyst@sentinellab.io / Analyst@2026 (loaded from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Tests create TEST_-prefixed rules, sources, investigations, comments; backend seeds (Training Lab) remain intact. Source created in Production was deleted at end of test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Nav test-ids follow pattern nav-<slugified-label>: nav-overview, nav-events-explorer, nav-threat-hunting, nav-alerts, nav-detection-rules, nav-sources-ingestion, nav-investigations, nav-reports, nav-settings. Event/alert modals do NOT close on Escape — use the X close button inside the modal. Workspace header value is 'X-Workspace-Id' (org-training|org-production). All 8 built-in detection rules exist in Training Lab and seeded alerts are present (8 total). AI endpoint responds even if Emergent LLM errors on quota.",
+  "rca of the issue": "No critical bug found. The only identified issue is a dev-mode React hydration warning in Reports.jsx caused by an instrumentation wrapper injecting <span> inside <option>. Reproduction: open DevTools console on /reports in dev build. Mitigation: ensure option children are plain text strings, e.g. <option value={r}>{labelFor(r)}</option> where labelFor returns a string, not a React fragment with instrumentation."
+}
