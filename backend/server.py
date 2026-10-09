@@ -616,7 +616,7 @@ async def investigation_detail(inv_id: str, request: Request, user=Depends(get_c
     inv = await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0})
     if not inv:
         raise HTTPException(404, "Investigation not found")
-    alerts = await db.alerts.find({"id": {"$in": inv.get("related_alerts", [])}}, {"_id": 0}).to_list(100)
+    alerts = await db.alerts.find({"id": {"$in": inv.get("related_alerts", [])}, "org_id": org}, {"_id": 0}).to_list(100)
     return {"investigation": inv, "alerts": alerts}
 
 
