@@ -136,6 +136,13 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Regression:** test asserts successful approval reaches terminal `approved` and cannot be reconciled again (commit `5e00a63`).
 - **Verification:** CI pending. **Limitations:** reconciliation is manual; an interruption between membership write and final status update requires review. Transactions and automatic recovery remain future improvements.
 
+## 2026-10-10 — Approval recovery UI
+
+- **Prior verification:** approval state tracking and manual reconciliation passed both workflows at `dc7b220`: [37983609525](https://github.com/ibrahim1101/SentinelLab/actions/runs/37983609525) and [37983604547](https://github.com/ibrahim1101/SentinelLab/actions/runs/37983604547).
+- **UI:** Settings → Security now displays `applying` and `failed` approval requests in a dedicated recovery review section. A super administrator can confirm reconciliation of an interrupted request; the endpoint only reads membership and finalizes state, never grants access (commit `158e434`).
+- **Regression:** auditor attempts to reconcile an approval are rejected with HTTP 403 (commit `68f686c`).
+- **Verification:** CI pending. Manual UI testing and automated crash recovery remain outstanding.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
