@@ -72,16 +72,18 @@ status, _ = request("PUT", endpoint, {"org_ids": ["org-training", "org-productio
 assert status == 403, f"Auditor changed workspace memberships: {status}"
 status, _ = request("PUT", endpoint, {"org_ids": ["org-invalid"]}, token=token)
 assert status == 400, f"Unknown workspace was accepted: {status}"
-status, changed = request("PUT", endpoint, {"org_ids": ["org-training", "org-production"]}, token=token)
-assert status == 200 and "org-production" in changed["org_ids"], f"Membership grant failed: {status}: {changed}"
-status, same = request("PUT", endpoint, {"org_ids": ["org-production", "org-training"]}, token=token)
-assert status == 200 and same.get("unchanged") is True, f"Idempotent membership update failed: {status}: {same}"
+status, _ = request("PUT", endpoint, {"org_ids": ["org-training", "org-production"]}, token=token)
+assert status == 409, f"Direct production grant bypassed approval: {status}"
+status, pending = request("POST", "/api/admin/users/" + analyst_id + "/production-access-requests", token=token)
+assert status == 200 and pending["status"] == "pending", f"Approval request failed: {status}: {pending}"
+status, _ = request("POST", "/api/admin/production-access-requests/" + pending["id"] + "/approve", token=token)
+assert status == 403, f"Requester approved their own production grant: {status}"
 status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
-assert status == 200, f"Approved production membership not effective: {status}"
-status, changed = request("PUT", endpoint, {"org_ids": ["org-training"]}, token=token)
-assert status == 200 and changed["default_org"] == "org-training", f"Membership revoke failed: {status}: {changed}"
-status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
-assert status == 403, f"Revoked user retained production access: {status}"
+assert status == 403, f"Pending production request prematurely granted access: {status}"
+status, requests = request("GET", "/api/admin/production-access-requests", token=token)
+assert status == 200 and any(x["id"] == pending["id"] for x in requests["requests"]), "Pending approval not listed"
+status, _ = request("GET", "/api/admin/production-access-requests", token=analyst_token)
+assert status == 403, f"Auditor read approval queue: {status}"
 admin_id = login["user"]["id"]
 status, _ = request("PUT", "/api/admin/users/" + admin_id + "/workspaces", {"org_ids": ["org-training"]}, token=token)
 assert status == 400, f"Super-admin production access was removable: {status}"
