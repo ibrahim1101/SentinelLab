@@ -157,6 +157,14 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Fix:** reconciliation API now rejects applying requests newer than five minutes with HTTP 409. Legacy malformed/missing timestamps remain eligible for administrator reconciliation, matching the queue's conservative stale classification (commit `bfc4c1c`).
 - **Verification:** CI pending. Dedicated injected applying-state integration tests and transactional processing remain outstanding.
 
+## 2026-10-10 — GitHub Actions runner startup incident
+
+- **Failure:** both PR workflows failed on `fa2d4c9`, runs [37988315630](https://github.com/ibrahim1101/SentinelLab/actions/runs/37988315630) and [37988308838](https://github.com/ibrahim1101/SentinelLab/actions/runs/37988308838).
+- **Retry:** both failed-job reruns were requested and completed with failure again (attempt 2).
+- **Evidence:** static-security and docker-smoke jobs had no recorded steps, no assigned runner, and job logs returned GitHub BlobNotFound (404). Both jobs had passed on previous commit `ba061a7`. The workflow configuration still uses `ubuntu-latest` and ordinary checkout, Python, Mongo and Docker steps.
+- **Assessment:** startup/infrastructure or repository Actions policy/billing issue is plausible, but root cause is **unconfirmed**. Do not misclassify as a test regression without execution logs. Inspect GitHub Actions run banner, repository Actions permissions, account billing and runner availability; these settings were not accessible through the current connector.
+- **Next:** resume integration verification when runners start successfully. Do not merge while checks are failing.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
