@@ -56,6 +56,8 @@ jobs:
           curl --fail --retry 12 --retry-delay 5 --retry-all-errors --retry-connrefused http://127.0.0.1:8080/ -o /tmp/sentinellab-home.html
           grep -qi '<html' /tmp/sentinellab-home.html
           curl --fail --retry 12 --retry-delay 5 --retry-all-errors --retry-connrefused http://127.0.0.1:8080/api/workspaces -o /dev/null || test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/workspaces)" = '401'
+      - name: Exercise login and tenant boundaries through Nginx
+        run: python backend/tests/compose_auth_smoke.py
       - name: Show container logs on failure
         if: failure()
         run: docker compose logs --tail=100
