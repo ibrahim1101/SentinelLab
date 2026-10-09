@@ -41,6 +41,9 @@ Statuses: `Not Started` · `In Progress` · `Implemented` · `Tested` · `Blocke
 | MITRE ATT&CK explorer + coverage | Tested |
 | Threat intelligence IOC UI + STIX/CSV import | Tested |
 | Network analytics + relationship graph | Not Started |
+| Investigation graph (interactive node-link, pivots) | Tested |
+| Detection Replay Lab (isolated, expected-vs-actual, regression) | Tested |
+| Pipeline Observatory (live EPS, parser failures, source health) | Tested |
 | UEBA | Not Started |
 | Vulnerability management | Not Started |
 | Incident response playbooks (dry-run + approval gates) | Tested |

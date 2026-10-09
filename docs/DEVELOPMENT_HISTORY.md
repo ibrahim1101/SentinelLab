@@ -22,6 +22,24 @@
 
 ---
 
+## 2026-10-09 — Milestone 3: Investigation Graph, Detection Replay Lab, Pipeline Observatory
+**Features added:**
+- **Investigation Graph** (`/api/graph`, `pages/Graph.jsx`): entity-centric node-link graph derived entirely from persisted records (alerts, events → host/ip/user/process entities, indicator IOC matches, linked investigations). Custom Fruchterman-Reingold force layout in SVG (no external lib), draggable nodes, click-to-inspect, double-click/expand to pivot and merge neighbors. Seed by alert/ip/host/user/indicator.
+- **Detection Replay Lab** (`/api/replay`, `/api/replay/samples`, `pages/Replay.jsx`): replays telemetry (JSON/JSONL/CSV/Syslog/CEF) against enabled rules fully in-memory — NEVER persists events or alerts (isolation verified: alert count unchanged after runs). Returns per-rule matches, execution time, and expected-vs-actual comparison (matched/missing/unexpected + pass/fail) for regression testing. Ships 3 built-in sample scenarios.
+- **Pipeline Observatory** (`/api/observatory`, `pages/Observatory.jsx`): real ingestion metrics — current EPS, per-minute EPS series (last 60m), total indexed, parser failures + recent error list, avg event→index delay, per-source throughput/health, retry/backlog (0, synchronous pipeline, reported honestly).
+
+**Files changed:** backend `server.py` (+graph/replay/observatory routes); frontend new `Graph.jsx`, `Replay.jsx`, `Observatory.jsx`; `Layout.jsx` nav (+3), `App.js` routes (+3).
+
+**Design decisions:** graph is entity-centric (not one-node-per-event) and capped at 70 nodes for readability; replay reuses `evaluate_rule` so logic matches ingest-time detection exactly; observatory metrics are all DB-derived and honestly labeled (no fabricated latency/ML).
+
+**Tests (curl):** graph 28 nodes/29 edges from alert seed (all 7 entity types), ip seed 26 nodes; replay sample brute-force parsed 7, matched "Brute Force Authentication", isolated=true, alert count stable; observatory returns eps/indexed/source-health. Frontend compiles.
+
+**Theme:** default switched to matte blackish-grey charcoal with subtle dot/weave background texture + faint cyan corner glow (all 4 themes retain texture vars).
+
+**Limitations / next:** UEBA, SOC performance analytics, asset risk intelligence, endpoint telemetry adapters (Sysmon/osquery), integration hub, Docker/CI remain backlog (Milestone 4).
+
+---
+
 ## 2026-10-09 — Milestone 1 (original)
 **Features:** Auth+RBAC+workspaces, ingestion+normalization, detection engine, alerts, hunting, rules, sources, investigations, reports, settings, AI assistant, dashboard.
 **Tests:** 26/26 backend passed; detection produced 8 real alerts from synthetic telemetry.
