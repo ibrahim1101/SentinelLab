@@ -1,0 +1,897 @@
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(Path(__file__).parent / ".env")
+
+import os
+import io
+import csv
+import json
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import Optional, List
+
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Query
+from fastapi.responses import StreamingResponse
+from starlette.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, EmailStr, Field
+
+from core import (db, new_id, now_iso, hash_password, verify_password, create_access_token,
+                  get_current_user, require_role, active_org, audit, clean,
+                  ROLE_LEVELS, ROLE_LABELS, role_level)
+from parsers import parse_payload, normalize
+from detection import run_detection, evaluate_rule
+import seed as seedmod
+import ai_assistant
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("sentinellab")
+
+app = FastAPI(title="SentinelLab API")
+api = APIRouter(prefix="/api")
+
+PROD_ORG = "org-production"
+TRAIN_ORG = "org-training"
+
+
+# ============================= MODELS =============================
+class RegisterReq(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6)
+    name: str
+
+class LoginReq(BaseModel):
+    email: EmailStr
+    password: str
+
+class IngestReq(BaseModel):
+    source_id: str
+    format: str = "json"
+    payload: object
+
+class RuleReq(BaseModel):
+    name: str
+    description: str = ""
+    rule_type: str = "match"
+    severity: str = "medium"
+    enabled: bool = True
+    mitre: List[str] = []
+    confidence: int = 80
+    params: dict = {}
+
+class AlertUpdate(BaseModel):
+    status: Optional[str] = None
+    severity: Optional[str] = None
+    assigned_to: Optional[str] = None
+    comment: Optional[str] = None
+    tags: Optional[List[str]] = None
+    investigation_id: Optional[str] = None
+
+class InvestigationReq(BaseModel):
+    title: str
+    severity: str = "medium"
+    priority: str = "medium"
+    status: str = "open"
+    lead: Optional[str] = None
+
+class InvUpdate(BaseModel):
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    findings: Optional[str] = None
+    note: Optional[str] = None
+    task: Optional[str] = None
+    related_alerts: Optional[List[str]] = None
+    related_events: Optional[List[str]] = None
+
+class SourceReq(BaseModel):
+    name: str
+    display_name: str = ""
+    source_type: str = "custom"
+    host: str = ""
+
+class HuntReq(BaseModel):
+    query: str = ""
+    conditions: List[dict] = []
+    limit: int = 200
+
+class AIReq(BaseModel):
+    message: str
+    ctx_type: Optional[str] = None
+    ctx_id: Optional[str] = None
+
+class SettingsReq(BaseModel):
+    app_name: Optional[str] = None
+    timezone: Optional[str] = None
+    default_time_range: Optional[str] = None
+    retention_days: Optional[int] = None
+    demo_mode: Optional[bool] = None
+
+
+# ============================= AUTH =============================
+def _set_cookie(response: Response, token: str):
+    response.set_cookie("access_token", token, httponly=True, secure=True,
+                        samesite="none", max_age=480 * 60, path="/")
+
+
+@api.post("/auth/register")
+async def register(body: RegisterReq, response: Response):
+    email = body.email.lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(400, "Email already registered")
+    uid = new_id()
+    user = {"id": uid, "email": email, "name": body.name,
+            "password_hash": hash_password(body.password), "role": "analyst",
+            "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": PROD_ORG,
+            "theme": "obsidian_dark", "created_at": now_iso()}
+    await db.users.insert_one(dict(user))
+    token = create_access_token(uid, email, "analyst")
+    _set_cookie(response, token)
+    user.pop("password_hash")
+    return {"user": clean(user), "access_token": token}
+
+
+@api.post("/auth/login")
+async def login(body: LoginReq, request: Request, response: Response):
+    email = body.email.lower()
+    ip = request.client.host if request.client else "?"
+    ident = f"{ip}:{email}"
+    att = await db.login_attempts.find_one({"identifier": ident})
+    if att and att.get("count", 0) >= 5:
+        locked_until = datetime.fromisoformat(att["locked_until"])
+        if datetime.now(timezone.utc) < locked_until:
+            raise HTTPException(429, "Account temporarily locked. Try again later.")
+    user = await db.users.find_one({"email": email})
+    if not user or not verify_password(body.password, user["password_hash"]):
+        count = (att.get("count", 0) if att else 0) + 1
+        await db.login_attempts.update_one(
+            {"identifier": ident},
+            {"$set": {"identifier": ident, "count": count,
+                      "locked_until": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()}},
+            upsert=True)
+        raise HTTPException(401, "Invalid credentials")
+    await db.login_attempts.delete_one({"identifier": ident})
+    token = create_access_token(user["id"], email, user["role"])
+    _set_cookie(response, token)
+    await audit(user.get("default_org"), user, "login", "session")
+    user.pop("password_hash", None)
+    return {"user": clean(user), "access_token": token}
+
+
+@api.post("/auth/logout")
+async def logout(response: Response, user=Depends(get_current_user)):
+    response.delete_cookie("access_token", path="/")
+    return {"ok": True}
+
+
+@api.get("/auth/me")
+async def me(user=Depends(get_current_user)):
+    return {"user": user, "roles": ROLE_LABELS}
+
+
+# ============================= WORKSPACES =============================
+@api.get("/workspaces")
+async def workspaces(user=Depends(get_current_user)):
+    orgs = await db.organizations.find({"id": {"$in": user.get("org_ids", [])}}, {"_id": 0}).to_list(50)
+    return {"workspaces": orgs}
+
+
+# ============================= DASHBOARD =============================
+def _range_seconds(tr):
+    return {"15m": 900, "1h": 3600, "24h": 86400, "7d": 604800, "30d": 2592000}.get(tr, 86400)
+
+
+def _range_to_iso(tr):
+    return (datetime.now(timezone.utc) - timedelta(seconds=_range_seconds(tr))).isoformat()
+
+
+async def _events_over_time(org, since):
+    pipeline = [
+        {"$match": {"org_id": org, "timestamp": {"$gte": since}}},
+        {"$project": {"hour": {"$substr": ["$timestamp", 0, 13]}}},
+        {"$group": {"_id": "$hour", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]
+    rows = await db.events.aggregate(pipeline).to_list(500)
+    return [{"time": r["_id"], "count": r["count"]} for r in rows]
+
+
+@api.get("/dashboard/overview")
+async def overview(request: Request, time_range: str = "24h", user=Depends(get_current_user)):
+    org = active_org(user, request)
+    since = _range_to_iso(time_range)
+    q = {"org_id": org, "timestamp": {"$gte": since}}
+    total_events = await db.events.count_documents(q)
+    all_events_cnt = await db.events.count_documents({"org_id": org})
+    open_alerts = await db.alerts.count_documents({"org_id": org, "status": {"$in": ["new", "triaged", "investigating"]}})
+    crit = await db.alerts.count_documents({"org_id": org, "severity": "critical", "status": {"$ne": "resolved"}})
+    high = await db.alerts.count_documents({"org_id": org, "severity": "high", "status": {"$ne": "resolved"}})
+    sources = await db.sources.find({"org_id": org}, {"_id": 0}).to_list(200)
+    active_sources = sum(1 for s in sources if s.get("status") == "online")
+    investigations = await db.investigations.count_documents({"org_id": org, "status": {"$nin": ["closed", "resolved"]}})
+    rules_triggered = await db.detection_rules.count_documents({"org_id": org, "match_count": {"$gt": 0}})
+    assets = await db.events.distinct("host", {"org_id": org})
+
+    buckets = await _events_over_time(org, since)
+    sev_counts = {s: await db.alerts.count_documents({"org_id": org, "severity": s}) for s in ["critical", "high", "medium", "low"]}
+    by_source = []
+    for s in sources:
+        c = await db.events.count_documents({"org_id": org, "source_id": s["id"], "timestamp": {"$gte": since}})
+        by_source.append({"source": s.get("display_name") or s["name"], "count": c})
+    by_source = sorted(by_source, key=lambda x: -x["count"])[:8]
+    cats = {}
+    async for e in db.events.find(q, {"category": 1, "_id": 0}):
+        cats[e.get("category", "other")] = cats.get(e.get("category", "other"), 0) + 1
+    top_cats = sorted([{"category": k, "count": v} for k, v in cats.items()], key=lambda x: -x["count"])[:6]
+    mitre = {}
+    async for a in db.alerts.find({"org_id": org}, {"mitre": 1, "_id": 0}):
+        for m in a.get("mitre", []):
+            mitre[m] = mitre.get(m, 0) + 1
+    mitre_dist = sorted([{"technique": k, "count": v} for k, v in mitre.items()], key=lambda x: -x["count"])[:8]
+    recent = await db.alerts.find({"org_id": org}, {"_id": 0}).sort("created_at", -1).limit(6).to_list(6)
+    eps = round(total_events / max(_range_seconds(time_range), 1), 3)
+    return {
+        "kpis": {"total_events": total_events, "all_events": all_events_cnt, "eps": eps,
+                 "open_alerts": open_alerts, "critical_alerts": crit, "high_alerts": high,
+                 "active_sources": active_sources, "inactive_sources": len(sources) - active_sources,
+                 "active_investigations": investigations, "rules_triggered": rules_triggered,
+                 "monitored_assets": len([a for a in assets if a])},
+        "events_over_time": buckets, "alerts_by_severity": sev_counts,
+        "events_by_source": by_source, "top_categories": top_cats,
+        "mitre_distribution": mitre_dist, "recent_alerts": recent,
+        "is_demo_workspace": org == TRAIN_ORG,
+    }
+
+
+# ============================= EVENTS / INGESTION =============================
+async def _notify(org, ntype, text, ref=None):
+    await db.notifications.insert_one({"id": new_id(), "org_id": org, "type": ntype, "text": text,
+                                       "ref": ref, "read": False, "created_at": now_iso()})
+
+
+@api.post("/ingest")
+async def ingest(body: IngestReq, request: Request, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    source = await db.sources.find_one({"id": body.source_id, "org_id": org}, {"_id": 0})
+    if not source:
+        raise HTTPException(404, "Source not found")
+    try:
+        records = parse_payload(body.payload, body.format)
+    except Exception as ex:
+        await db.sources.update_one({"id": source["id"], "org_id": org}, {"$inc": {"parse_errors": 1}})
+        await db.parser_errors.insert_one({"id": new_id(), "org_id": org, "source_id": source["id"],
+                                           "error": str(ex), "timestamp": now_iso()})
+        raise HTTPException(400, f"Parse error: {ex}")
+    docs = [normalize(r, org, source, is_synthetic=(org == TRAIN_ORG)) for r in records]
+    if docs:
+        await db.events.insert_many([dict(d) for d in docs])
+        await db.sources.update_one({"id": source["id"], "org_id": org},
+                                    {"$inc": {"events_received": len(docs)},
+                                     "$set": {"last_received": now_iso(), "status": "online"}})
+    alerts = await run_detection(org, docs, persist=True)
+    for a in alerts:
+        await _notify(org, "critical_alert" if a["severity"] in ("critical", "high") else "alert",
+                      f"Alert: {a['title']}", a["id"])
+    await audit(org, user, "ingest", "events", details={"count": len(docs), "source": source["id"]})
+    return {"ingested": len(docs), "alerts_generated": len(alerts)}
+
+
+@api.post("/ingest/upload")
+async def ingest_upload(request: Request, source_id: str = Query(...), format: str = Query("json"),
+                        file: UploadFile = File(...), user=Depends(require_role("analyst"))):
+    content = (await file.read()).decode("utf-8", errors="replace")
+    return await ingest(IngestReq(source_id=source_id, format=format, payload=content), request, user)
+
+
+@api.get("/events")
+async def list_events(request: Request, q: Optional[str] = None, severity: Optional[str] = None,
+                      category: Optional[str] = None, source_id: Optional[str] = None,
+                      host: Optional[str] = None, username: Optional[str] = None, ip: Optional[str] = None,
+                      time_range: str = "24h", page: int = 1, page_size: int = 50,
+                      sort: str = "timestamp", order: int = -1, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    filt = {"org_id": org, "timestamp": {"$gte": _range_to_iso(time_range)}}
+    if severity: filt["severity"] = severity
+    if category: filt["category"] = category
+    if source_id: filt["source_id"] = source_id
+    if host: filt["host"] = host
+    if username: filt["username"] = username
+    if ip: filt["$or"] = [{"src_ip": ip}, {"dest_ip": ip}]
+    if q:
+        filt["$or"] = [{"host": {"$regex": q, "$options": "i"}},
+                       {"username": {"$regex": q, "$options": "i"}},
+                       {"src_ip": {"$regex": q, "$options": "i"}},
+                       {"dest_ip": {"$regex": q, "$options": "i"}},
+                       {"process_name": {"$regex": q, "$options": "i"}},
+                       {"event_type": {"$regex": q, "$options": "i"}}]
+    total = await db.events.count_documents(filt)
+    skip = (page - 1) * page_size
+    rows = await db.events.find(filt, {"_id": 0, "raw": 0}).sort(sort, order).skip(skip).limit(page_size).to_list(page_size)
+    return {"total": total, "page": page, "page_size": page_size, "events": rows}
+
+
+@api.get("/events/export/data")
+async def export_events(request: Request, format: str = "json", time_range: str = "24h",
+                        severity: Optional[str] = None, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    filt = {"org_id": org, "timestamp": {"$gte": _range_to_iso(time_range)}}
+    if severity: filt["severity"] = severity
+    rows = await db.events.find(filt, {"_id": 0, "raw": 0}).limit(5000).to_list(5000)
+    if format == "csv":
+        buf = io.StringIO()
+        if rows:
+            w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()), extrasaction="ignore")
+            w.writeheader()
+            for r in rows:
+                w.writerow({k: (json.dumps(v) if isinstance(v, (list, dict)) else v) for k, v in r.items()})
+        return StreamingResponse(io.BytesIO(buf.getvalue().encode()), media_type="text/csv",
+                                 headers={"Content-Disposition": "attachment; filename=events.csv"})
+    return StreamingResponse(io.BytesIO(json.dumps(rows, indent=2).encode()), media_type="application/json",
+                             headers={"Content-Disposition": "attachment; filename=events.json"})
+
+
+@api.get("/events/{event_id}")
+async def event_detail(event_id: str, request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    e = await db.events.find_one({"id": event_id, "org_id": org}, {"_id": 0})
+    if not e:
+        raise HTTPException(404, "Event not found")
+    related_alerts = await db.alerts.find({"org_id": org, "related_events": event_id}, {"_id": 0}).to_list(50)
+    related_events = await db.events.find(
+        {"org_id": org, "id": {"$ne": event_id},
+         "$or": [{"src_ip": e.get("src_ip")}, {"host": e.get("host")}]},
+        {"_id": 0, "raw": 0}).limit(10).to_list(10)
+    return {"event": e, "related_alerts": related_alerts, "related_events": related_events}
+
+
+# ============================= DETECTION RULES =============================
+@api.get("/rules")
+async def list_rules(request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    rows = await db.detection_rules.find({"org_id": org}, {"_id": 0}).sort("name", 1).to_list(500)
+    return {"rules": rows}
+
+
+@api.post("/rules")
+async def create_rule(body: RuleReq, request: Request, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    rule = {"id": new_id(), "org_id": org, "version": "1.0", "match_count": 0,
+            "last_run": None, "last_error": None, "author": user["email"],
+            "created_at": now_iso(), "updated_at": now_iso(), **body.model_dump()}
+    await db.detection_rules.insert_one(dict(rule))
+    await audit(org, user, "create", "rule", rule["id"], {"name": rule["name"]})
+    return clean(rule)
+
+
+@api.put("/rules/{rule_id}")
+async def update_rule(rule_id: str, body: RuleReq, request: Request, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    r = await db.detection_rules.find_one({"id": rule_id, "org_id": org})
+    if not r:
+        raise HTTPException(404, "Rule not found")
+    upd = body.model_dump()
+    upd["updated_at"] = now_iso()
+    try:
+        upd["version"] = f"{float(r.get('version', '1.0')) + 0.1:.1f}"
+    except ValueError:
+        upd["version"] = "1.1"
+    await db.detection_rules.update_one({"id": rule_id, "org_id": org}, {"$set": upd})
+    await audit(org, user, "update", "rule", rule_id)
+    return clean(await db.detection_rules.find_one({"id": rule_id, "org_id": org}, {"_id": 0}))
+
+
+@api.post("/rules/{rule_id}/toggle")
+async def toggle_rule(rule_id: str, request: Request, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    r = await db.detection_rules.find_one({"id": rule_id, "org_id": org}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Rule not found")
+    await db.detection_rules.update_one({"id": rule_id, "org_id": org}, {"$set": {"enabled": not r["enabled"]}})
+    return {"enabled": not r["enabled"]}
+
+
+@api.delete("/rules/{rule_id}")
+async def delete_rule(rule_id: str, request: Request, user=Depends(require_role("soc_manager"))):
+    org = active_org(user, request)
+    await db.detection_rules.delete_one({"id": rule_id, "org_id": org})
+    await audit(org, user, "delete", "rule", rule_id)
+    return {"ok": True}
+
+
+@api.post("/rules/{rule_id}/backtest")
+async def backtest_rule(rule_id: str, request: Request, time_range: str = "7d", user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    r = await db.detection_rules.find_one({"id": rule_id, "org_id": org}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Rule not found")
+    events = await db.events.find({"org_id": org, "timestamp": {"$gte": _range_to_iso(time_range)}},
+                                  {"_id": 0}).limit(10000).to_list(10000)
+    alerts, matched = await evaluate_rule(r, events, org)
+    return {"would_alert": len(alerts), "matched_events": len(matched),
+            "sample": [{"title": a["title"], "severity": a["severity"], "event_count": a["event_count"]} for a in alerts[:10]]}
+
+
+# ============================= ALERTS =============================
+@api.get("/alerts")
+async def list_alerts(request: Request, status: Optional[str] = None, severity: Optional[str] = None,
+                      q: Optional[str] = None, page: int = 1, page_size: int = 50, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    filt = {"org_id": org}
+    if status: filt["status"] = status
+    if severity: filt["severity"] = severity
+    if q: filt["title"] = {"$regex": q, "$options": "i"}
+    total = await db.alerts.count_documents(filt)
+    rows = await db.alerts.find(filt, {"_id": 0}).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    return {"total": total, "alerts": rows, "page": page, "page_size": page_size}
+
+
+@api.get("/alerts/{alert_id}")
+async def alert_detail(alert_id: str, request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    a = await db.alerts.find_one({"id": alert_id, "org_id": org}, {"_id": 0})
+    if not a:
+        raise HTTPException(404, "Alert not found")
+    events = await db.events.find({"id": {"$in": a.get("related_events", [])}}, {"_id": 0, "raw": 0}).limit(50).to_list(50)
+    rule = await db.detection_rules.find_one({"id": a.get("rule_id")}, {"_id": 0})
+    return {"alert": a, "events": events, "rule": rule}
+
+
+@api.put("/alerts/{alert_id}")
+async def update_alert(alert_id: str, body: AlertUpdate, request: Request, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    a = await db.alerts.find_one({"id": alert_id, "org_id": org}, {"_id": 0})
+    if not a:
+        raise HTTPException(404, "Alert not found")
+    upd, audit_entries = {"updated_at": now_iso()}, []
+    for field in ("status", "severity", "assigned_to", "investigation_id"):
+        v = getattr(body, field)
+        if v is not None and v != a.get(field):
+            upd[field] = v
+            audit_entries.append({"ts": now_iso(), "action": f"set {field}={v}", "by": user["email"]})
+    if body.tags is not None:
+        upd["tags"] = body.tags
+    push = {}
+    if body.comment:
+        push["comments"] = {"id": new_id(), "text": body.comment, "by": user["email"], "ts": now_iso()}
+        audit_entries.append({"ts": now_iso(), "action": "comment", "by": user["email"]})
+    mongo_upd = {"$set": upd}
+    if audit_entries:
+        mongo_upd["$push"] = {"audit": {"$each": audit_entries}}
+    if push:
+        mongo_upd.setdefault("$push", {}).update(push)
+    await db.alerts.update_one({"id": alert_id, "org_id": org}, mongo_upd)
+    await audit(org, user, "update", "alert", alert_id, upd)
+    return clean(await db.alerts.find_one({"id": alert_id, "org_id": org}, {"_id": 0}))
+
+
+@api.post("/alerts/bulk")
+async def bulk_alerts(request: Request, body: dict, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    ids = body.get("ids", [])
+    status = body.get("status")
+    await db.alerts.update_many({"id": {"$in": ids}, "org_id": org},
+                                {"$set": {"status": status, "updated_at": now_iso()}})
+    return {"updated": len(ids)}
+
+
+# ============================= THREAT HUNTING =============================
+def _parse_query(query: str):
+    conds = []
+    if not query:
+        return conds
+    for tok in query.split(" AND "):
+        tok = tok.strip()
+        matched = None
+        for op_text, op in [(">", "gt"), ("<", "lt"), ("!=", "ne"), (":", "eq"), ("=", "eq")]:
+            if op_text in tok:
+                field, val = tok.split(op_text, 1)
+                conds.append({"field": field.strip(), "op": op, "value": val.strip().strip('"')})
+                matched = True
+                break
+        if not matched and tok:
+            conds.append({"field": "host", "op": "contains", "value": tok})
+    return conds
+
+
+def _apply_conditions(filt, conds):
+    op_map = {"eq": "$eq", "ne": "$ne", "gt": "$gt", "lt": "$lt"}
+    allowed = ("src_ip", "dest_ip", "host", "username", "process_name", "category",
+               "severity", "outcome", "action", "event_type", "dest_port", "protocol", "dns_query")
+    for c in conds:
+        field, op, value = c.get("field"), c.get("op", "eq"), c.get("value")
+        if field not in allowed:
+            continue
+        if op == "contains":
+            filt[field] = {"$regex": str(value), "$options": "i"}
+        elif op in op_map:
+            if op in ("gt", "lt"):
+                try: value = float(value)
+                except (ValueError, TypeError): pass
+            filt.setdefault(field, {})[op_map[op]] = value
+        else:
+            filt[field] = value
+
+
+@api.post("/hunt")
+async def hunt(body: HuntReq, request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    t0 = datetime.now(timezone.utc)
+    filt = {"org_id": org}
+    conds = body.conditions or _parse_query(body.query)
+    _apply_conditions(filt, conds)
+    limit = min(body.limit, 1000)
+    rows = await db.events.find(filt, {"_id": 0, "raw": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
+    total = await db.events.count_documents(filt)
+
+    def topn(field):
+        c = {}
+        for r in rows:
+            v = r.get(field)
+            if v: c[v] = c.get(v, 0) + 1
+        return sorted([{"value": k, "count": v} for k, v in c.items()], key=lambda x: -x["count"])[:5]
+    hist = {}
+    for r in rows:
+        h = r.get("timestamp", "")[:13]
+        hist[h] = hist.get(h, 0) + 1
+    timeline = sorted([{"time": k, "count": v} for k, v in hist.items()], key=lambda x: x["time"])
+    took = (datetime.now(timezone.utc) - t0).total_seconds() * 1000
+    return {"total": total, "returned": len(rows), "events": rows, "took_ms": round(took, 1),
+            "top_src_ip": topn("src_ip"), "top_host": topn("host"), "top_process": topn("process_name"),
+            "timeline": timeline, "conditions": conds}
+
+
+@api.get("/hunt/saved")
+async def saved_hunts(request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    rows = await db.saved_searches.find({"org_id": org}, {"_id": 0}).to_list(100)
+    return {"saved": rows}
+
+
+@api.post("/hunt/saved")
+async def save_hunt(request: Request, body: dict, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    doc = {"id": new_id(), "org_id": org, "name": body.get("name"), "query": body.get("query"),
+           "by": user["email"], "created_at": now_iso()}
+    await db.saved_searches.insert_one(dict(doc))
+    return clean(doc)
+
+
+# ============================= SOURCES =============================
+@api.get("/sources")
+async def list_sources(request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    rows = await db.sources.find({"org_id": org}, {"_id": 0, "token_hash": 0}).to_list(200)
+    return {"sources": rows}
+
+
+@api.post("/sources")
+async def create_source(body: SourceReq, request: Request, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    import secrets
+    token = "sl_" + secrets.token_urlsafe(24)
+    doc = {"id": new_id(), "org_id": org, "name": body.name,
+           "display_name": body.display_name or body.name, "source_type": body.source_type,
+           "host": body.host, "status": "inactive", "enabled": True, "events_received": 0,
+           "last_received": None, "parse_errors": 0, "token_hint": token[:11] + "…",
+           "token_hash": hash_password(token), "created_at": now_iso(),
+           "is_synthetic": org == TRAIN_ORG}
+    await db.sources.insert_one(dict(doc))
+    await audit(org, user, "create", "source", doc["id"], {"name": body.name})
+    doc.pop("token_hash")
+    return {"source": clean(doc), "ingestion_token": token}
+
+
+@api.delete("/sources/{source_id}")
+async def delete_source(source_id: str, request: Request, user=Depends(require_role("soc_manager"))):
+    org = active_org(user, request)
+    await db.sources.delete_one({"id": source_id, "org_id": org})
+    await audit(org, user, "delete", "source", source_id)
+    return {"ok": True}
+
+
+# ============================= INVESTIGATIONS =============================
+@api.get("/investigations")
+async def list_investigations(request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    rows = await db.investigations.find({"org_id": org}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"investigations": rows}
+
+
+@api.post("/investigations")
+async def create_investigation(body: InvestigationReq, request: Request, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    doc = {"id": new_id(), "org_id": org, "related_alerts": [], "related_events": [],
+           "related_assets": [], "notes": [], "tasks": [], "evidence": [], "findings": "",
+           "created_at": now_iso(), "updated_at": now_iso(), "is_synthetic": org == TRAIN_ORG,
+           "lead": body.lead or user["email"], **body.model_dump(exclude={"lead"})}
+    await db.investigations.insert_one(dict(doc))
+    await audit(org, user, "create", "investigation", doc["id"], {"title": body.title})
+    return clean(doc)
+
+
+@api.get("/investigations/{inv_id}")
+async def investigation_detail(inv_id: str, request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    inv = await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Investigation not found")
+    alerts = await db.alerts.find({"id": {"$in": inv.get("related_alerts", [])}}, {"_id": 0}).to_list(100)
+    return {"investigation": inv, "alerts": alerts}
+
+
+@api.put("/investigations/{inv_id}")
+async def update_investigation(inv_id: str, body: InvUpdate, request: Request, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    inv = await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Investigation not found")
+    upd = {"updated_at": now_iso()}
+    for f in ("status", "priority", "findings", "related_alerts", "related_events"):
+        v = getattr(body, f)
+        if v is not None:
+            upd[f] = v
+    push = {}
+    if body.note:
+        push["notes"] = {"id": new_id(), "text": body.note, "by": user["email"], "ts": now_iso()}
+    if body.task:
+        push["tasks"] = {"id": new_id(), "text": body.task, "done": False, "ts": now_iso()}
+    mu = {"$set": upd}
+    if push: mu["$push"] = push
+    await db.investigations.update_one({"id": inv_id, "org_id": org}, mu)
+    await audit(org, user, "update", "investigation", inv_id)
+    return clean(await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0}))
+
+
+@api.post("/investigations/{inv_id}/evidence")
+async def add_evidence(inv_id: str, request: Request, file: UploadFile = File(...), user=Depends(require_role("analyst"))):
+    import hashlib
+    org = active_org(user, request)
+    inv = await db.investigations.find_one({"id": inv_id, "org_id": org})
+    if not inv:
+        raise HTTPException(404, "Investigation not found")
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Evidence file too large (max 10MB)")
+    ev = {"id": new_id(), "filename": file.filename, "size": len(content),
+          "sha256": hashlib.sha256(content).hexdigest(), "content_type": file.content_type,
+          "uploaded_by": user["email"], "uploaded_at": now_iso(),
+          "chain_of_custody": [{"by": user["email"], "action": "uploaded", "ts": now_iso()}]}
+    await db.investigations.update_one({"id": inv_id, "org_id": org}, {"$push": {"evidence": ev}})
+    await audit(org, user, "add_evidence", "investigation", inv_id, {"filename": file.filename, "sha256": ev["sha256"]})
+    return {"evidence": ev}
+
+
+# ============================= REPORTS =============================
+@api.get("/reports")
+async def list_reports(request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    rows = await db.reports.find({"org_id": org}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"reports": rows}
+
+
+@api.post("/reports/generate")
+async def generate_report(request: Request, body: dict, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    rtype = body.get("type", "soc_summary")
+    time_range = body.get("time_range", "7d")
+    since = _range_to_iso(time_range)
+    data = {
+        "events": await db.events.count_documents({"org_id": org, "timestamp": {"$gte": since}}),
+        "alerts": await db.alerts.count_documents({"org_id": org, "created_at": {"$gte": since}}),
+        "critical": await db.alerts.count_documents({"org_id": org, "severity": "critical"}),
+        "investigations": await db.investigations.count_documents({"org_id": org}),
+        "sources": await db.sources.count_documents({"org_id": org}),
+    }
+    top_alerts = await db.alerts.find({"org_id": org}, {"_id": 0}).sort("created_at", -1).limit(20).to_list(20)
+    doc = {"id": new_id(), "org_id": org, "type": rtype, "title": body.get("title", rtype.replace("_", " ").title()),
+           "time_range": time_range, "summary": data, "top_alerts": top_alerts,
+           "generated_by": user["email"], "created_at": now_iso(), "status": "ready"}
+    await db.reports.insert_one(dict(doc))
+    await audit(org, user, "generate", "report", doc["id"], {"type": rtype})
+    return clean(doc)
+
+
+@api.get("/reports/{report_id}/download")
+async def download_report(report_id: str, request: Request, format: str = "json", user=Depends(get_current_user)):
+    org = active_org(user, request)
+    r = await db.reports.find_one({"id": report_id, "org_id": org}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Report not found")
+    if format == "csv":
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["metric", "value"])
+        for k, v in r["summary"].items():
+            w.writerow([k, v])
+        return StreamingResponse(io.BytesIO(buf.getvalue().encode()), media_type="text/csv",
+                                 headers={"Content-Disposition": f"attachment; filename=report-{report_id}.csv"})
+    return StreamingResponse(io.BytesIO(json.dumps(r, indent=2).encode()), media_type="application/json",
+                             headers={"Content-Disposition": f"attachment; filename=report-{report_id}.json"})
+
+
+# ============================= NOTIFICATIONS =============================
+@api.get("/notifications")
+async def notifications(request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    rows = await db.notifications.find({"org_id": org}, {"_id": 0}).sort("created_at", -1).limit(30).to_list(30)
+    unread = await db.notifications.count_documents({"org_id": org, "read": False})
+    return {"notifications": rows, "unread": unread}
+
+
+@api.post("/notifications/read")
+async def read_notifications(request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    await db.notifications.update_many({"org_id": org}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
+# ============================= GLOBAL SEARCH =============================
+@api.get("/search")
+async def global_search(request: Request, q: str, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    rx = {"$regex": q, "$options": "i"}
+    events = await db.events.find({"org_id": org, "$or": [{"host": rx}, {"src_ip": rx}, {"username": rx}]},
+                                  {"_id": 0, "raw": 0}).limit(5).to_list(5)
+    alerts = await db.alerts.find({"org_id": org, "title": rx}, {"_id": 0}).limit(5).to_list(5)
+    invs = await db.investigations.find({"org_id": org, "title": rx}, {"_id": 0}).limit(5).to_list(5)
+    rules = await db.detection_rules.find({"org_id": org, "name": rx}, {"_id": 0}).limit(5).to_list(5)
+    assets = await db.events.distinct("host", {"org_id": org, "host": rx})
+    return {"events": events, "alerts": alerts, "investigations": invs, "rules": rules,
+            "assets": [{"host": a} for a in assets[:5]]}
+
+
+# ============================= SETTINGS / ADMIN =============================
+@api.get("/settings")
+async def get_settings(request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    s = await db.settings.find_one({"org_id": org}, {"_id": 0})
+    if not s:
+        s = {"org_id": org, "app_name": "SentinelLab", "timezone": "UTC",
+             "default_time_range": "24h", "retention_days": 90, "demo_mode": False}
+        await db.settings.insert_one(dict(s))
+        s.pop("_id", None)
+    s["ai_configured"] = ai_assistant.is_configured()
+    return {"settings": s}
+
+
+@api.put("/settings")
+async def update_settings(body: SettingsReq, request: Request, user=Depends(require_role("soc_manager"))):
+    org = active_org(user, request)
+    upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    await db.settings.update_one({"org_id": org}, {"$set": upd}, upsert=True)
+    await audit(org, user, "update", "settings", details=upd)
+    return clean(await db.settings.find_one({"org_id": org}, {"_id": 0}))
+
+
+@api.get("/admin/users")
+async def admin_users(request: Request, user=Depends(require_role("admin"))):
+    rows = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
+    return {"users": rows, "roles": ROLE_LABELS}
+
+
+@api.put("/admin/users/{user_id}/role")
+async def set_role(user_id: str, body: dict, request: Request, user=Depends(require_role("admin"))):
+    role = body.get("role")
+    if role not in ROLE_LEVELS:
+        raise HTTPException(400, "Invalid role")
+    await db.users.update_one({"id": user_id}, {"$set": {"role": role}})
+    await audit(user.get("default_org"), user, "set_role", "user", user_id, {"role": role})
+    return {"ok": True}
+
+
+@api.get("/admin/audit")
+async def admin_audit(request: Request, user=Depends(require_role("soc_manager"))):
+    org = active_org(user, request)
+    rows = await db.audit_logs.find({"org_id": org}, {"_id": 0}).sort("timestamp", -1).limit(100).to_list(100)
+    return {"audit": rows}
+
+
+@api.get("/admin/health")
+async def admin_health(user=Depends(get_current_user)):
+    try:
+        await db.command("ping")
+        dbok = True
+    except Exception:
+        dbok = False
+    return {"database": "ok" if dbok else "down", "search_backend": "mongo-adapter",
+            "ai_assistant": "configured" if ai_assistant.is_configured() else "disabled"}
+
+
+# ============================= USER PREFS =============================
+@api.put("/me/theme")
+async def set_theme(body: dict, user=Depends(get_current_user)):
+    await db.users.update_one({"id": user["id"]}, {"$set": {"theme": body.get("theme", "obsidian_dark")}})
+    return {"ok": True}
+
+
+@api.put("/me/workspace")
+async def set_workspace(body: dict, user=Depends(get_current_user)):
+    wid = body.get("workspace_id")
+    if wid not in user.get("org_ids", []):
+        raise HTTPException(403, "No access to workspace")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"default_org": wid}})
+    return {"ok": True}
+
+
+# ============================= AI ASSISTANT =============================
+@api.post("/ai/ask")
+async def ai_ask(body: AIReq, request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    res = await ai_assistant.ask(org, body.message, body.ctx_type, body.ctx_id, session_id=user["id"])
+    return res
+
+
+# ============================= DEMO MODE =============================
+@api.post("/demo/reset")
+async def demo_reset(request: Request, user=Depends(require_role("soc_manager"))):
+    for coll in ["events", "alerts", "detection_rules", "sources", "investigations",
+                 "indicators", "notifications", "reports"]:
+        await db[coll].delete_many({"org_id": TRAIN_ORG})
+    await seedmod.seed_training_workspace(TRAIN_ORG)
+    return {"ok": True}
+
+
+# ============================= HEALTH =============================
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "service": "sentinellab"}
+
+
+@app.get("/api/ready")
+async def ready():
+    try:
+        await db.command("ping")
+        return {"ready": True}
+    except Exception:
+        raise HTTPException(503, "not ready")
+
+
+# ============================= STARTUP =============================
+@app.on_event("startup")
+async def startup():
+    await db.users.create_index("email", unique=True)
+    await db.users.create_index("id", unique=True)
+    await db.events.create_index([("org_id", 1), ("timestamp", -1)])
+    await db.events.create_index([("org_id", 1), ("category", 1)])
+    await db.alerts.create_index([("org_id", 1), ("status", 1)])
+    await db.login_attempts.create_index("identifier")
+
+    for oid, name, demo in [(PROD_ORG, "SentinelLab Production", False),
+                            (TRAIN_ORG, "Training Lab (Synthetic)", True)]:
+        await db.organizations.update_one({"id": oid},
+            {"$setOnInsert": {"id": oid, "name": name, "is_demo": demo, "created_at": now_iso()}}, upsert=True)
+
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@sentinellab.io").lower()
+    admin_pw = os.environ.get("ADMIN_PASSWORD", "Sentinel@2026")
+    existing = await db.users.find_one({"email": admin_email})
+    if not existing:
+        await db.users.insert_one({"id": new_id(), "email": admin_email, "name": "SOC Administrator",
+                                   "password_hash": hash_password(admin_pw), "role": "super_admin",
+                                   "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": TRAIN_ORG,
+                                   "theme": "obsidian_dark", "created_at": now_iso()})
+    elif not verify_password(admin_pw, existing["password_hash"]):
+        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_pw)}})
+    if not await db.users.find_one({"email": "analyst@sentinellab.io"}):
+        await db.users.insert_one({"id": new_id(), "email": "analyst@sentinellab.io", "name": "SOC Analyst",
+                                   "password_hash": hash_password("Analyst@2026"), "role": "analyst",
+                                   "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": TRAIN_ORG,
+                                   "theme": "obsidian_dark", "created_at": now_iso()})
+    if await db.detection_rules.count_documents({"org_id": PROD_ORG}) == 0:
+        for r in seedmod.builtin_rules(PROD_ORG):
+            await db.detection_rules.insert_one(r)
+    await seedmod.seed_training_workspace(TRAIN_ORG)
+    logger.info("SentinelLab startup complete")
+
+
+app.include_router(api)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    from core import client
+    client.close()

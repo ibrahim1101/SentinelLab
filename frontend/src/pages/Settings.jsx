@@ -1,0 +1,146 @@
+import { useEffect, useState } from "react";
+import { Settings as SIcon, Shield, Database, Clock, Plug, Info, FlaskConical, RefreshCw } from "lucide-react";
+import client from "@/lib/api";
+import { useTheme, THEMES } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
+import { PageHead, StatusPill, fmtTime } from "@/components/common";
+import { toast } from "sonner";
+
+const TABS = [
+  { id: "general", label: "General", icon: SIcon },
+  { id: "security", label: "Security", icon: Shield },
+  { id: "ingestion", label: "Ingestion", icon: Database },
+  { id: "retention", label: "Retention", icon: Clock },
+  { id: "integrations", label: "Integrations", icon: Plug },
+  { id: "about", label: "About", icon: Info },
+];
+
+export default function Settings() {
+  const { theme, setTheme } = useTheme();
+  const { user, roles } = useAuth();
+  const [tab, setTab] = useState("general");
+  const [s, setS] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [audit, setAudit] = useState([]);
+  const [health, setHealth] = useState(null);
+  const isAdmin = ["admin", "super_admin"].includes(user?.role);
+
+  useEffect(() => {
+    client.get("/settings").then(({ data }) => setS(data.settings));
+    client.get("/admin/health").then(({ data }) => setHealth(data)).catch(() => {});
+    if (isAdmin) client.get("/admin/users").then(({ data }) => setUsers(data.users)).catch(() => {});
+    client.get("/admin/audit").then(({ data }) => setAudit(data.audit)).catch(() => {});
+  }, []);
+
+  const save = async (patch) => { const { data } = await client.put("/settings", patch); setS(data); toast.success("Settings saved"); };
+  const resetDemo = async () => { if (!window.confirm("Reset Training Lab synthetic data?")) return; await client.post("/demo/reset"); toast.success("Demo data regenerated"); };
+  const setUserRole = async (id, role) => { await client.put(`/admin/users/${id}/role`, { role }); toast.success("Role updated"); setUsers(users.map((u) => u.id === id ? { ...u, role } : u)); };
+
+  if (!s) return null;
+
+  return (
+    <div data-testid="settings-page">
+      <PageHead title="Settings" desc="Application configuration and management" />
+      <div className="flex gap-4">
+        <div className="w-48 shrink-0 space-y-0.5">
+          {TABS.map((t) => (
+            <button key={t.id} className={`nav-item w-full ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)} data-testid={`settings-tab-${t.id}`}>
+              <t.icon size={15} /> {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 card p-5 min-w-0">
+          {tab === "general" && (
+            <div className="space-y-4 max-w-md">
+              <Field label="Application Name"><input className="inp" defaultValue={s.app_name} onBlur={(e) => save({ app_name: e.target.value })} data-testid="set-appname" /></Field>
+              <Field label="Time Zone"><input className="inp" defaultValue={s.timezone} onBlur={(e) => save({ timezone: e.target.value })} data-testid="set-tz" /></Field>
+              <Field label="Default Time Range">
+                <select className="inp" defaultValue={s.default_time_range} onChange={(e) => save({ default_time_range: e.target.value })} data-testid="set-range">{["15m", "1h", "24h", "7d"].map((r) => <option key={r} value={r}>Last {r}</option>)}</select>
+              </Field>
+              <Field label="Theme">
+                <select className="inp" value={theme} onChange={(e) => setTheme(e.target.value)} data-testid="set-theme">{THEMES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+              </Field>
+              <div className="flex items-center justify-between border-t pt-4">
+                <div><div className="text-[13px] font-medium flex items-center gap-1.5" style={{ color: "var(--text)" }}><FlaskConical size={14} style={{ color: "var(--cyan)" }} /> Demo Mode</div><div className="text-[11.5px]" style={{ color: "var(--text-3)" }}>Use simulated data for demonstration</div></div>
+                <Toggle on={s.demo_mode} onChange={(v) => save({ demo_mode: v })} testId="demo-toggle" />
+              </div>
+              <button className="btn btn-sm" onClick={resetDemo} data-testid="reset-demo"><RefreshCw size={13} /> Reset Training Lab Data</button>
+            </div>
+          )}
+          {tab === "security" && (
+            <div className="space-y-3 max-w-lg text-[13px]">
+              <Row k="Password Hashing" v="bcrypt (Argon2id-ready adapter)" />
+              <Row k="Session Token" v="JWT · 8h expiry · httpOnly cookie + Bearer" />
+              <Row k="Login Rate Limiting" v="5 attempts → 15 min lockout" />
+              <Row k="RBAC" v="Server-enforced · 5 roles" />
+              <Row k="Audit Logging" v="Enabled" />
+              <Row k="Organization Isolation" v="All resources workspace-scoped" />
+              {isAdmin && (
+                <>
+                  <div className="text-[11px] uppercase mt-5 mb-2" style={{ color: "var(--text-3)" }}>User & Role Management</div>
+                  <table className="dense w-full"><thead><tr><th>User</th><th>Email</th><th>Role</th></tr></thead><tbody>
+                    {users.map((u) => (<tr key={u.id} className="border-t"><td style={{ color: "var(--text)" }}>{u.name}</td><td className="font-mono" style={{ color: "var(--text-2)" }}>{u.email}</td>
+                      <td><select className="inp max-w-[180px]" value={u.role} onChange={(e) => setUserRole(u.id, e.target.value)} data-testid={`role-${u.id}`}>{Object.entries(roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td></tr>))}
+                  </tbody></table>
+                </>
+              )}
+            </div>
+          )}
+          {tab === "ingestion" && (
+            <div className="space-y-3 max-w-lg text-[13px]">
+              <Row k="Pipeline" v="Receive → Parse → Normalize → Enrich → Persist → Detect → Alert" />
+              <Row k="Supported Formats" v="JSON, JSONL, CSV, Syslog (3164/5424), CEF" />
+              <Row k="Schema Version" v="1.0" />
+              <Row k="Parser Version" v="1.0" />
+              <Row k="Dead-letter / Parse Errors" v="Captured per source" />
+            </div>
+          )}
+          {tab === "retention" && (
+            <div className="space-y-4 max-w-md">
+              <Field label={`Data Retention: ${s.retention_days} days`}>
+                <input type="range" min="30" max="365" step="5" defaultValue={s.retention_days} className="w-full" onChange={(e) => setS({ ...s, retention_days: +e.target.value })} onMouseUp={(e) => save({ retention_days: +e.target.value })} data-testid="retention-slider" />
+                <div className="flex justify-between text-[10px]" style={{ color: "var(--text-3)" }}><span>30d</span><span>90d</span><span>365d</span></div>
+              </Field>
+              <p className="text-[12px]" style={{ color: "var(--text-3)" }}>Events older than the retention window are eligible for cleanup. Evidence is retained independently per chain-of-custody policy.</p>
+            </div>
+          )}
+          {tab === "integrations" && (
+            <div className="space-y-3 max-w-lg">
+              <IntegrationRow name="AI Security Assistant" status={health?.ai_assistant === "configured" ? "online" : "offline"} desc="Provider-independent adapter (OpenAI-compatible / local). Currently uses the managed key." />
+              <IntegrationRow name="VirusTotal" status="offline" desc="Threat intel enrichment — requires API key" />
+              <IntegrationRow name="AbuseIPDB" status="offline" desc="IP reputation — requires API key" />
+              <IntegrationRow name="Slack Webhook" status="offline" desc="Alert notifications — requires webhook URL" />
+              <IntegrationRow name="SMTP / Email" status="offline" desc="Email delivery for reports & alerts" />
+              <p className="text-[11.5px] mt-2" style={{ color: "var(--text-3)" }}>Optional integrations are credential-driven and disconnected until configured. No API keys are hardcoded.</p>
+            </div>
+          )}
+          {tab === "about" && (
+            <div className="text-[13px] space-y-3 max-w-lg">
+              <div className="flex items-center gap-2"><Shield size={20} style={{ color: "var(--cyan)" }} /><span className="font-head font-bold text-lg">SentinelLab</span><span className="pill">v1.0.0</span></div>
+              <p style={{ color: "var(--text-2)" }}>Self-hostable Security Operations Center — SIEM, detection engineering, threat hunting & incident response.</p>
+              <div className="text-[11px] uppercase mt-4 mb-2" style={{ color: "var(--text-3)" }}>System Health</div>
+              {health && <><Row k="Database" v={<StatusPill status={health.database} />} /><Row k="Search Backend" v={health.search_backend} /><Row k="AI Assistant" v={<StatusPill status={health.ai_assistant === "configured" ? "online" : "offline"} />} /></>}
+              <div className="text-[11px] uppercase mt-4 mb-2" style={{ color: "var(--text-3)" }}>Recent Audit Log</div>
+              <div className="max-h-48 overflow-auto space-y-1">
+                {audit.slice(0, 20).map((a) => <div key={a.id} className="text-[11px] font-mono" style={{ color: "var(--text-3)" }}>{fmtTime(a.timestamp).slice(5, 16)} · {a.user_email} · {a.action} {a.resource_type}</div>)}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const Field = ({ label, children }) => <div><label className="text-[11px] uppercase block mb-1" style={{ color: "var(--text-3)" }}>{label}</label>{children}</div>;
+const Row = ({ k, v }) => <div className="flex justify-between border-b py-1.5"><span style={{ color: "var(--text-3)" }}>{k}</span><span className="font-mono" style={{ color: "var(--text)" }}>{v}</span></div>;
+const IntegrationRow = ({ name, status, desc }) => (
+  <div className="flex items-center justify-between border-b py-2.5">
+    <div><div className="text-[13px] font-medium" style={{ color: "var(--text)" }}>{name}</div><div className="text-[11.5px]" style={{ color: "var(--text-3)" }}>{desc}</div></div>
+    <StatusPill status={status} />
+  </div>
+);
+function Toggle({ on, onChange, testId }) {
+  return <button onClick={() => onChange(!on)} data-testid={testId} className="relative w-11 h-6 rounded-full transition" style={{ background: on ? "var(--cyan)" : "var(--border)" }}>
+    <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: on ? 22 : 2 }} /></button>;
+}

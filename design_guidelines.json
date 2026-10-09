@@ -1,0 +1,259 @@
+{
+  "project_name": "SentinelLab",
+  "app_type": "dashboard",
+  "archetype": "Obsidian Security Command Center (Enterprise SIEM & Threat Hunting Platform)",
+  "design_philosophy": {
+    "core": "Tactical Minimalism & High Density Information Architecture",
+    "theme_strategy": "Dark-first enterprise SOC interface built for maximum data scanning, zero distraction, and precise cognitive ergonomics.",
+    "anti_patterns": [
+      "No rounded-3xl or rounded-2xl giant cards",
+      "No decorative cartoon 3D illustrations or generic AI SaaS glossy gradients",
+      "No unnecessary scroll padding or oversized whitespace",
+      "No Inter font for code/JSON/queries (MUST use Monospace for technical values)",
+      "No default un-tinted pure transparent popovers or headers"
+    ]
+  },
+  "themes": {
+    "obsidian_dark": {
+      "name": "Obsidian Dark (Default)",
+      "background": "#0B0E14",
+      "surface_base": "#121721",
+      "surface_card": "#161C26",
+      "surface_border": "#222D3D",
+      "text_primary": "#F1F5F9",
+      "text_secondary": "#94A3B8",
+      "text_muted": "#64748B",
+      "cyan_accent": "#06B6D4",
+      "electric_blue": "#3B82F6"
+    },
+    "stealth_titanium": {
+      "name": "Stealth Titanium",
+      "background": "#0D1117",
+      "surface_base": "#161B22",
+      "surface_card": "#21262D",
+      "surface_border": "#30363D",
+      "text_primary": "#E6EDF3",
+      "text_secondary": "#8B949E",
+      "text_muted": "#6E7681",
+      "cyan_accent": "#22D3EE",
+      "electric_blue": "#60A5FA"
+    },
+    "light_professional": {
+      "name": "Light Professional",
+      "background": "#F8FAFC",
+      "surface_base": "#FFFFFF",
+      "surface_card": "#F1F5F9",
+      "surface_border": "#CBD5E1",
+      "text_primary": "#0F172A",
+      "text_secondary": "#475569",
+      "text_muted": "#64748B",
+      "cyan_accent": "#0891B2",
+      "electric_blue": "#2563EB"
+    },
+    "high_contrast": {
+      "name": "High Contrast",
+      "background": "#000000",
+      "surface_base": "#0A0A0A",
+      "surface_card": "#141414",
+      "surface_border": "#333333",
+      "text_primary": "#FFFFFF",
+      "text_secondary": "#CCCCCC",
+      "text_muted": "#A0A0A0",
+      "cyan_accent": "#00F0FF",
+      "electric_blue": "#3B82F6"
+    }
+  },
+  "severity_system": {
+    "critical": {
+      "text": "#F87171",
+      "badge_bg": "rgba(153, 27, 27, 0.4)",
+      "badge_border": "rgba(239, 68, 68, 0.5)",
+      "label": "CRITICAL"
+    },
+    "high": {
+      "text": "#FB923C",
+      "badge_bg": "rgba(154, 52, 18, 0.4)",
+      "badge_border": "rgba(249, 115, 22, 0.5)",
+      "label": "HIGH"
+    },
+    "medium": {
+      "text": "#FBBF24",
+      "badge_bg": "rgba(114, 71, 15, 0.4)",
+      "badge_border": "rgba(245, 158, 11, 0.5)",
+      "label": "MEDIUM"
+    },
+    "low": {
+      "text": "#60A5FA",
+      "badge_bg": "rgba(30, 58, 138, 0.4)",
+      "badge_border": "rgba(59, 130, 246, 0.5)",
+      "label": "LOW"
+    },
+    "info": {
+      "text": "#38BDF8",
+      "badge_bg": "rgba(12, 74, 110, 0.4)",
+      "badge_border": "rgba(14, 165, 233, 0.5)",
+      "label": "INFO"
+    }
+  },
+  "typography": {
+    "headings": {
+      "font_family": "Barlow, Inter, sans-serif",
+      "weights": "font-bold (700) or font-semibold (600)",
+      "letter_spacing": "tracking-tight"
+    },
+    "body": {
+      "font_family": "Inter, sans-serif",
+      "sizes": "text-xs (12px) to text-sm (14px) for maximum density"
+    },
+    "technical_data": {
+      "font_family": "JetBrains Mono, Menlo, Consolas, monospace",
+      "usage": "IP addresses, Hashes, Hashes, Timestamps, Query Editor, Raw JSON, ECS fields"
+    }
+  },
+  "layout_architecture": {
+    "sidebar": {
+      "position": "fixed left-0 top-0 bottom-0 w-64 md:w-60",
+      "components": [
+        "SentinelLab Shield Brand Logo with glow border",
+        "SOC Status Pill (System Health: Operational)",
+        "Main Navigation: Overview, Events Explorer, Threat Hunting, Alerts, Detection Rules, Sources & Ingestion, Investigations, Reports, Settings",
+        "Quick Action: Live Telemetry Feed indicator",
+        "Analyst Profile Badge at bottom"
+      ]
+    },
+    "topbar": {
+      "position": "sticky top-0 z-40 h-14 border-b bg-slate-950/80 backdrop-blur-md",
+      "components": [
+        "Global Security Search (IP, Hash, Host, User, CVE) with shortcut badge [Cmd+K]",
+        "Time Range Selector Pill (Last 15m, Last 1h, Last 24h, Custom Range)",
+        "Live Ingestion Rate EPS ticker",
+        "Active Incident Alert Bell with badge count",
+        "Theme Switcher Dropdown (Obsidian Dark, Stealth Titanium, Light Professional, High Contrast)",
+        "Analyst User Avatar & Session menu"
+      ]
+    },
+    "content_density": {
+      "card_padding": "p-3 md:p-4",
+      "card_radius": "rounded-md",
+      "table_density": "py-2 px-3 text-xs",
+      "gap": "gap-3 md:gap-4"
+    }
+  },
+  "key_views": {
+    "login": {
+      "test_id": "login-screen",
+      "features": ["Command center authentication card", "MFA code input field", "Demo login one-click credentials selector (SOC Analyst Level 2 / Security Engineer)"]
+    },
+    "overview_dashboard": {
+      "test_id": "overview-dashboard",
+      "kpi_cards": [
+        {"title": "Total Events (24h)", "value": "12,482,910", "change": "+8.4%", "test_id": "kpi-total-events"},
+        {"title": "Active Alerts", "value": "42", "change": "-3 (Critical: 5)", "test_id": "kpi-active-alerts"},
+        {"title": "High/Critical Incidents", "value": "7", "status": "Needs Triage", "test_id": "kpi-high-severity"},
+        {"title": "Active Data Sources", "value": "28 / 30", "status": "2 Warning", "test_id": "kpi-active-sources"}
+      ],
+      "visualizations": [
+        "Recharts Events Over Time Bar/Area Chart (EPS spike detection)",
+        "Alerts by Severity Donut / Breakdown Chart",
+        "MITRE ATT&CK Matrix Tactic Heatmap preview",
+        "Recent Critical Alerts Table with fast action drawer trigger"
+      ]
+    },
+    "events_explorer": {
+      "test_id": "events-explorer",
+      "features": [
+        "KQL filter bar & severity filters (Critical, High, Medium, Low)",
+        "Time distribution mini histogram",
+        "Dense datatable with columns: Timestamp, Severity, Source IP, Destination IP, Action, Event Category, Host, Analyst Quick View",
+        "Pagination & column sorter",
+        "Export CSV / JSON buttons"
+      ]
+    },
+    "event_details_modal": {
+      "test_id": "event-details-modal",
+      "tabs": [
+        "Overview (Parsed ECS Fields, enrichment info like GeoIP, Threat Intel score)",
+        "Raw JSON (Syntax highlighted JSON viewer)",
+        "Normalized JSON (Standardized Schema)"
+      ]
+    },
+    "threat_hunting": {
+      "test_id": "threat-hunting-workspace",
+      "features": [
+        "Advanced Query Workspace (Lucene/KQL with helper query buttons: 'Failed Logins > 10', 'Suspicious Powershell Exec', 'Outbound SSH to Unknown IP')",
+        "Query Run button with execution timer metric",
+        "Top Entities facet breakdown (Top 5 Source IPs, Top 5 Hostnames, Top 5 Process Names)",
+        "Event Timeline Histogram chart",
+        "Interactive hunt results datatable"
+      ]
+    },
+    "detection_rules": {
+      "test_id": "detection-rules-panel",
+      "features": [
+        "SIGMA / YARA / KQL Rule Directory",
+        "Status toggles (Enabled / Disabled / Testing)",
+        "Rule severity badge & MITRE technique tags (e.g., T1059.001)",
+        "Rule details side-panel with logic parameters, author, creation date, trigger history, and test rule executor"
+      ]
+    },
+    "sources_ingestion": {
+      "test_id": "sources-ingestion-page",
+      "features": [
+        "Ingestion pipeline health status cards (Syslog, CrowdStrike, AWS CloudTrail, Fortinet, Zeek, Windows Event Logs)",
+        "EPS Throughput live sparkline charts",
+        "Health status table with Status pills (Healthy, Degraded, Offline)",
+        "Add New Source modal trigger"
+      ]
+    },
+    "investigations": {
+      "test_id": "investigations-page",
+      "features": [
+        "Incident Case Management Table (Case ID, Title, Severity, Lead Analyst, Priority, Status: New/Investigating/Escalated/Closed)",
+        "Evidence artifacts breakdown & timeline",
+        "New Case creation modal dialog"
+      ]
+    },
+    "reports_export": {
+      "test_id": "reports-export-page",
+      "features": [
+        "SOC Compliance templates (SOC2 Type II, ISO 27001, Executive Weekly Summary, Ransomware Audit)",
+        "Custom date range and severity filters for export",
+        "Export actions (Generate PDF report, Download CSV, Send to Email)"
+      ]
+    },
+    "settings": {
+      "test_id": "settings-page",
+      "tabs": ["General", "Security", "Ingestion", "Retention", "Integrations", "About"],
+      "features": [
+        "Live Demo Mode Toggle (Generates live simulated security telemetry and alert events)",
+        "Data retention slider (30 days, 90 days, 365 days)",
+        "API Key & SIEM Integration config (Slack Webhook, Jira Service Desk, PagerDuty, Webhooks)"
+      ]
+    }
+  },
+  "image_urls": [
+    {
+      "url": "https://images.unsplash.com/photo-1751448555253-f39c06e29d82?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwyfHxjeWJlcnNlY3VyaXR5JTIwY29tbWFuZCUyMGNlbnRlciUyMGF2YXRhcnxlbnwwfHx8fDE3OTE1NjI4NTZ8MA&ixlib=rb-4.1.0&q=85",
+      "category": "soc_preview_dashboard",
+      "description": "SOC Security and Privacy Command Center Preview"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1708807472445-d33589e6b090?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwxfHxjeWJlcnNlY3VyaXR5JTIwY29tbWFuZCUyMGNlbnRlciUyMGF2YXRhcnxlbnwwfHx8fDE3OTE1NjI4NTZ8MA&ixlib=rb-4.1.0&q=85",
+      "category": "analyst_avatar",
+      "description": "Security Operations Center Senior Analyst Monitor Room"
+    }
+  ],
+  "instructions_to_main_agent": [
+    "Ensure ALL interactive elements (buttons, inputs, tabs, table rows, switches, dropdown items) have precise kebab-case `data-testid` attributes.",
+    "Do NOT change the layout density to huge roomy cards — keep cell padding tight (`py-1.5 px-3` or `py-2 px-3`) for true SOC SIEM density.",
+    "Implement the 4 theme modes in state/CSS variables or Tailwind classes (Obsidian Dark as default).",
+    "Use Lucide icons for all tactical UI icons (Shield, AlertTriangle, Terminal, Activity, FileText, Cpu, Key, Eye, Lock, RefreshCw, Search, Download).",
+    "Ensure Demo Mode toggle in Settings generates live periodic telemetry events into the global store so charts and tables feel active.",
+    "Provide rich mock data with realistic IP addresses (e.g. 192.168.1.105, 10.0.4.12, 185.220.101.5), SHA256 hashes, MITRE technique tags (T1059, T1078), and ECS JSON log structures."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": {
+    "testing_requirement": "All interactive elements MUST include data-testid attribute for stable testing.",
+    "contrast_requirement": "Strict WCAG AA / APCA compliance for dark dark background and high severity alert badges.",
+    "hover_state_rule": "Always explicitly define hover text and border colors (e.g., hover:border-cyan-500/50 hover:bg-slate-800/60)."
+  }
+}
