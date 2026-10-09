@@ -150,6 +150,13 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **UI:** recovery controls show stale status and only enable reconciliation after the grace period (commit `31b0887`).
 - **Verification:** CI pending. This is automatic **detection**, not automatic reconciliation; manual review remains necessary to avoid racing in-flight approvals. Future work: robust transactional processing, recovery tests with injected failures and browser UI tests.
 
+## 2026-10-10 — Server-enforced reconciliation grace period
+
+- **Prior CI:** both workflows passed at `ba061a7`: [37987283026](https://github.com/ibrahim1101/SentinelLab/actions/runs/37987283026), [37987277623](https://github.com/ibrahim1101/SentinelLab/actions/runs/37987277623).
+- **Security finding:** the five-minute grace period was UI-only, so direct API clients could reconcile an in-flight request prematurely.
+- **Fix:** reconciliation API now rejects applying requests newer than five minutes with HTTP 409. Legacy malformed/missing timestamps remain eligible for administrator reconciliation, matching the queue's conservative stale classification (commit `bfc4c1c`).
+- **Verification:** CI pending. Dedicated injected applying-state integration tests and transactional processing remain outstanding.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
