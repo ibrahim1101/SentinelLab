@@ -74,6 +74,14 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Compatibility note:** existing user memberships are not automatically migrated; administrators must review and remediate historical memberships. A controlled invitation/approval workflow for production access remains to be built.
 - **Verification:** CI pending when documented.
 
+## 2026-10-10 — Administrator-managed workspace membership
+
+- **Goal:** allow explicit review and remediation of legacy production access, with no automatic revocations.
+- **Implementation:** added super-admin-only `GET /api/admin/membership-review` listing current production members and `PUT /api/admin/users/{user_id}/workspaces` for controlled grants and revocations (commit `62c2b51`).
+- **Safeguards:** validates built-in workspace IDs, keeps a valid default workspace, prevents self-removal of production access and removal of production access from super administrators, and records old/new membership in the audit log.
+- **Important:** the review endpoint lists all production members; membership changes must be explicitly authorized. No automatic migration or revocation was executed.
+- **Remaining:** add dedicated API integration tests, verify CI, improve administrative review UI and approval workflow, and consider multi-admin safeguards.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
