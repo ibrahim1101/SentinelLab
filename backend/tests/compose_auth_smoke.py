@@ -84,6 +84,26 @@ status, requests = request("GET", "/api/admin/production-access-requests", token
 assert status == 200 and any(x["id"] == pending["id"] for x in requests["requests"]), "Pending approval not listed"
 status, _ = request("GET", "/api/admin/production-access-requests", token=analyst_token)
 assert status == 403, f"Auditor read approval queue: {status}"
+# Create a distinct second administrator to verify the successful approval path.
+second_email = "ci-approver-" + uuid.uuid4().hex[:12] + "@example.com"
+status, second = request("POST", "/api/auth/register", {"email": second_email, "password": "ci-temporary-strong-password", "name": "CI Second Approver"})
+assert status == 200, f"Second approver registration failed: {status}: {second}"
+second_id, second_token = second["user"]["id"], second["access_token"]
+status, _ = request("PUT", "/api/admin/users/" + second_id + "/role", {"role": "super_admin"}, token=token)
+assert status == 200, f"Super-admin provisioning failed: {status}"
+status, _ = request("POST", "/api/admin/production-access-requests/" + pending["id"] + "/approve", token=second_token)
+assert status == 200, f"Independent second administrator could not approve production access: {status}"
+status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
+assert status == 200, f"Approved production membership did not take effect: {status}"
+status, _ = request("POST", "/api/admin/production-access-requests/" + pending["id"] + "/approve", token=second_token)
+assert status == 404, f"Already approved request was reusable: {status}"
+status, revoked = request("PUT", endpoint, {"org_ids": ["org-training"]}, token=token)
+assert status == 200 and revoked["default_org"] == "org-training", f"Production revocation failed: {status}: {revoked}"
+status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
+assert status == 403, f"Revoked production membership still worked: {status}"
+status, _ = request("PUT", "/api/admin/users/" + second_id + "/workspaces", {"org_ids": ["org-training"]}, token=token)
+assert status == 400, f"Super-admin production guard did not trigger: {status}"
+print("PASS: independent second-admin approval, single-use request and production revocation")
 admin_id = login["user"]["id"]
 status, _ = request("PUT", "/api/admin/users/" + admin_id + "/workspaces", {"org_ids": ["org-training"]}, token=token)
 assert status == 400, f"Super-admin production access was removable: {status}"
