@@ -73,6 +73,18 @@ export default function Settings() {
     finally { setSavingMember(""); }
   };
 
+  const reconcileRequest = async (entry) => {
+    if (!window.confirm("Reconcile this interrupted approval against actual membership? This will not grant access.")) return;
+    setSavingMember(entry.target_id);
+    try {
+      const { data } = await client.post(`/admin/production-access-requests/${entry.id}/reconcile`);
+      const queue = await client.get("/admin/production-access-requests");
+      setApprovalQueue(queue.data.requests);
+      toast.success(`Reconciliation completed: ${data.status}`);
+    } catch (err) { toast.error(err.response?.data?.detail || "Reconciliation failed"); }
+    finally { setSavingMember(""); }
+  };
+
   if (!s) return null;
 
   return (
@@ -123,6 +135,10 @@ export default function Settings() {
                     <div className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Production workspace membership review</div>
                     <p className="text-[12px]" style={{ color: "var(--text-2)" }}>Currently approved production members: {members.length}. Review older accounts before deployment. Changes are audited and require confirmation.</p>
                     <div className="space-y-2">{approvalQueue.filter((q) => q.status === "pending").map((q) => <div key={q.id} className="flex items-center justify-between gap-2 border-b py-2"><span className="text-[12px]">Pending approval: {users.find((u) => u.id === q.target_id)?.email || q.target_id}</span><button className="btn btn-sm" disabled={!!savingMember || q.requester_id === user.id} onClick={() => approveRequest(q)}>{q.requester_id === user.id ? "Awaiting second admin" : "Approve"}</button></div>)}</div>
+                    {approvalQueue.some((q) => q.status === "applying" || q.status === "failed") && <div className="space-y-2 border-t pt-3" data-testid="approval-recovery">
+                      <div className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Approval recovery review</div>
+                      {approvalQueue.filter((q) => q.status === "applying" || q.status === "failed").map((q) => <div key={q.id} className="flex items-center justify-between gap-2 py-1 text-[12px]"><span>{users.find((u) => u.id === q.target_id)?.email || q.target_id} · {q.status}{q.failure_reason ? ` · ${q.failure_reason}` : ""}</span>{q.status === "applying" && <button className="btn btn-sm" disabled={!!savingMember} onClick={() => reconcileRequest(q)}>Reconcile</button>}</div>)}
+                    </div>}
                     <div className="space-y-2">{users.map((u) => {
                       const approved = (u.org_ids || []).includes("org-production");
                       return <div key={u.id} className="flex items-center justify-between gap-3 border-b py-2">
