@@ -82,6 +82,14 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Important:** the review endpoint lists all production members; membership changes must be explicitly authorized. No automatic migration or revocation was executed.
 - **Remaining:** add dedicated API integration tests, verify CI, improve administrative review UI and approval workflow, and consider multi-admin safeguards.
 
+## 2026-10-10 — Membership approval/revocation live API regression
+
+- **Goal:** validate administrator-controlled membership changes through the running Docker stack, not only code inspection.
+- **Change:** expanded `backend/tests/compose_auth_smoke.py` with checks for read-only membership review, denied auditor grants, rejected unknown workspace IDs, super-admin production grant, immediate production read access, revocation, subsequent 403, and self-protection of super-admin production membership.
+- **Commit:** `43979a4`.
+- **Verification:** CI pending at time of writing; record workflow links and results after completion.
+- **Remaining:** build an administrative review interface and multi-admin approval process, and review legacy production memberships before public exposure.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
