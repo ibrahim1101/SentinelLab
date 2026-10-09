@@ -121,6 +121,13 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Regression:** expanded Docker API smoke to create a separate second administrator, approve a pending request, verify immediate production access, reject reuse of the approval, revoke access and verify 403 (commit `2bd402c`).
 - **Verification:** new CI pending. Dedicated negative role-escalation regression and robust multi-admin provisioning UX remain follow-up work.
 
+## 2026-10-10 — Role escalation regression and failed grant diagnostics
+
+- **Previous verification:** two-person approval workflow and role protection passed both CI runs [37981065841](https://github.com/ibrahim1101/SentinelLab/actions/runs/37981065841) and [37981057900](https://github.com/ibrahim1101/SentinelLab/actions/runs/37981057900).
+- **Regression:** expanded the live Docker smoke test to provision an ordinary admin and verify they cannot promote another user or themselves to super admin, before an existing super admin provisions the second approver (commit `ddcd4e3`).
+- **Diagnostics:** if the approved request cannot be applied to the user's memberships, mark the request `failed` with a reason and timestamp to support administrative investigation (commit `12d9139`).
+- **Verification:** new CI pending. **Remaining:** use MongoDB transactions or a durable recovery worker for crash windows between approval and grant, plus approval cancellation/expiry and UI browser tests.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
