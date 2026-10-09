@@ -61,3 +61,26 @@ assert status == 403, f"Auditor created rule: {status}"
 status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-foreign-tenant")
 assert status == 403, f"Auditor accessed foreign tenant: {status}"
 print("PASS: analyst/admin RBAC, manager-only mutation, auditor read-only, updated role, tenant boundaries")
+
+# Exercise explicit membership review, grant, revoke and super-admin safeguards.
+status, review = request("GET", "/api/admin/membership-review", token=analyst_token)
+assert status == 403, f"Auditor accessed production membership review: {status}"
+status, review = request("GET", "/api/admin/membership-review", token=token)
+assert status == 200 and "production_members" in review, f"Super-admin membership review failed: {status}"
+endpoint = "/api/admin/users/" + analyst_id + "/workspaces"
+status, _ = request("PUT", endpoint, {"org_ids": ["org-training", "org-production"]}, token=analyst_token)
+assert status == 403, f"Auditor changed workspace memberships: {status}"
+status, _ = request("PUT", endpoint, {"org_ids": ["org-invalid"]}, token=token)
+assert status == 400, f"Unknown workspace was accepted: {status}"
+status, changed = request("PUT", endpoint, {"org_ids": ["org-training", "org-production"]}, token=token)
+assert status == 200 and "org-production" in changed["org_ids"], f"Membership grant failed: {status}: {changed}"
+status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
+assert status == 200, f"Approved production membership not effective: {status}"
+status, changed = request("PUT", endpoint, {"org_ids": ["org-training"]}, token=token)
+assert status == 200 and changed["default_org"] == "org-training", f"Membership revoke failed: {status}: {changed}"
+status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
+assert status == 403, f"Revoked user retained production access: {status}"
+admin_id = login["user"]["id"]
+status, _ = request("PUT", "/api/admin/users/" + admin_id + "/workspaces", {"org_ids": ["org-training"]}, token=token)
+assert status == 400, f"Super-admin production access was removable: {status}"
+print("PASS: super-admin membership review, grant, revoke, invalid input and role protections")
