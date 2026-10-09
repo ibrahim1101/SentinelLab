@@ -1287,7 +1287,9 @@ async def startup():
             {"$setOnInsert": {"id": oid, "name": name, "is_demo": demo, "created_at": now_iso()}}, upsert=True)
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@sentinellab.io").lower()
-    admin_pw = os.environ.get("ADMIN_PASSWORD", "Sentinel@2026")
+    admin_pw = os.environ.get("ADMIN_PASSWORD")
+    if not admin_pw or len(admin_pw) < 12:
+        raise RuntimeError("ADMIN_PASSWORD must be configured with at least 12 characters")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
         await db.users.insert_one({"id": new_id(), "email": admin_email, "name": "SOC Administrator",
@@ -1296,7 +1298,7 @@ async def startup():
                                    "theme": "obsidian_dark", "created_at": now_iso()})
     elif not verify_password(admin_pw, existing["password_hash"]):
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_pw)}})
-    if not await db.users.find_one({"email": "analyst@sentinellab.io"}):
+    if os.environ.get("ENABLE_DEMO_ACCOUNTS") == "true" and not await db.users.find_one({"email": "analyst@sentinellab.io"}):
         await db.users.insert_one({"id": new_id(), "email": "analyst@sentinellab.io", "name": "SOC Analyst",
                                    "password_hash": hash_password("Analyst@2026"), "role": "analyst",
                                    "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": TRAIN_ORG,
