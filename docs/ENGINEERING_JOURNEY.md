@@ -203,3 +203,11 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - Link commits, issues, PRs, and workflow runs when available.
 - Distinguish *implemented*, *tested*, *passed in CI*, and *not yet validated*.
 - Never erase historical failures when later fixed.
+
+
+### 2026-10-10 — First local SentinelLab playbook runtime review
+- User launched the local Docker stack using public ECR base images after Docker Hub token timeout; frontend port 8080 conflicted with another local service, so local port 8081 was recommended.
+- Live manual Malware Alert Triage run with EDR isolation approved showed `NoneType` enrichment exception and an `Ok` status for a non-connected EDR action. No actual endpoint isolation was performed.
+- Root cause: `enrich_iocs` accessed `alert.get` when `alert` was `None`; external response actions were audit-only but marked `ok`.
+- Commit `f1b7223`: skip enrichment when no source IP exists, label audit-only external actions `simulated`, and distinguish failed / approval-required / completed-with-skips run status.
+- Follow-up: add automated regression coverage, verify CI, and check frontend presentation of the new statuses; avoid treating a simulated EDR action as actual containment.
