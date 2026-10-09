@@ -4,6 +4,7 @@ import {
   Shield, LayoutDashboard, ScrollText, Crosshair, Bell, FileSearch, Cpu,
   Radio, FolderSearch, FileBarChart, Settings as SettingsIcon, Search,
   Palette, LogOut, ChevronDown, Activity, Bot, Check, Target, Globe, Workflow,
+  Network, Repeat, Gauge,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme, THEMES } from "@/context/ThemeContext";
@@ -16,10 +17,13 @@ const NAV = [
   { to: "/hunting", label: "Threat Hunting", icon: Crosshair },
   { to: "/alerts", label: "Alerts", icon: Bell },
   { to: "/rules", label: "Detection Rules", icon: Cpu },
+  { to: "/replay", label: "Detection Replay", icon: Repeat },
   { to: "/mitre", label: "MITRE ATT&CK", icon: Target },
   { to: "/sources", label: "Sources & Ingestion", icon: Radio },
+  { to: "/observatory", label: "Pipeline Observatory", icon: Gauge },
   { to: "/intel", label: "Threat Intel", icon: Globe },
   { to: "/investigations", label: "Investigations", icon: FolderSearch },
+  { to: "/graph", label: "Investigation Graph", icon: Network },
   { to: "/playbooks", label: "Playbooks", icon: Workflow },
   { to: "/reports", label: "Reports", icon: FileBarChart },
   { to: "/settings", label: "Settings", icon: SettingsIcon },

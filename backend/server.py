@@ -1047,6 +1047,214 @@ async def playbook_executions(request: Request, user=Depends(get_current_user)):
     return {"executions": rows}
 
 
+# ============================= INVESTIGATION GRAPH =============================
+_GRAPH_FIELDS = [("host", "host"), ("src_ip", "ip"), ("dest_ip", "ip"),
+                 ("username", "user"), ("process_name", "process")]
+
+
+async def _build_graph(org, stype, sval):
+    nodes, edges, seen = {}, [], set()
+
+    def add_node(nid, label, ntype, meta=None):
+        if nid not in nodes:
+            nodes[nid] = {"id": nid, "label": str(label), "type": ntype, "meta": meta or {}}
+
+    def add_edge(a, b, label):
+        if a == b:
+            return
+        key = tuple(sorted([a, b])) + (label,)
+        if key in seen:
+            return
+        seen.add(key)
+        edges.append({"source": a, "target": b, "label": label})
+
+    def link_entities(center, evs):
+        for e in evs:
+            for field, ntype in _GRAPH_FIELDS:
+                v = e.get(field)
+                if not v:
+                    continue
+                nid = f"{ntype}:{v}"
+                add_node(nid, v, ntype)
+                add_edge(center, nid, field)
+
+    center = f"{stype}:{sval}"
+    if stype == "alert":
+        a = await db.alerts.find_one({"id": sval, "org_id": org}, {"_id": 0})
+        if not a:
+            raise HTTPException(404, "Alert not found")
+        add_node(center, a["title"], "alert", {"severity": a["severity"]})
+        evs = await db.events.find({"id": {"$in": a.get("related_events", [])[:300]}},
+                                   {"_id": 0, "raw": 0}).to_list(300)
+        link_entities(center, evs)
+        if a.get("investigation_id"):
+            inv = await db.investigations.find_one({"id": a["investigation_id"], "org_id": org}, {"_id": 0}) \
+                or await db.investigations.find_one({"org_id": org, "title": a["investigation_id"]}, {"_id": 0})
+            if inv:
+                invid = f"investigation:{inv['id']}"
+                add_node(invid, inv["title"], "investigation")
+                add_edge(invid, center, "contains")
+    else:
+        label = sval
+        if stype == "indicator":
+            ind = await db.indicators.find_one({"id": sval, "org_id": org}, {"_id": 0})
+            if not ind:
+                raise HTTPException(404, "Indicator not found")
+            sval = ind["value"]
+            center = f"indicator:{ind['id']}"
+            label = ind["value"]
+        add_node(center, label, stype)
+        qmap = {"host": {"host": sval}, "user": {"username": sval}, "process": {"process_name": sval},
+                "ip": {"$or": [{"src_ip": sval}, {"dest_ip": sval}]},
+                "indicator": {"$or": [{"src_ip": sval}, {"dest_ip": sval}, {"file_hash": sval}, {"dns_query": sval}]}}
+        evs = await db.events.find({"org_id": org, **qmap.get(stype, {})},
+                                   {"_id": 0, "raw": 0}).limit(300).to_list(300)
+        link_entities(center, evs)
+        # alerts referencing this entity
+        afilt = {"host": {"host": sval}, "ip": {"src_ip": sval}, "user": {"username": sval}}.get(stype)
+        if afilt:
+            als = await db.alerts.find({"org_id": org, **afilt}, {"_id": 0}).limit(40).to_list(40)
+            for al in als:
+                aid = f"alert:{al['id']}"
+                add_node(aid, al["title"], "alert", {"severity": al["severity"]})
+                add_edge(aid, center, "alerts")
+
+    # enrich ip nodes with indicator matches
+    ip_nodes = [n for n in list(nodes.values()) if n["type"] == "ip"]
+    for n in ip_nodes:
+        ind = await db.indicators.find_one({"org_id": org, "value": n["label"], "active": True}, {"_id": 0})
+        if ind:
+            iid = f"indicator:{ind['id']}"
+            add_node(iid, ind["value"], "indicator", {"confidence": ind["confidence"]})
+            add_edge(n["id"], iid, "ioc")
+    return {"nodes": list(nodes.values())[:70], "edges": edges, "seed": {"type": stype, "value": sval}}
+
+
+@api.post("/graph")
+async def graph(request: Request, body: dict, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    stype = body.get("seed_type", "alert")
+    sval = body.get("seed_value")
+    if not sval:
+        a = await db.alerts.find_one({"org_id": org}, {"_id": 0}, sort=[("created_at", -1)])
+        if not a:
+            return {"nodes": [], "edges": [], "seed": None}
+        stype, sval = "alert", a["id"]
+    return await _build_graph(org, stype, sval)
+
+
+# ============================= DETECTION REPLAY LAB =============================
+class ReplayReq(BaseModel):
+    format: str = "json"
+    payload: object
+    expected_rules: List[str] = []
+
+
+@api.post("/replay")
+async def replay(body: ReplayReq, request: Request, user=Depends(require_role("analyst"))):
+    """Replay telemetry against enabled rules WITHOUT persisting events or alerts (isolated)."""
+    org = active_org(user, request)
+    try:
+        records = parse_payload(body.payload, body.format)
+    except Exception as ex:
+        raise HTTPException(400, f"Parse error: {ex}")
+    stub = {"id": "replay", "name": "Replay Lab"}
+    docs = [normalize(r, org, stub, is_synthetic=True) for r in records]
+    rules = await db.detection_rules.find({"org_id": org, "enabled": True}, {"_id": 0}).to_list(500)
+    t0 = datetime.now(timezone.utc)
+    results, triggered = [], set()
+    for rule in rules:
+        alerts, matched = await evaluate_rule(rule, docs, org)
+        if alerts:
+            triggered.add(rule["name"])
+            results.append({"rule_id": rule["id"], "rule_name": rule["name"], "severity": rule["severity"],
+                            "rule_type": rule["rule_type"], "would_alert": len(alerts),
+                            "matched_events": len(matched), "mitre": rule.get("mitre", [])})
+    took = (datetime.now(timezone.utc) - t0).total_seconds() * 1000
+    expected = set(body.expected_rules)
+    comparison = None
+    if expected:
+        comparison = {"matched": sorted(expected & triggered), "missing": sorted(expected - triggered),
+                      "unexpected": sorted(triggered - expected),
+                      "passed": expected.issubset(triggered) and not (triggered - expected)}
+    return {"parsed_events": len(docs), "took_ms": round(took, 1), "rules_evaluated": len(rules),
+            "triggered_count": len(triggered), "results": results, "comparison": comparison, "isolated": True}
+
+
+@api.get("/replay/samples")
+async def replay_samples(user=Depends(get_current_user)):
+    import json as _j
+    base = datetime.now(timezone.utc)
+    def ts(m): return (base - timedelta(minutes=m)).isoformat()
+    brute = [{"timestamp": ts(4 - i * 0.3), "category": "authentication", "event_type": "Authentication",
+              "action": "login", "outcome": "failure", "src_ip": "203.0.113.9", "username": "admin",
+              "host": "auth-01", "severity": "medium"} for i in range(7)]
+    ps = [{"timestamp": ts(2), "category": "process", "event_type": "Process", "action": "process-create",
+           "process_name": "powershell.exe", "parent_process": "winword.exe", "host": "WKS-22",
+           "username": "jdoe", "command_line": "powershell.exe -nop -w hidden -enc ZQBjAGgAbwA=", "severity": "high"}]
+    scan = [{"timestamp": ts(1.5 - i * 0.05), "category": "network", "event_type": "Connection",
+             "action": "connect", "src_ip": "198.51.100.7", "dest_ip": "10.0.0.50", "dest_port": 20 + i,
+             "protocol": "TCP", "host": "10.0.0.50", "severity": "low"} for i in range(13)]
+    return {"samples": [
+        {"name": "Brute Force (7 failed logins)", "format": "json", "payload": _j.dumps(brute, indent=2),
+         "expected_rules": ["Brute Force Authentication"]},
+        {"name": "Suspicious PowerShell (encoded)", "format": "json", "payload": _j.dumps(ps, indent=2),
+         "expected_rules": ["Suspicious PowerShell Execution"]},
+        {"name": "Port Scan (13 ports)", "format": "json", "payload": _j.dumps(scan, indent=2),
+         "expected_rules": ["Port Scan Detected"]},
+    ]}
+
+
+# ============================= PIPELINE OBSERVATORY =============================
+@api.get("/observatory")
+async def observatory(request: Request, user=Depends(get_current_user)):
+    from dateutil import parser as _dtp
+    org = active_org(user, request)
+    now = datetime.now(timezone.utc)
+    since1h = (now - timedelta(hours=1)).isoformat()
+    # eps per minute (last 60 min)
+    pipeline = [
+        {"$match": {"org_id": org, "ingested_at": {"$gte": since1h}}},
+        {"$project": {"minute": {"$substr": ["$ingested_at", 0, 16]}}},
+        {"$group": {"_id": "$minute", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]
+    eps_rows = await db.events.aggregate(pipeline).to_list(120)
+    eps_series = [{"time": r["_id"], "eps": round(r["count"] / 60, 2)} for r in eps_rows]
+    total = await db.events.count_documents({"org_id": org})
+    last1h = await db.events.count_documents({"org_id": org, "ingested_at": {"$gte": since1h}})
+    parser_total = await db.parser_errors.count_documents({"org_id": org})
+    recent_errors = await db.parser_errors.find({"org_id": org}, {"_id": 0}).sort("timestamp", -1).limit(10).to_list(10)
+    # avg ingest delay from recent events
+    sample = await db.events.find({"org_id": org}, {"_id": 0, "timestamp": 1, "ingested_at": 1}).sort("ingested_at", -1).limit(200).to_list(200)
+    delays = []
+    for e in sample:
+        try:
+            d = (_dtp.parse(e["ingested_at"]) - _dtp.parse(e["timestamp"])).total_seconds()
+            if 0 <= d < 86400 * 3:
+                delays.append(d)
+        except Exception:
+            pass
+    avg_delay = round(sum(delays) / len(delays), 1) if delays else 0
+    # per-source health
+    sources = await db.sources.find({"org_id": org}, {"_id": 0, "token_hash": 0}).to_list(200)
+    src_health = []
+    for s in sources:
+        tp = await db.events.count_documents({"org_id": org, "source_id": s["id"], "ingested_at": {"$gte": since1h}})
+        src_health.append({"id": s["id"], "name": s.get("display_name") or s["name"], "status": s.get("status"),
+                           "events_received": s.get("events_received", 0), "parse_errors": s.get("parse_errors", 0),
+                           "throughput_1h": tp, "last_received": s.get("last_received")})
+    online = sum(1 for s in sources if s.get("status") == "online")
+    return {
+        "eps_current": round(last1h / 3600, 3), "eps_series": eps_series,
+        "total_indexed": total, "events_last_1h": last1h,
+        "parser_failures": parser_total, "recent_errors": recent_errors,
+        "avg_ingest_delay_s": avg_delay, "retry_queue_depth": 0, "dropped_events": parser_total,
+        "index_backlog": 0, "sources_total": len(sources), "sources_online": online,
+        "source_health": sorted(src_health, key=lambda x: -x["throughput_1h"]),
+    }
+
+
 # ============================= HEALTH =============================
 @app.get("/api/health")
 async def health():
