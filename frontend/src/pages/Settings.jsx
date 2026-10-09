@@ -46,11 +46,13 @@ export default function Settings() {
     if (!window.confirm(`${enableProduction ? "Grant" : "Revoke"} production workspace access for ${target.email}?`)) return;
     setSavingMember(target.id);
     try {
-      const { data } = await client.put(`/admin/users/${target.id}/workspaces`, { org_ids });
-      setUsers((prev) => prev.map((u) => u.id === target.id ? { ...u, org_ids: data.org_ids, default_org: data.default_org } : u));
+      const { data } = enableProduction
+        ? await client.post(`/admin/users/${target.id}/production-access-requests`)
+        : await client.put(`/admin/users/${target.id}/workspaces`, { org_ids });
+      if (!enableProduction) setUsers((prev) => prev.map((u) => u.id === target.id ? { ...u, org_ids: data.org_ids, default_org: data.default_org } : u));
       const review = await client.get("/admin/membership-review");
       setMembers(review.data.production_members);
-      toast.success("Workspace membership updated");
+      toast.success(enableProduction ? "Approval requested — a different super admin must approve" : "Workspace membership updated");
     } catch (err) { toast.error(err.response?.data?.detail || "Workspace membership update failed"); }
     finally { setSavingMember(""); }
   };
@@ -108,7 +110,7 @@ export default function Settings() {
                       const approved = (u.org_ids || []).includes("org-production");
                       return <div key={u.id} className="flex items-center justify-between gap-3 border-b py-2">
                         <div className="min-w-0"><div className="truncate">{u.name || u.email}</div><div className="text-[11px] truncate" style={{ color: "var(--text-3)" }}>{u.email} · {approved ? "Production approved" : "Training only"}</div></div>
-                        <button type="button" className="btn btn-sm" disabled={!!savingMember || (u.role === "super_admin" && approved)} onClick={() => changeMembership(u, !approved)} data-testid={`membership-${u.id}`}>{savingMember === u.id ? "Saving…" : approved ? "Revoke production" : "Grant production"}</button>
+                        <button type="button" className="btn btn-sm" disabled={!!savingMember || (u.role === "super_admin" && approved)} onClick={() => changeMembership(u, !approved)} data-testid={`membership-${u.id}`}>{savingMember === u.id ? "Saving…" : approved ? "Revoke production" : "Request production access"}</button>
                       </div>;
                     })}</div>
                   </div>}
