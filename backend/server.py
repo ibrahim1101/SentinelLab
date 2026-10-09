@@ -863,7 +863,8 @@ async def approve_production_access(request_id: str, user=Depends(require_role("
     result = await db.users.update_one({"id": target["id"], "org_ids": {"$ne": PROD_ORG}},
                                        {"$addToSet": {"org_ids": PROD_ORG}})
     if result.modified_count != 1:
-        await db.production_access_requests.update_one({"id": request_id}, {"$set": {"status": "failed"}})
+        await db.production_access_requests.update_one({"id": request_id, "status": "approved"},
+            {"$set": {"status": "failed", "failure_reason": "membership_update_not_applied", "failed_at": now_iso()}})
         raise HTTPException(409, "Production grant could not be applied; review account state")
     await audit(user.get("default_org"), user, "approve_production_access", "user", target["id"],
                 {"request_id": request_id, "requester_id": entry["requester_id"]})
