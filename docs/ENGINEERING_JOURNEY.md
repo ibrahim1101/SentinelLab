@@ -58,6 +58,14 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 6. Add production-readiness controls (TLS, secure cookie configuration, rate limiting, monitoring, backups, migration and deployment guidance).
 7. Verify full-stack usability and functionality end-to-end, including any features inherited from Emergent.
 
+## 2026-10-10 — Tenant-safe bulk alert mutation accounting
+
+- **Goal:** ensure bulk alert updates cannot affect other tenants and return an accurate update count.
+- **Change:** replaced the requested-ID count with MongoDB `modified_count`, retaining the `org_id` filter (commit `8331353`).
+- **Regression:** MongoDB integration test submits local, foreign, and nonexistent alert IDs and asserts only the local record changes (commit `f7402dd`).
+- **Verification:** CI triggered; results must be checked before claiming success.
+- **Next:** audit remaining mutation paths, especially related IDs and organization membership onboarding.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
