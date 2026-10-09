@@ -211,3 +211,22 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - Root cause: `enrich_iocs` accessed `alert.get` when `alert` was `None`; external response actions were audit-only but marked `ok`.
 - Commit `f1b7223`: skip enrichment when no source IP exists, label audit-only external actions `simulated`, and distinguish failed / approval-required / completed-with-skips run status.
 - Follow-up: add automated regression coverage, verify CI, and check frontend presentation of the new statuses; avoid treating a simulated EDR action as actual containment.
+
+
+### 2026-10-10 — SentinelLab operator documentation and portfolio integration
+- **Request:** create a public-facing, comprehensive PDF user guide explaining SentinelLab functionality and each UI module, with a link from the cybersecurity portfolio.
+- **Guide artifact:** `SentinelLab_Complete_User_Guide_v1.pdf` created as a 9-page, 22-section first edition, based on repository documentation and UI code; covers 15 sidebar modules, Docker setup, operations, troubleshooting and simulated-vs-real action limitations. The guide is a source-based first edition, **not** an exhaustive browser-verified reference for every control.
+- **Portfolio repo:** `ibrahim1101/Portfolio`, `main`, commit [112e91b](https://github.com/ibrahim1101/Portfolio/commit/112e91bf6811db82737f459c8fbec06932ea7195) updated `sentinellab.html`: changed stale “Early planning” description to developer preview and inserted two PDF links targeting `docs/SentinelLab_Complete_User_Guide_v1.pdf`.
+- **Publication caveat:** the PDF binary has **not** been confirmed uploaded to the public Portfolio repository. Both links may return 404 until that exact file is committed and GitHub Pages deploys. The SentinelLab development repository is private; public docs should be published to the Portfolio repo, without exposing sensitive development material.
+- **Related backend fix:** `f1b7223` corrected null-alert IOC enrichment, marked disconnected external actions simulated, and improved aggregate execution statuses. The prior runtime issue and root cause are documented in the entry above.
+- **Verification:** local screenshot demonstrated the manual Malware Alert Triage issue before the fix; the updated code's CI, UI display, and local re-test are not yet independently confirmed here.
+- **Next:** verify CI; add regression tests; publish and verify the PDF link; expand guide with browser-verified screenshots and controls. Do not merge SentinelLab PR #1 without authorization.
+
+### 2026-10-10 — Next-chat handoff and prioritized roadmap
+- **Development branch:** `fix/phase1-security-regressions` in private `ibrahim1101/SentinelLab`; PR #1 remains unmerged. Do not commit to default branch or merge without user approval.
+- **P0:** regression tests for manual playbook enrichment, disconnected action simulation and execution status; browser UI representation of those statuses; deterministic interrupted `applying` production-access reconciliation tests (membership present/absent, fresh guard, malformed timestamps).
+- **P1:** full 15-module browser QA; PDF public hosting and link verification; screenshot-by-screenshot guide expansion; Docker onboarding, registry fallback and configurable local port.
+- **P2:** richer threat intel enrichment; optional real EDR/firewall/IdP integration adapters with explicit approvals; security, observability and recovery hardening.
+- **P3:** advanced SOC roadmap (UEBA, Sigma UI, scheduled reports/PDF reports, vulnerability capabilities).
+- **Historical CI evidence:** commit `d2edbb5` passed both workflow runs [37991302420](https://github.com/ibrahim1101/SentinelLab/actions/runs/37991302420) and [37991298108](https://github.com/ibrahim1101/SentinelLab/actions/runs/37991298108). Those green runs precede the new playbook fix; never present them as verification of `f1b7223`.
+- **Handoff:** continue documenting successful and failed work in this journal; update `docs/PROJECT_HANDOFF.md` and roadmap with each milestone.
