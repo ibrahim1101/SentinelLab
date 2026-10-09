@@ -52,7 +52,7 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 
 1. Verify the latest investigation-isolation CI run and fix any failure.
 2. Audit all other joins, exports, mutations, and background jobs for organization scoping.
-3. Review self-registration: currently new accounts receive membership in both built-in workspaces; design secure tenant onboarding before public deployment.
+3. Self-registration now grants training-only membership; design administrator-approved production tenant onboarding before public deployment. Review previously registered users for overbroad access.
 4. Expand RBAC coverage across auditor, analyst, SOC manager, administrator, and super administrator actions.
 5. Audit security-sensitive user input, file uploads, session handling, and secrets.
 6. Add production-readiness controls (TLS, secure cookie configuration, rate limiting, monitoring, backups, migration and deployment guidance).
@@ -65,6 +65,14 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Regression:** MongoDB integration test submits local, foreign, and nonexistent alert IDs and asserts only the local record changes (commit `f7402dd`).
 - **Verification:** CI triggered; results must be checked before claiming success.
 - **Next:** audit remaining mutation paths, especially related IDs and organization membership onboarding.
+
+## 2026-10-10 — Self-registration tenant privilege fix
+
+- **Finding:** anonymous registration automatically granted both production and training memberships, enabling newly created accounts to access production SOC data.
+- **Fix:** self-registered accounts now receive training-only membership and training as their default workspace (commit `7732ffc`).
+- **Regression:** authenticated Compose smoke test asserts restricted membership and a 403 when a new account requests production data (commit `be6f8ac`).
+- **Compatibility note:** existing user memberships are not automatically migrated; administrators must review and remediate historical memberships. A controlled invitation/approval workflow for production access remains to be built.
+- **Verification:** CI pending when documented.
 
 ## Update template (append on every milestone)
 
