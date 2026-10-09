@@ -98,6 +98,13 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Verification:** frontend build/CI pending; manual browser validation remains outstanding.
 - **Next:** consider a two-person approval flow for high-risk grants, audit legacy accounts, and add UI interaction tests.
 
+## 2026-10-10 — Idempotent membership management
+
+- **Goal:** avoid redundant database writes and audit entries when an administrator submits an unchanged membership set.
+- **Implementation:** workspace updates compare requested and existing membership sets; unchanged requests return `unchanged: true` without a write or audit event (commit `211ca75`).
+- **Regression:** Docker API smoke test repeats a grant with reordered workspace IDs and asserts the idempotent response (commit `c99c752`).
+- **Verification:** CI pending at time of entry. UI browser interaction still needs manual verification.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
