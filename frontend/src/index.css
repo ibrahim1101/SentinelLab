@@ -4,38 +4,56 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0B0E14;
-  --surface: #121721;
-  --card: #161C26;
-  --border: #222D3D;
-  --text: #F1F5F9;
-  --text-2: #94A3B8;
-  --text-3: #64748B;
-  --cyan: #06B6D4;
-  --blue: #3B82F6;
-  --hover: #1b2330;
+  --bg: #161719;
+  --surface: #1D1E21;
+  --card: #222427;
+  --border: #323438;
+  --text: #ECECEE;
+  --text-2: #A2A2A8;
+  --text-3: #6E6F75;
+  --cyan: #22B8CF;
+  --blue: #5B8DEF;
+  --hover: #292B2F;
+  --tex-dot: rgba(255,255,255,.028);
+  --tex-line: rgba(255,255,255,.015);
 }
 :root[data-theme="stealth_titanium"] {
   --bg: #0D1117; --surface: #161B22; --card: #21262D; --border: #30363D;
   --text: #E6EDF3; --text-2: #8B949E; --text-3: #6E7681; --cyan: #22D3EE; --blue: #60A5FA; --hover: #262c36;
+  --tex-dot: rgba(255,255,255,.03); --tex-line: rgba(255,255,255,.016);
 }
 :root[data-theme="light_professional"] {
   --bg: #F8FAFC; --surface: #FFFFFF; --card: #F1F5F9; --border: #CBD5E1;
   --text: #0F172A; --text-2: #475569; --text-3: #64748B; --cyan: #0891B2; --blue: #2563EB; --hover: #e2e8f0;
+  --tex-dot: rgba(15,23,42,.05); --tex-line: rgba(15,23,42,.02);
 }
 :root[data-theme="high_contrast"] {
   --bg: #000000; --surface: #0A0A0A; --card: #141414; --border: #333333;
   --text: #FFFFFF; --text-2: #CCCCCC; --text-3: #A0A0A0; --cyan: #00F0FF; --blue: #3B82F6; --hover: #1a1a1a;
+  --tex-dot: rgba(255,255,255,.04); --tex-line: rgba(255,255,255,.02);
 }
 
 * { border-color: var(--border); }
 body {
   margin: 0;
+  position: relative;
   font-family: 'Inter', system-ui, sans-serif;
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   font-size: 14px;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(var(--tex-dot) 1px, transparent 1px),
+    repeating-linear-gradient(135deg, var(--tex-line) 0, var(--tex-line) 1px, transparent 1px, transparent 9px),
+    radial-gradient(1200px 600px at 100% 0%, color-mix(in srgb, var(--cyan) 5%, transparent), transparent 70%);
+  background-size: 22px 22px, auto, auto;
 }
 .font-head { font-family: 'Barlow', sans-serif; letter-spacing: -0.01em; }
 .font-mono { font-family: 'JetBrains Mono', Menlo, Consolas, monospace; }

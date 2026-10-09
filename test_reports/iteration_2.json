@@ -1,0 +1,42 @@
+{
+  "summary": "Milestone 2 E2E testing. Backend: 40/40 pytest cases passed (26 Milestone-1 regression + 14 new Milestone-2 — MITRE coverage shape/known-techniques/rule-mappings/gaps; IOC CRUD + hits + CSV + STIX import + scan; Playbooks list of 7 built-ins, dry-run proven non-persistent, live-run creates investigation with tasks + persists execution + honors notify approval gate, unknown playbook 404). Frontend: After clearing a stale webpack bundle (see RCA), confirmed sidebar now exposes nav-mitre-att-ck, nav-threat-intel, nav-playbooks. MITRE page renders matrix with all 12 tactic columns, cells for the 7 expected covered techniques (T1110, T1110.003, T1046, T1059.001, T1078, T1136, T1071), detail panel + gaps panel work. Threat Intel page shows ioc-stat-ip/domain/url/hash/email, add-ioc-modal insert visible in table, import-ioc-modal CSV insert visible, STIX option selectable, scan-ioc-btn triggers toast, ioc-hits-modal opens on value click, ioc-fp-* and ioc-del-* work. Playbooks page: all 7 cards present; run-playbook-modal lists 10 alert options; dry-run returns DRY-RUN/simulated step text (notify step 'simulated'); live-run returns 'Created investigation' text and persists an exec-history row; approve-notify checkbox is honored (notify step runs); clicking exec-* opens exec-detail-modal with step list. Regression navs (overview, events, hunting, alerts, rules, sources, investigations, reports, settings, threat-hunting) all reachable.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Modals (import-ioc-modal, run-playbook-modal, exec-detail-modal, ioc-hits-modal)", "issues": ["Modal does not dismiss on Escape key — only via the X button. Minor UX nit, documented in iteration_1 for event/alert modals as well; now generalised to new modals."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_milestone2.py",
+    "/app/backend/tests/test_sentinellab_api.py",
+    "/app/test_reports/pytest/milestone2_results.xml",
+    "/app/test_reports/pytest/all_results.xml"
+  ],
+  "action_items": [
+    "Investigate webpack-dev-server HMR stall: Layout.jsx (containing the new MITRE/Intel/Playbooks NAV entries) did NOT appear in the served bundle.js until I manually `touch`ed the file after a supervisor restart. If this repeats, main agent should either (a) run `sudo supervisorctl restart frontend` + `touch src/components/Layout.jsx` after any sidebar NAV edit, or (b) wire a Webpack `watchOptions.poll` in craco/webpack config to make file watching reliable in this container (inotify is sometimes unreliable on overlayfs).",
+    "Optional UX: close modals on Escape key for all shadcn/custom Modal wrappers (`/app/frontend/src/components/Modal.jsx`)."
+  ],
+  "critical_code_review_comments": [
+    "backend/server.py is now 1115 lines — long overdue to split into routers (auth, events, rules, alerts, indicators, mitre, playbooks, investigations, reports, settings, admin). Growing fast.",
+    "`/api/indicators/scan` uses `evaluate_rule` only against detection_rules with rule_type=='indicator'. If no such enabled rule exists for a given org, scan returns 0 regardless of how many active IOCs exist. Fine today (seed creates one), but is implicit — consider either auto-creating an org-wide 'IOC Match' rule in seed, or scanning indicators directly bypassing rule_type filter.",
+    "playbooks.execute(): dry_run approval branch marks approval-gated steps as `status='simulated'` which is correct, but the record['status'] computation on line 180 only accepts {ok, simulated}. If a non-approval step errors on a dry run it will be flagged needs_approval instead of failed — rename state to 'completed' only when all are 'ok' and no error occurred.",
+    "playbooks.execute(): `enrich_iocs` only considers `alert['src_ip']` — URLs/hashes/domains from the alert's related_events are ignored. Low-impact today but mentioned for completeness.",
+    "indicator_hits regex uses `^v$` anchored match with $options=i — correct, but doesn't match events where the IP is embedded in `raw` or logged under a non-standard key. Acceptable for synthetic data; document limitation.",
+    "mitre_coverage computes coverage per enabled rule only (as required). Good. Sub-technique parent is auto-covered when any sub covered — matches ATT&CK conventions.",
+    "No pagination on `/api/indicators` beyond `.limit(1000)` and `/api/playbooks/executions` beyond `.limit(100)` — ok for synthetic workspace; flag for prod scale.",
+    "Known Milestone-1 hydration warning in Reports.jsx (<span> inside <option>) still present. Carry-over."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_milestone2.py (new)",
+    "/app/frontend/src/components/Layout.jsx (touched, no content change — to force webpack rebuild)"
+  ],
+  "success_rate": { "backend": "100% (40/40 pytest)", "frontend": "100% of Milestone-2 testids present & interactive after HMR unstick" },
+  "test_credentials": "admin@sentinellab.io / Sentinel@2026 ; analyst@sentinellab.io / Analyst@2026 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Backend tests create TEST_-prefixed indicators (ip, domain, STIX-sourced) and clean them up at end of test. Frontend tests created TEST_UI_ IOCs and deleted them via UI. Live playbook runs created 2 additional investigation docs in Training Lab (expected side-effect of live run testing — safe since org-training is synthetic).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Nav testids follow pattern `nav-<slug>` where slug is lowercased label with non-[a-z] runs collapsed to '-'. So nav-mitre-att-ck for 'MITRE ATT&CK', nav-threat-intel, nav-playbooks. Playbook pages open modal that does NOT close on Escape — close via X button or re-click outside. If sidebar is missing new NAV items after an edit, `touch /app/frontend/src/components/Layout.jsx` then wait ~10s — webpack HMR occasionally misses the change on this container. Live playbook runs persist to automation_executions and create investigations; dry runs persist nothing. GET /api/investigations/{id} returns `{investigation, alerts}` (wrapped), not the raw document.",
+  "rca of the issue": "RCA (resolved during testing): Initial frontend check showed sidebar missing MITRE ATT&CK, Threat Intel, and Playbooks nav items even though Layout.jsx on disk included them and routes resolved correctly when visited directly. Diffed the live bundle.js served at /static/js/bundle.js — the NAV array in the compiled JS lacked those 3 entries, confirming the webpack dev server had not recompiled Layout.jsx after the Milestone-2 edit. Reproduction: curl the bundle and grep for 'MITRE ATT' — count was 1 (only Mitre.jsx PageHead title) before fix, 2 after. Mitigation: `touch /app/frontend/src/components/Layout.jsx` triggered an HMR rebuild; after 8s the bundle contained the new nav labels and the sidebar rendered all 12 items. Root cause is inotify watch flakiness on container overlayfs — not an app code bug."
+}
