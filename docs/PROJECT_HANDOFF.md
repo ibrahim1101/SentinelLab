@@ -73,3 +73,15 @@ Not yet initialized in repo by agent. (Emergent-managed.)
 
 ## 12. Phase 1 security stabilization (2026-10-09)
 Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace filtering, bounds user-provided regex matching, escapes Events Explorer literal searches, and prevents nonpersistent detection runs from modifying event/rule records. Dedicated regression tests added. These changes require independent CI and integration verification before production deployment. Milestones 2 and 3 are implemented per development history; earlier sections 8 and 11 are historical and superseded by the feature matrix.
+
+
+## 13. Current handoff — 2026-10-10 (supersedes historical backlog)
+- **Repository/branch:** private `ibrahim1101/SentinelLab` on `fix/phase1-security-regressions`; PR #1 open and unmerged. The older “not initialized” branch note and milestone 2/3 pending lists above are historical, not current status.
+- **CI:** verified green on `d2edbb5` in workflow runs 37991302420 and 37991298108. Changes made afterward need their own verification.
+- **Local preview:** Docker Compose Mongo/API/React frontend. User successfully built all images using public ECR mirrors when Docker Hub auth timed out; port 8080 was occupied and local override to port 8081 was recommended. Local host URL `http://localhost:8081` depends on that override.
+- **Runtime issue:** live manual Malware Alert Triage with approved EDR action yielded `NoneType` IOC enrichment failure; audit-only disconnected EDR action incorrectly said `ok`. Fixed in `backend/playbooks.py` commit `f1b7223`: no-indicator enrichment skips, disconnected external actions marked `simulated`, aggregate statuses improved. Tests/browser retest pending. No actual EDR isolation was performed.
+- **Public documentation:** first-edition 9-page, 22-section `SentinelLab_Complete_User_Guide_v1.pdf` created for download. The public Portfolio repo `ibrahim1101/Portfolio` `main` commit `112e91b` updated `sentinellab.html` to describe the developer preview and link `docs/SentinelLab_Complete_User_Guide_v1.pdf` in project actions and journey section. **PDF binary upload to Portfolio is not confirmed**; links are pending publication and validation. Do not publicly expose private repo materials or secrets.
+- **Immediate P0:** test the playbook null-alert, simulated action and aggregate statuses; validate frontend labels; add deterministic applying-state approval reconciliation tests including five-minute server guard.
+- **P1:** 15-module browser QA; publish/verify guide; improve PDF with validated controls/screenshots; Docker onboarding.
+- **P2/P3:** richer IOC enrichment, integration adapters and production hardening, then advanced SOC features.
+- **Process:** keep `docs/ENGINEERING_JOURNEY.md` current with commits, failures, test evidence and limitations; never merge PR #1 without explicit authorization.
