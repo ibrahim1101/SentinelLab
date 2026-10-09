@@ -791,7 +791,7 @@ async def membership_review(user=Depends(require_role("super_admin"))):
 async def set_user_workspaces(user_id: str, body: dict, user=Depends(require_role("super_admin"))):
     """Explicit super-admin approval or revocation of built-in workspace access."""
     org_ids = body.get("org_ids")
-    if not isinstance(org_ids, list) or not org_ids or len(org_ids) != len(set(map(str, org_ids))) or any(not isinstance(v, str) or v not in (PROD_ORG, TRAIN_ORG) for v in org_ids):
+    if not isinstance(org_ids, list) or not org_ids or len(org_ids) != len(set(str(v) for v in org_ids)) or any(not isinstance(v, str) or v not in (PROD_ORG, TRAIN_ORG) for v in org_ids):
         raise HTTPException(400, "Specify a nonempty, unique list of known workspace IDs")
     target = await db.users.find_one({"id": user_id})
     if not target:
@@ -800,6 +800,8 @@ async def set_user_workspaces(user_id: str, body: dict, user=Depends(require_rol
         raise HTTPException(400, "Cannot remove your own production access")
     if target.get("role") == "super_admin" and PROD_ORG not in org_ids:
         raise HTTPException(400, "Cannot remove production access from a super administrator")
+    if set(org_ids) == set(target.get("org_ids", [])):
+        return {"ok": True, "org_ids": target.get("org_ids", []), "default_org": target.get("default_org"), "unchanged": True}
     default_org = target.get("default_org") if target.get("default_org") in org_ids else org_ids[0]
     result = await db.users.update_one({"id": user_id}, {"$set": {"org_ids": org_ids, "default_org": default_org}})
     await audit(user.get("default_org"), user, "set_workspaces", "user", user_id,
