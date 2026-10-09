@@ -230,3 +230,10 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **P3:** advanced SOC roadmap (UEBA, Sigma UI, scheduled reports/PDF reports, vulnerability capabilities).
 - **Historical CI evidence:** commit `d2edbb5` passed both workflow runs [37991302420](https://github.com/ibrahim1101/SentinelLab/actions/runs/37991302420) and [37991298108](https://github.com/ibrahim1101/SentinelLab/actions/runs/37991298108). Those green runs precede the new playbook fix; never present them as verification of `f1b7223`.
 - **Handoff:** continue documenting successful and failed work in this journal; update `docs/PROJECT_HANDOFF.md` and roadmap with each milestone.
+
+### 2026-10-10 — P0 playbook regression coverage initiated
+- **Change:** added `backend/tests/test_playbook_regressions.py` at commit [5bbad48](https://github.com/ibrahim1101/SentinelLab/commit/5bbad48691125a40189493f646613da84efb58e5), covering manual no-alert enrichment, approved disconnected EDR simulation, and unapproved action gating.
+- **Verification:** GitHub accepted the commit; first workflow-run lookup returned no runs. Tests have not yet been observed passing. UI browser testing and production-access applying-state tests remain outstanding.
+- **Documentation publication:** confirmed `ibrahim1101/Portfolio` main contains `docs/SentinelLab_Complete_User_Guide_v1.pdf` (Git blob `11a7d7b1`). GitHub Pages serving the PDF and the website link are not yet independently verified.
+- **Security observation:** playbook `create_investigation` links alerts with a query by `id` alone; review tenant scoping before public deployment. Existing `completed` aggregate status can coexist with a simulated external action; frontend must explicitly distinguish simulated from real containment.
+- **Next:** run regression suite in CI, add UI assertions and deterministic reconciliation integration tests. PR #1 remains unmerged.
