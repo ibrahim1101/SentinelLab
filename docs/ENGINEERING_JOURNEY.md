@@ -105,6 +105,15 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Regression:** Docker API smoke test repeats a grant with reordered workspace IDs and asserts the idempotent response (commit `c99c752`).
 - **Verification:** CI pending at time of entry. UI browser interaction still needs manual verification.
 
+## 2026-10-10 — Two-person production access approval
+
+- **Security policy:** direct production workspace grants now return HTTP 409. A super administrator submits a production access request; a **different** super administrator must approve before production membership is added.
+- **Backend:** added pending-request collection, list/create/approve APIs, distinct-approver check, atomic claim of pending requests, membership add-to-set, and audit logging (commit `2870eaf`).
+- **Tests:** Compose smoke now rejects direct grants, rejects self-approval, verifies no access before approval and checks queue authorization (commit `51ef0b5`).
+- **UI:** Settings → Security submits requests and displays pending requests with approval buttons disabled for the original requester (commits `5450211`, `057b623`).
+- **Verification:** CI pending; full two-admin approval happy path and browser validation still require dedicated tests. No migration of legacy access was performed.
+- **Known hardening work:** approval and membership writes are separate MongoDB operations; a transaction or recovery procedure would strengthen failure handling. Request expiry and cancellation are not yet implemented.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
