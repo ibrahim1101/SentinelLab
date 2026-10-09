@@ -143,6 +143,13 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Regression:** auditor attempts to reconcile an approval are rejected with HTTP 403 (commit `68f686c`).
 - **Verification:** CI pending. Manual UI testing and automated crash recovery remain outstanding.
 
+## 2026-10-10 — Stale approval detection
+
+- **Previous verification:** recovery UI and reconciliation permission checks passed both workflows at `5218ee8`: [37984512147](https://github.com/ibrahim1101/SentinelLab/actions/runs/37984512147) and [37984504011](https://github.com/ibrahim1101/SentinelLab/actions/runs/37984504011).
+- **Improvement:** approval queue marks `applying` requests older than five minutes with `needs_reconciliation`. Missing/invalid timestamps are flagged for review; no access is granted automatically (commit `864af53`).
+- **UI:** recovery controls show stale status and only enable reconciliation after the grace period (commit `31b0887`).
+- **Verification:** CI pending. This is automatic **detection**, not automatic reconciliation; manual review remains necessary to avoid racing in-flight approvals. Future work: robust transactional processing, recovery tests with injected failures and browser UI tests.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
