@@ -1,0 +1,77 @@
+# SentinelLab — Engineering Journey & Decision Log
+
+> **Living document.** Update this file with every meaningful feature, design decision, test, failure, fix, and release milestone. Preserve failures and their root causes rather than rewriting history. Dates and claims below are limited to verified project context; the early Emergent phase is summarized, not reconstructed step-by-step.
+
+## Project vision
+
+SentinelLab is a SOC/SIEM-oriented cybersecurity application, initially generated using Emergent and now being engineered into a maintainable, secure, independently deployable full-stack project. Development happens in [ibrahim1101/SentinelLab](https://github.com/ibrahim1101/SentinelLab).
+
+**Engineering policy:** work in feature branches, run automated tests, document regressions, and do not merge pull requests without explicit approval.
+
+## Phase 0 — Emergent prototype
+
+- The initial UI and application functionality were built with Emergent. The user reported that Emergent credits ran out during testing and requested independent verification and continued engineering in GitHub.
+- Existing application includes a React frontend, FastAPI backend, MongoDB storage, authentication/workspaces, events, alerts, rules, investigations, reports, threat hunting, and additional SOC-oriented features.
+- **Limitation:** This log cannot claim every original Emergent feature has been independently validated. The original build history and any unverified implementation claims should be audited separately.
+
+## Phase 1 — Security stabilization and reproducible deployment
+
+Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://github.com/ibrahim1101/SentinelLab/pull/1), intentionally unmerged.
+
+### Security fixes
+
+- Restricted AI assistant context retrieval to the active organization.
+- Ensured detection replay with `persist=False` does not modify events, alerts, or rule metadata.
+- Scoped detection persistence and rule updates by organization; added MongoDB-backed isolation tests.
+- Escaped and bounded user-controlled regular expressions.
+- Removed default hardcoded administrator credentials; made demo accounts opt-in.
+- Added live authentication, role-based access control, and workspace authorization smoke tests.
+- Scoped linked event and rule lookups in alert details to the active tenant (commits `b692422`, `8576b81`).
+- Added MongoDB-backed cross-tenant alert tests (commits `ba1088c`, `d5ff2a5`).
+- Scoped linked alerts in investigation details to the active tenant, with a MongoDB regression test (commits `7ec55fc`, `573bbcb`).
+
+### Build and infrastructure
+
+- Added portable runtime dependencies in `backend/requirements.runtime.txt` and a non-root backend Docker image.
+- Added `compose.yaml` for MongoDB, FastAPI API, and the React frontend served by Nginx on localhost.
+- Added `.env.example`, Docker ignore files, and `docs/LOCAL_DOCKER.md`.
+- Added GitHub Actions security and Docker smoke workflows, including anonymous access, administrator login, JWT checks, role restrictions, and workspace boundary tests.
+
+### CI failures and lessons learned
+
+| Stage | Symptom | Root cause | Resolution | Verification |
+|---|---|---|---|---|
+| Expanded role tests, commit `3d991ed` | Docker smoke failed with HTTP 422 on account registration | Test email used `@example.invalid`, rejected by email validation | Changed to a syntactically acceptable `@example.com` test address in `ae48bf3` | Both workflows passed: runs [37973059921](https://github.com/ibrahim1101/SentinelLab/actions/runs/37973059921), [37973055184](https://github.com/ibrahim1101/SentinelLab/actions/runs/37973055184) |
+| Alert-detail tenant join hardening, `8576b81` | Regression risk: linked records were not tenant-filtered | Alert's own query was scoped, but linked events/rules weren't | Scoped joins and added regression test | Both workflows passed: runs [37974511197](https://github.com/ibrahim1101/SentinelLab/actions/runs/37974511197), [37974504326](https://github.com/ibrahim1101/SentinelLab/actions/runs/37974504326) |
+| MongoDB tenant integration, `d5ff2a5` | Need to verify behavior with actual cross-linked tenant records | Source-level assertions alone are insufficient | Added isolated MongoDB integration tests | Both workflows passed: runs [37975092843](https://github.com/ibrahim1101/SentinelLab/actions/runs/37975092843), [37975085607](https://github.com/ibrahim1101/SentinelLab/actions/runs/37975085607) |
+| Investigation linked-alert hardening, `573bbcb` | Potential cross-tenant data disclosure | Investigation was scoped, linked alert query was not | Added `org_id` filter and integration test | CI running when this entry was authored; verify latest Actions run |
+
+**Note:** Earlier trial-and-error details not captured in available verified history must be appended from actual commits, CI logs, or original development notes; do not invent them.
+
+## Outstanding risks / next engineering milestones
+
+1. Verify the latest investigation-isolation CI run and fix any failure.
+2. Audit all other joins, exports, mutations, and background jobs for organization scoping.
+3. Review self-registration: currently new accounts receive membership in both built-in workspaces; design secure tenant onboarding before public deployment.
+4. Expand RBAC coverage across auditor, analyst, SOC manager, administrator, and super administrator actions.
+5. Audit security-sensitive user input, file uploads, session handling, and secrets.
+6. Add production-readiness controls (TLS, secure cookie configuration, rate limiting, monitoring, backups, migration and deployment guidance).
+7. Verify full-stack usability and functionality end-to-end, including any features inherited from Emergent.
+
+## Update template (append on every milestone)
+
+### YYYY-MM-DD — Short milestone name
+- **Goal:**
+- **Changes / files:**
+- **Commit / PR:**
+- **Tests and CI evidence:**
+- **Failures / root cause / remediation:**
+- **Remaining risks and next step:**
+
+## Documentation maintenance rules
+
+- Keep this file editable Markdown and version-controlled.
+- Update after substantive changes, including failed experiments and abandoned approaches.
+- Link commits, issues, PRs, and workflow runs when available.
+- Distinguish *implemented*, *tested*, *passed in CI*, and *not yet validated*.
+- Never erase historical failures when later fixed.
