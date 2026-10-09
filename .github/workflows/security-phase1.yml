@@ -6,6 +6,20 @@ on:
 jobs:
   static-security:
     runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      MONGO_URL: mongodb://127.0.0.1:27017
+      DB_NAME: sentinellab_phase1_ci
+      JWT_SECRET: ci-only-test-secret
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -16,4 +30,4 @@ jobs:
       - name: Install lightweight test dependencies
         run: python -m pip install pytest pytest-xdist pytest-asyncio python-dateutil motor pymongo PyJWT bcrypt fastapi
       - name: Run isolated regression tests
-        run: python -m pytest -q backend/tests/test_security_regressions.py backend/tests/test_detection_behavior.py
+        run: python -m pytest -q backend/tests/test_security_regressions.py backend/tests/test_detection_behavior.py backend/tests/test_detection_mongo_integration.py
