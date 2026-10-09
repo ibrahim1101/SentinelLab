@@ -44,3 +44,23 @@ async def test_alert_detail_never_joins_foreign_tenant_records(monkeypatch):
         for coll in ("events", "alerts", "detection_rules"):
             await database[coll].delete_many({"org_id": {"$in": [tenant_a, tenant_b]}})
         client.close()
+
+@pytest.mark.asyncio
+async def test_investigation_detail_filters_cross_tenant_alerts(monkeypatch):
+    client = AsyncIOMotorClient(os.environ["MONGO_URL"], serverSelectionTimeoutMS=5000)
+    database = client[os.environ["DB_NAME"]]
+    tenant_a, tenant_b = "ci-investigation-a", "ci-investigation-b"
+    request = Request({"type": "http", "headers": [(b"x-workspace-id", tenant_a.encode())]})
+    user_a = {"id": "ci-investigator-a", "email": "a@example.com", "role": "analyst", "org_ids": [tenant_a], "default_org": tenant_a}
+    monkeypatch.setattr(server, "db", database)
+    try:
+        await database.investigations.delete_many({"org_id": tenant_a})
+        await database.alerts.delete_many({"org_id": {"$in": [tenant_a, tenant_b]}})
+        await database.investigations.insert_one({"id": "ci-inv-a", "org_id": tenant_a, "related_alerts": ["ci-alert-local", "ci-alert-foreign"]})
+        await database.alerts.insert_many([{"id": "ci-alert-local", "org_id": tenant_a}, {"id": "ci-alert-foreign", "org_id": tenant_b}])
+        result = await server.investigation_detail("ci-inv-a", request, user_a)
+        assert [alert["id"] for alert in result["alerts"]] == ["ci-alert-local"]
+    finally:
+        await database.investigations.delete_many({"org_id": tenant_a})
+        await database.alerts.delete_many({"org_id": {"$in": [tenant_a, tenant_b]}})
+        client.close()
