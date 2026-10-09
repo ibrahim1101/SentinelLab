@@ -470,9 +470,9 @@ async def bulk_alerts(request: Request, body: dict, user=Depends(require_role("a
     org = active_org(user, request)
     ids = body.get("ids", [])
     status = body.get("status")
-    await db.alerts.update_many({"id": {"$in": ids}, "org_id": org},
-                                {"$set": {"status": status, "updated_at": now_iso()}})
-    return {"updated": len(ids)}
+    result = await db.alerts.update_many({"id": {"$in": ids}, "org_id": org},
+                                         {"$set": {"status": status, "updated_at": now_iso()}})
+    return {"updated": result.modified_count}
 
 
 # ============================= THREAT HUNTING =============================
