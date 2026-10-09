@@ -90,6 +90,14 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Verification:** CI pending at time of writing; record workflow links and results after completion.
 - **Remaining:** build an administrative review interface and multi-admin approval process, and review legacy production memberships before public exposure.
 
+## 2026-10-10 — Production membership review UI
+
+- **Goal:** expose administrator-controlled production workspace access in the existing application rather than requiring raw API requests.
+- **Implementation:** added super-admin-only membership review controls under Settings → Security, displaying user membership status and offering confirmation-gated grant/revoke actions, with loading and error feedback. The server enforces authorization and audits changes (commit `dd3db57`).
+- **Prior verification:** membership grant/revoke API integration tests passed on commit `af4e270`, runs [37978184860](https://github.com/ibrahim1101/SentinelLab/actions/runs/37978184860) and [37978175892](https://github.com/ibrahim1101/SentinelLab/actions/runs/37978175892).
+- **Verification:** frontend build/CI pending; manual browser validation remains outstanding.
+- **Next:** consider a two-person approval flow for high-risk grants, audit legacy accounts, and add UI interaction tests.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
