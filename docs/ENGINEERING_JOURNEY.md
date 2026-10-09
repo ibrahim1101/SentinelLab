@@ -172,6 +172,13 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Mitigation:** make Compose Mongo image configurable with `MONGO_IMAGE` (default `mongo:7` for local installs), and configure CI's service container and Compose to pull Mongo 7 via `public.ecr.aws/docker/library/mongo:7` instead of Docker Hub (commits `2a55ded`, `ef5b3db`).
 - **Verification:** new CI pending; public ECR image availability is not yet validated by a successful run. No production image default changed.
 
+## 2026-10-10 — Docker base image registry throttle
+
+- **Verification:** at `459e95b`, both static-security jobs passed ([37990186845](https://github.com/ibrahim1101/SentinelLab/actions/runs/37990186845), [37990180403](https://github.com/ibrahim1101/SentinelLab/actions/runs/37990180403)); Docker smoke jobs failed at image build.
+- **Root cause:** Docker Hub returned HTTP 429 for `python:3.12-slim` and `node:22-alpine`, even after Mongo moved to public ECR. This confirms remaining base-image pulls were throttled, not app test failures.
+- **Fix:** backend and frontend Dockerfiles accept configurable Python, Node, and Nginx base images. Compose passes those build args. CI points all three to public ECR mirrors, preserving Docker Hub defaults for local users (commits `eebd0e1`, `e43327b`, `be597b7`, `fba5230`).
+- **Verification:** new CI pending; mirror image/tag availability must be confirmed by actual build.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
