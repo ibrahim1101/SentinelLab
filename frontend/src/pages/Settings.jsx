@@ -26,12 +26,14 @@ export default function Settings() {
   const isAdmin = ["admin", "super_admin"].includes(user?.role);
   const isSuperAdmin = user?.role === "super_admin";
   const [members, setMembers] = useState([]);
+  const [approvalQueue, setApprovalQueue] = useState([]);
   const [savingMember, setSavingMember] = useState("");
 
   useEffect(() => {
     client.get("/settings").then(({ data }) => setS(data.settings));
     client.get("/admin/health").then(({ data }) => setHealth(data)).catch(() => {});
     if (isAdmin) client.get("/admin/users").then(({ data }) => setUsers(data.users)).catch(() => {});
+    if (isSuperAdmin) client.get("/admin/production-access-requests").then(({ data }) => setApprovalQueue(data.requests)).catch(() => {});
     if (isSuperAdmin) client.get("/admin/membership-review").then(({ data }) => setMembers(data.production_members)).catch(() => toast.error("Could not load production membership review"));
     client.get("/admin/audit").then(({ data }) => setAudit(data.audit)).catch(() => {});
   }, []);
@@ -52,8 +54,22 @@ export default function Settings() {
       if (!enableProduction) setUsers((prev) => prev.map((u) => u.id === target.id ? { ...u, org_ids: data.org_ids, default_org: data.default_org } : u));
       const review = await client.get("/admin/membership-review");
       setMembers(review.data.production_members);
+      const queue = await client.get("/admin/production-access-requests");
+      setApprovalQueue(queue.data.requests);
       toast.success(enableProduction ? "Approval requested — a different super admin must approve" : "Workspace membership updated");
     } catch (err) { toast.error(err.response?.data?.detail || "Workspace membership update failed"); }
+    finally { setSavingMember(""); }
+  };
+
+  const approveRequest = async (entry) => {
+    if (!window.confirm("Approve production access for this user? This is a privileged operation.")) return;
+    setSavingMember(entry.target_id);
+    try {
+      await client.post(`/admin/production-access-requests/${entry.id}/approve`);
+      const [queue, people, review] = await Promise.all([client.get("/admin/production-access-requests"), client.get("/admin/users"), client.get("/admin/membership-review")]);
+      setApprovalQueue(queue.data.requests); setUsers(people.data.users); setMembers(review.data.production_members);
+      toast.success("Production access approved");
+    } catch (err) { toast.error(err.response?.data?.detail || "Approval failed"); }
     finally { setSavingMember(""); }
   };
 
@@ -106,6 +122,7 @@ export default function Settings() {
                   {isSuperAdmin && <div className="mt-5 space-y-3" data-testid="membership-review">
                     <div className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Production workspace membership review</div>
                     <p className="text-[12px]" style={{ color: "var(--text-2)" }}>Currently approved production members: {members.length}. Review older accounts before deployment. Changes are audited and require confirmation.</p>
+                    <div className="space-y-2">{approvalQueue.filter((q) => q.status === "pending").map((q) => <div key={q.id} className="flex items-center justify-between gap-2 border-b py-2"><span className="text-[12px]">Pending approval: {users.find((u) => u.id === q.target_id)?.email || q.target_id}</span><button className="btn btn-sm" disabled={!!savingMember || q.requester_id === user.id} onClick={() => approveRequest(q)}>{q.requester_id === user.id ? "Awaiting second admin" : "Approve"}</button></div>)}</div>
                     <div className="space-y-2">{users.map((u) => {
                       const approved = (u.org_ids || []).includes("org-production");
                       return <div key={u.id} className="flex items-center justify-between gap-3 border-b py-2">
