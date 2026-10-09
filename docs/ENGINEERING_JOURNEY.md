@@ -128,6 +128,14 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Diagnostics:** if the approved request cannot be applied to the user's memberships, mark the request `failed` with a reason and timestamp to support administrative investigation (commit `12d9139`).
 - **Verification:** new CI pending. **Remaining:** use MongoDB transactions or a durable recovery worker for crash windows between approval and grant, plus approval cancellation/expiry and UI browser tests.
 
+## 2026-10-10 — Interrupted approval reconciliation
+
+- **Prior CI:** both workflows passed at `8a850d7`: [37981690975](https://github.com/ibrahim1101/SentinelLab/actions/runs/37981690975), [37981683959](https://github.com/ibrahim1101/SentinelLab/actions/runs/37981683959).
+- **Issue:** the old approval path marked a request `approved` before writing the target user's membership; process interruption could leave a misleading approved request without access.
+- **Fix:** introduce `applying` transitional state, only mark `approved` after successful membership update, and add super-admin-only `POST /admin/production-access-requests/{request_id}/reconcile` to inspect the target's actual membership and finalize an interrupted `applying` request without issuing a new grant (commit `118c19c`).
+- **Regression:** test asserts successful approval reaches terminal `approved` and cannot be reconciled again (commit `5e00a63`).
+- **Verification:** CI pending. **Limitations:** reconciliation is manual; an interruption between membership write and final status update requires review. Transactions and automatic recovery remain future improvements.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
