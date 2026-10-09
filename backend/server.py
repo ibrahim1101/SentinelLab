@@ -775,6 +775,13 @@ async def set_role(user_id: str, body: dict, request: Request, user=Depends(requ
     role = body.get("role")
     if role not in ROLE_LEVELS:
         raise HTTPException(400, "Invalid role")
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if (role == "super_admin" or target.get("role") == "super_admin") and user.get("role") != "super_admin":
+        raise HTTPException(403, "Only super administrators can manage super-admin roles")
+    if target["id"] == user["id"] and role != target.get("role"):
+        raise HTTPException(400, "Cannot change your own administrator role")
     await db.users.update_one({"id": user_id}, {"$set": {"role": role}})
     await audit(user.get("default_org"), user, "set_role", "user", user_id, {"role": role})
     return {"ok": True}
