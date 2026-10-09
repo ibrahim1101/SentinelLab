@@ -114,6 +114,13 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Verification:** CI pending; full two-admin approval happy path and browser validation still require dedicated tests. No migration of legacy access was performed.
 - **Known hardening work:** approval and membership writes are separate MongoDB operations; a transaction or recovery procedure would strengthen failure handling. Request expiry and cancellation are not yet implemented.
 
+## 2026-10-10 — Independent approver regression and role escalation guard
+
+- **Verification:** previous two-person approval changes passed both workflows, runs [37979949507](https://github.com/ibrahim1101/SentinelLab/actions/runs/37979949507) and [37979944325](https://github.com/ibrahim1101/SentinelLab/actions/runs/37979944325).
+- **Security finding:** existing role management allowed ordinary admins to assign the `super_admin` role, undermining two-person production approval. Fixed: only super admins can assign or alter super-admin roles; self-role changes are rejected; unknown users return 404 (commit `43b94b7`).
+- **Regression:** expanded Docker API smoke to create a separate second administrator, approve a pending request, verify immediate production access, reject reuse of the approval, revoke access and verify 403 (commit `2bd402c`).
+- **Verification:** new CI pending. Dedicated negative role-escalation regression and robust multi-admin provisioning UX remain follow-up work.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
