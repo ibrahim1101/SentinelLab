@@ -165,6 +165,13 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Assessment:** startup/infrastructure or repository Actions policy/billing issue is plausible, but root cause is **unconfirmed**. Do not misclassify as a test regression without execution logs. Inspect GitHub Actions run banner, repository Actions permissions, account billing and runner availability; these settings were not accessible through the current connector.
 - **Next:** resume integration verification when runners start successfully. Do not merge while checks are failing.
 
+## 2026-10-10 — Docker Hub rate limit identified and CI registry workaround
+
+- **Failure:** both latest workflows failed at `57ea3bf`, runs [37989865684](https://github.com/ibrahim1101/SentinelLab/actions/runs/37989865684) and [37989860486](https://github.com/ibrahim1101/SentinelLab/actions/runs/37989860486).
+- **Confirmed root cause:** Docker smoke log says `mongo Error toomanyrequests: You have reached your unauthenticated pull rate limit`. Static-security passed in one run; the other static job failed initializing its Mongo container. Earlier no-step failures had missing logs, so their cause remains unproven.
+- **Mitigation:** make Compose Mongo image configurable with `MONGO_IMAGE` (default `mongo:7` for local installs), and configure CI's service container and Compose to pull Mongo 7 via `public.ecr.aws/docker/library/mongo:7` instead of Docker Hub (commits `2a55ded`, `ef5b3db`).
+- **Verification:** new CI pending; public ECR image availability is not yet validated by a successful run. No production image default changed.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
