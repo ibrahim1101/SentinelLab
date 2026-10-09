@@ -42,6 +42,10 @@ status, registered = request("POST", "/api/auth/register", {"email": email, "pas
 assert status == 200, f"Account registration failed: {status}: {registered}"
 analyst_token = registered["access_token"]
 analyst_id = registered["user"]["id"]
+assert registered["user"]["org_ids"] == ["org-training"], "Self-registration granted unexpected tenant access"
+assert registered["user"]["default_org"] == "org-training", "Self-registration selected privileged workspace"
+status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
+assert status == 403, f"Self-registered user accessed production: {status}"
 status, _ = request("GET", "/api/admin/users", token=analyst_token)
 assert status == 403, f"Analyst accessed admin users: {status}"
 status, _ = request("DELETE", "/api/rules/nonexistent-rule", token=analyst_token)
