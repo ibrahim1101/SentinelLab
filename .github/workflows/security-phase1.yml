@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mongo:
-        image: mongo:7
+        image: public.ecr.aws/docker/library/mongo:7
         ports:
           - 27017:27017
         options: >-
@@ -38,6 +38,7 @@ jobs:
     env:
       JWT_SECRET: ci-only-32-character-secret-value
       ADMIN_PASSWORD: ci-only-strong-admin-password
+      MONGO_IMAGE: public.ecr.aws/docker/library/mongo:7
     steps:
       - uses: actions/checkout@v4
       - name: Validate Compose configuration
