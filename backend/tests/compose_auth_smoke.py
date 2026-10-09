@@ -37,7 +37,7 @@ assert status == 403, f"Unauthorized workspace returned {status}; expected 403"
 print("PASS: anonymous access, admin login, identity, workspace listing, invalid token, workspace isolation")
 
 # Create a disposable account and verify role-based access using live API calls.
-email = "ci-" + uuid.uuid4().hex[:16] + "@example.invalid"
+email = "ci-" + uuid.uuid4().hex[:16] + "@example.com"
 status, registered = request("POST", "/api/auth/register", {"email": email, "password": "ci-temporary-strong-password", "name": "CI Security Analyst"})
 assert status == 200, f"Account registration failed: {status}: {registered}"
 analyst_token = registered["access_token"]
