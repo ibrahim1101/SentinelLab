@@ -179,6 +179,13 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Fix:** backend and frontend Dockerfiles accept configurable Python, Node, and Nginx base images. Compose passes those build args. CI points all three to public ECR mirrors, preserving Docker Hub defaults for local users (commits `eebd0e1`, `e43327b`, `be597b7`, `fba5230`).
 - **Verification:** new CI pending; mirror image/tag availability must be confirmed by actual build.
 
+## 2026-10-10 — CI recovered and all checks green
+
+- **Verified success:** commit `9ada6cb` passed both workflow runs [37990803014](https://github.com/ibrahim1101/SentinelLab/actions/runs/37990803014) and [37990797442](https://github.com/ibrahim1101/SentinelLab/actions/runs/37990797442). Each run passed `static-security` and `docker-smoke`.
+- **Root causes and recovery:** anonymous Docker Hub image pulls were rate limited (429); ECR public mirror used for CI Mongo/Python/Node/Nginx images. Frontend multi-stage Dockerfile initially declared `NGINX_BASE_IMAGE` after first `FROM`, which caused a blank base image; moving declaration before first `FROM` fixed this.
+- **Coverage:** Compose smoke validates authentication, training-only registration, tenant isolation, RBAC, two-person production approval and revocation. Still needed: deterministic stale `applying` reconciliation tests for membership-present, membership-absent, and five-minute guard paths.
+- **Branch discipline:** PR #1 remains unmerged. This journal update itself triggers new CI checks and must be verified separately.
+
 ## Update template (append on every milestone)
 
 ### YYYY-MM-DD — Short milestone name
