@@ -103,6 +103,10 @@ status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-pr
 assert status == 200, f"Approved production membership did not take effect: {status}"
 status, _ = request("POST", "/api/admin/production-access-requests/" + pending["id"] + "/approve", token=second_token)
 assert status == 404, f"Already approved request was reusable: {status}"
+status, _ = request("POST", "/api/admin/production-access-requests/" + pending["id"] + "/reconcile", token=second_token)
+assert status == 404, f"Completed approval could be reconciled again: {status}"
+status, queue = request("GET", "/api/admin/production-access-requests", token=token)
+assert status == 200 and any(x["id"] == pending["id"] and x["status"] == "approved" for x in queue["requests"]), "Approval did not reach terminal approved state"
 status, revoked = request("PUT", endpoint, {"org_ids": ["org-training"]}, token=token)
 assert status == 200 and revoked["default_org"] == "org-training", f"Production revocation failed: {status}: {revoked}"
 status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
