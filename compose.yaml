@@ -22,9 +22,16 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sentinellab.io}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       ENABLE_DEMO_ACCOUNTS: ${ENABLE_DEMO_ACCOUNTS:-false}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
     depends_on:
       mongo:
         condition: service_healthy
+  web:
+    build:
+      context: ./frontend
+    ports:
+      - '127.0.0.1:8080:80'
+    depends_on:
+      - api
 volumes:
   mongo_data:
