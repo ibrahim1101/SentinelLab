@@ -52,3 +52,6 @@ Statuses: `Not Started` · `In Progress` · `Implemented` · `Tested` · `Blocke
 | TOTP MFA + WebAuthn | Not Started |
 | Scheduled reports + PDF export | Not Started |
 | Docker Compose + GitHub Actions CI | Not Started |
+
+## Phase 1 verification note (2026-10-09)
+Milestone 2/3 `Tested` labels above reflect Emergent-reported API checks, not independent CI confirmation. Security stabilization is in progress on `fix/phase1-security-regressions`; do not interpret this matrix as a production certification.
