@@ -123,7 +123,7 @@ async def register(body: RegisterReq, response: Response):
     uid = new_id()
     user = {"id": uid, "email": email, "name": body.name,
             "password_hash": hash_password(body.password), "role": "analyst",
-            "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": PROD_ORG,
+            "org_ids": [TRAIN_ORG], "default_org": TRAIN_ORG,
             "theme": "obsidian_dark", "created_at": now_iso()}
     await db.users.insert_one(dict(user))
     token = create_access_token(uid, email, "analyst")
