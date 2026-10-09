@@ -70,3 +70,6 @@ Not yet initialized in repo by agent. (Emergent-managed.)
 2. Threat Intelligence IOC management page + CSV/STIX import.
 3. Playbooks & automation engine with approval gates.
 4. Docker Compose + GitHub Actions CI + PDF report export.
+
+## 12. Phase 1 security stabilization (2026-10-09)
+Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace filtering, bounds user-provided regex matching, escapes Events Explorer literal searches, and prevents nonpersistent detection runs from modifying event/rule records. Dedicated regression tests added. These changes require independent CI and integration verification before production deployment. Milestones 2 and 3 are implemented per development history; earlier sections 8 and 11 are historical and superseded by the feature matrix.
