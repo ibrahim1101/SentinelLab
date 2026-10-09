@@ -38,12 +38,12 @@ Statuses: `Not Started` · `In Progress` · `Implemented` · `Tested` · `Blocke
 ## Later Milestones
 | Feature | Status |
 |---|---|
-| MITRE ATT&CK explorer + coverage | Not Started |
-| Threat intelligence IOC UI + STIX/CSV import | Not Started |
+| MITRE ATT&CK explorer + coverage | Tested |
+| Threat intelligence IOC UI + STIX/CSV import | Tested |
 | Network analytics + relationship graph | Not Started |
 | UEBA | Not Started |
 | Vulnerability management | Not Started |
-| Incident response playbooks | Not Started |
+| Incident response playbooks (dry-run + approval gates) | Tested |
 | Security automation engine | Not Started |
 | Sigma YAML import UI | Not Started |
 | TOTP MFA + WebAuthn | Not Started |

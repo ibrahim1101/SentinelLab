@@ -22,6 +22,8 @@ from parsers import parse_payload, normalize
 from detection import run_detection, evaluate_rule
 import seed as seedmod
 import ai_assistant
+import playbooks as pbmod
+from mitre_data import TACTICS, TECHNIQUES, ATTACK_VERSION
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("sentinellab")
@@ -827,6 +829,222 @@ async def demo_reset(request: Request, user=Depends(require_role("soc_manager"))
         await db[coll].delete_many({"org_id": TRAIN_ORG})
     await seedmod.seed_training_workspace(TRAIN_ORG)
     return {"ok": True}
+
+
+# ============================= THREAT INTELLIGENCE (IOCs) =============================
+class IndicatorReq(BaseModel):
+    ioc_type: str  # ip, domain, url, hash, email
+    value: str
+    confidence: int = 70
+    source: str = "manual"
+    tags: List[str] = []
+
+
+@api.get("/indicators")
+async def list_indicators(request: Request, ioc_type: Optional[str] = None, active: Optional[bool] = None,
+                          q: Optional[str] = None, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    filt = {"org_id": org}
+    if ioc_type: filt["ioc_type"] = ioc_type
+    if active is not None: filt["active"] = active
+    if q: filt["value"] = {"$regex": q, "$options": "i"}
+    rows = await db.indicators.find(filt, {"_id": 0}).sort("created_at", -1).limit(1000).to_list(1000)
+    stats = {}
+    for t in ["ip", "domain", "url", "hash", "email"]:
+        stats[t] = await db.indicators.count_documents({"org_id": org, "ioc_type": t})
+    return {"indicators": rows, "stats": stats}
+
+
+@api.post("/indicators")
+async def create_indicator(body: IndicatorReq, request: Request, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    doc = {"id": new_id(), "org_id": org, "ioc_type": body.ioc_type, "value": body.value.strip(),
+           "confidence": body.confidence, "source": body.source, "tags": body.tags,
+           "active": True, "false_positive": False, "hits": 0,
+           "created_at": now_iso(), "is_synthetic": org == TRAIN_ORG}
+    await db.indicators.insert_one(dict(doc))
+    await audit(org, user, "create", "indicator", doc["id"], {"value": body.value})
+    return clean(doc)
+
+
+@api.put("/indicators/{ind_id}")
+async def update_indicator(ind_id: str, request: Request, body: dict, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    upd = {k: v for k, v in body.items() if k in ("active", "false_positive", "confidence", "tags")}
+    await db.indicators.update_one({"id": ind_id, "org_id": org}, {"$set": upd})
+    return clean(await db.indicators.find_one({"id": ind_id, "org_id": org}, {"_id": 0}))
+
+
+@api.delete("/indicators/{ind_id}")
+async def delete_indicator(ind_id: str, request: Request, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    await db.indicators.delete_one({"id": ind_id, "org_id": org})
+    await audit(org, user, "delete", "indicator", ind_id)
+    return {"ok": True}
+
+
+@api.get("/indicators/{ind_id}/hits")
+async def indicator_hits(ind_id: str, request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    ind = await db.indicators.find_one({"id": ind_id, "org_id": org}, {"_id": 0})
+    if not ind:
+        raise HTTPException(404, "Indicator not found")
+    v = str(ind["value"]).lower()
+    fields = {"ip": ["src_ip", "dest_ip"], "domain": ["dns_query"], "hash": ["file_hash"],
+              "url": ["dns_query"], "email": ["username"]}.get(ind["ioc_type"], [])
+    ors = [{f: {"$regex": f"^{v}$", "$options": "i"}} for f in fields]
+    events = await db.events.find({"org_id": org, "$or": ors or [{"id": "__none__"}]},
+                                  {"_id": 0, "raw": 0}).limit(100).to_list(100) if ors else []
+    return {"indicator": ind, "hits": events, "count": len(events)}
+
+
+def _parse_stix_pattern(pattern: str):
+    """Extract (ioc_type, value) pairs from a STIX 2.1 indicator pattern."""
+    out = []
+    m = {"ipv4-addr:value": "ip", "ipv6-addr:value": "ip", "domain-name:value": "domain",
+         "url:value": "url", "email-addr:value": "email",
+         "file:hashes.'SHA-256'": "hash", "file:hashes.MD5": "hash", "file:hashes.'SHA-1'": "hash"}
+    import re as _re
+    for mm in _re.finditer(r"([\w:\-\.'`]+)\s*=\s*'([^']+)'", pattern or ""):
+        key, val = mm.group(1).strip(), mm.group(2).strip()
+        for k, t in m.items():
+            if key.lower().replace("`", "'") == k.lower():
+                out.append((t, val)); break
+        else:
+            if "hashes" in key.lower():
+                out.append(("hash", val))
+    return out
+
+
+@api.post("/indicators/import")
+async def import_indicators(request: Request, body: dict, user=Depends(require_role("analyst"))):
+    """Import IOCs from CSV text (type,value,confidence,source,tags) or STIX 2.1 bundle JSON."""
+    org = active_org(user, request)
+    fmt = body.get("format", "csv")
+    data = body.get("data", "")
+    docs = []
+    if fmt == "csv":
+        reader = csv.DictReader(io.StringIO(data)) if "," in data.split("\n", 1)[0] else None
+        if reader and reader.fieldnames and "value" in [f.lower() for f in reader.fieldnames]:
+            for r in reader:
+                r = {k.lower().strip(): v for k, v in r.items() if k}
+                if not r.get("value"): continue
+                docs.append((r.get("type", "ip"), r["value"], int(r.get("confidence") or 70),
+                             r.get("source", "csv-import"),
+                             [t for t in (r.get("tags", "") or "").split(";") if t]))
+        else:
+            for line in data.splitlines():
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 2 and parts[1]:
+                    docs.append((parts[0] or "ip", parts[1], int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 70,
+                                 parts[3] if len(parts) > 3 else "csv-import",
+                                 parts[4].split(";") if len(parts) > 4 else []))
+    elif fmt == "stix":
+        try:
+            bundle = json.loads(data)
+        except Exception as ex:
+            raise HTTPException(400, f"Invalid STIX JSON: {ex}")
+        for obj in bundle.get("objects", []):
+            if obj.get("type") == "indicator":
+                for t, v in _parse_stix_pattern(obj.get("pattern", "")):
+                    conf = obj.get("confidence", 70)
+                    docs.append((t, v, conf, obj.get("name", "stix-import"), obj.get("labels", [])))
+    inserted = 0
+    for t, v, conf, src, tags in docs:
+        if await db.indicators.find_one({"org_id": org, "value": v, "ioc_type": t}):
+            continue
+        await db.indicators.insert_one({"id": new_id(), "org_id": org, "ioc_type": t, "value": str(v).strip(),
+                                        "confidence": conf, "source": src, "tags": tags, "active": True,
+                                        "false_positive": False, "hits": 0, "created_at": now_iso(),
+                                        "is_synthetic": org == TRAIN_ORG})
+        inserted += 1
+    await audit(org, user, "import", "indicator", details={"count": inserted, "format": fmt})
+    return {"imported": inserted, "parsed": len(docs)}
+
+
+@api.post("/indicators/scan")
+async def scan_indicators(request: Request, time_range: str = "7d", user=Depends(require_role("analyst"))):
+    """Match all active indicators against recent events and generate alerts for hits."""
+    org = active_org(user, request)
+    events = await db.events.find({"org_id": org, "timestamp": {"$gte": _range_to_iso(time_range)}},
+                                  {"_id": 0}).limit(10000).to_list(10000)
+    rules = await db.detection_rules.find({"org_id": org, "rule_type": "indicator", "enabled": True},
+                                          {"_id": 0}).to_list(50)
+    total = 0
+    for rule in rules:
+        alerts, matched = await evaluate_rule(rule, events, org)
+        for a in alerts:
+            existing = await db.alerts.find_one({"org_id": org, "rule_id": rule["id"], "title": a["title"],
+                                                 "status": {"$in": ["new", "triaged", "investigating"]}})
+            if not existing:
+                await db.alerts.insert_one(dict(a)); total += 1
+    return {"alerts_generated": total, "events_scanned": len(events)}
+
+
+# ============================= MITRE ATT&CK =============================
+@api.get("/mitre/coverage")
+async def mitre_coverage(request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    rules = await db.detection_rules.find({"org_id": org}, {"_id": 0}).to_list(500)
+    covered, rule_map = set(), {}
+    for r in rules:
+        if not r.get("enabled"):
+            continue
+        for tech in r.get("mitre", []):
+            covered.add(tech)
+            if "." in tech:
+                covered.add(tech.split(".")[0])
+            rule_map.setdefault(tech, []).append({"id": r["id"], "name": r["name"], "severity": r["severity"]})
+    alert_counts = {}
+    async for a in db.alerts.find({"org_id": org}, {"mitre": 1, "_id": 0}):
+        for m in a.get("mitre", []):
+            alert_counts[m] = alert_counts.get(m, 0) + 1
+            if "." in m:
+                p = m.split(".")[0]
+                alert_counts[p] = alert_counts.get(p, 0) + 1
+    techs = []
+    for t in TECHNIQUES:
+        tid = t["id"]
+        techs.append({**t, "covered": tid in covered, "alerts": alert_counts.get(tid, 0),
+                      "rules": rule_map.get(tid, [])})
+    gap = [t for t in techs if not t["covered"]]
+    total = len(TECHNIQUES)
+    return {"version": ATTACK_VERSION, "tactics": TACTICS, "techniques": techs,
+            "coverage_pct": round(100 * sum(1 for t in techs if t["covered"]) / max(total, 1)),
+            "covered_count": sum(1 for t in techs if t["covered"]), "total": total,
+            "gaps": gap, "gap_count": len(gap)}
+
+
+# ============================= INCIDENT RESPONSE PLAYBOOKS =============================
+@api.get("/playbooks")
+async def list_playbooks(user=Depends(get_current_user)):
+    return {"playbooks": pbmod.BUILTIN}
+
+
+@api.post("/playbooks/run")
+async def run_playbook(request: Request, body: dict, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    pb = pbmod.PLAYBOOK_MAP.get(body.get("playbook_id"))
+    if not pb:
+        raise HTTPException(404, "Playbook not found")
+    alert = None
+    if body.get("alert_id"):
+        alert = await db.alerts.find_one({"id": body["alert_id"], "org_id": org}, {"_id": 0})
+        if not alert:
+            raise HTTPException(404, "Alert not found")
+    dry_run = body.get("dry_run", True)
+    record = await pbmod.execute(pb, org, alert, user, dry_run=dry_run, approvals=body.get("approvals", []))
+    if not dry_run:
+        await audit(org, user, "run_playbook", "playbook", pb["id"],
+                    {"alert_id": body.get("alert_id"), "dry_run": dry_run})
+    return record
+
+
+@api.get("/playbooks/executions")
+async def playbook_executions(request: Request, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    rows = await db.automation_executions.find({"org_id": org}, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
+    return {"executions": rows}
 
 
 # ============================= HEALTH =============================

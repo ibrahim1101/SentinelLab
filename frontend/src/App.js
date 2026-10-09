@@ -16,6 +16,9 @@ import Sources from "@/pages/Sources";
 import Investigations from "@/pages/Investigations";
 import Reports from "@/pages/Reports";
 import Settings from "@/pages/Settings";
+import Mitre from "@/pages/Mitre";
+import ThreatIntel from "@/pages/ThreatIntel";
+import Playbooks from "@/pages/Playbooks";
 
 function Shell() {
   const { user } = useAuth();
@@ -30,8 +33,11 @@ function Shell() {
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/hunting" element={<ThreatHunting />} />
           <Route path="/rules" element={<DetectionRules />} />
+          <Route path="/mitre" element={<Mitre />} />
           <Route path="/sources" element={<Sources />} />
+          <Route path="/intel" element={<ThreatIntel />} />
           <Route path="/investigations" element={<Investigations />} />
+          <Route path="/playbooks" element={<Playbooks />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" />} />
