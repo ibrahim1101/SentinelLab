@@ -182,12 +182,12 @@ async def run_detection(org_id, events, persist=True):
             if not persist:
                 continue
             await db.detection_rules.update_one(
-                {"id": rule["id"]},
+                {"id": rule["id"], "org_id": org_id},
                 {"$set": {"last_error": str(ex), "last_run": now_iso()}})
             continue
         if matched and persist:
             await db.events.update_many(
-                {"id": {"$in": list(matched)}},
+                {"org_id": org_id, "id": {"$in": list(matched)}},
                 {"$addToSet": {"rule_matches": rule["id"]}})
         new_alerts = []
         for a in alerts:
@@ -199,7 +199,7 @@ async def run_detection(org_id, events, persist=True):
                 })
                 if existing:
                     await db.alerts.update_one(
-                        {"id": existing["id"]},
+                        {"id": existing["id"], "org_id": org_id},
                         {"$set": {"last_seen": a["last_seen"], "updated_at": now_iso()},
                          "$inc": {"event_count": a["event_count"]}})
                     continue
