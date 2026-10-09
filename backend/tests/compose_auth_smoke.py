@@ -89,6 +89,12 @@ second_email = "ci-approver-" + uuid.uuid4().hex[:12] + "@example.com"
 status, second = request("POST", "/api/auth/register", {"email": second_email, "password": "ci-temporary-strong-password", "name": "CI Second Approver"})
 assert status == 200, f"Second approver registration failed: {status}: {second}"
 second_id, second_token = second["user"]["id"], second["access_token"]
+status, _ = request("PUT", "/api/admin/users/" + second_id + "/role", {"role": "admin"}, token=token)
+assert status == 200, f"Admin role provisioning failed: {status}"
+status, _ = request("PUT", "/api/admin/users/" + analyst_id + "/role", {"role": "super_admin"}, token=second_token)
+assert status == 403, f"Ordinary admin escalated a user to super admin: {status}"
+status, _ = request("PUT", "/api/admin/users/" + second_id + "/role", {"role": "super_admin"}, token=second_token)
+assert status == 403, f"Ordinary admin self-promoted: {status}"
 status, _ = request("PUT", "/api/admin/users/" + second_id + "/role", {"role": "super_admin"}, token=token)
 assert status == 200, f"Super-admin provisioning failed: {status}"
 status, _ = request("POST", "/api/admin/production-access-requests/" + pending["id"] + "/approve", token=second_token)
