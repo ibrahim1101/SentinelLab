@@ -34,6 +34,9 @@ jobs:
 
   docker-smoke:
     runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: ci-only-32-character-secret-value
+      ADMIN_PASSWORD: ci-only-strong-admin-password
     steps:
       - uses: actions/checkout@v4
       - name: Validate Compose configuration
@@ -48,7 +51,7 @@ jobs:
         run: docker compose up -d --build --wait
       - name: Check API and MongoDB connectivity
         run: |
-          curl --fail --retry 12 --retry-delay 5 --retry-connrefused http://127.0.0.1:8000/openapi.json -o /dev/null
+          curl --fail --retry 12 --retry-delay 5 --retry-all-errors --retry-connrefused http://127.0.0.1:8000/openapi.json -o /dev/null
           docker compose ps
       - name: Show container logs on failure
         if: failure()
