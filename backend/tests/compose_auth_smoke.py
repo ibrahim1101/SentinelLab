@@ -105,6 +105,8 @@ status, _ = request("POST", "/api/admin/production-access-requests/" + pending["
 assert status == 404, f"Already approved request was reusable: {status}"
 status, _ = request("POST", "/api/admin/production-access-requests/" + pending["id"] + "/reconcile", token=second_token)
 assert status == 404, f"Completed approval could be reconciled again: {status}"
+status, _ = request("POST", "/api/admin/production-access-requests/" + pending["id"] + "/reconcile", token=analyst_token)
+assert status == 403, f"Auditor could reconcile production approval: {status}"
 status, queue = request("GET", "/api/admin/production-access-requests", token=token)
 assert status == 200 and any(x["id"] == pending["id"] and x["status"] == "approved" for x in queue["requests"]), "Approval did not reach terminal approved state"
 status, revoked = request("PUT", endpoint, {"org_ids": ["org-training"]}, token=token)
