@@ -891,6 +891,15 @@ async def reconcile_production_access(request_id: str, user=Depends(require_role
     entry = await db.production_access_requests.find_one({"id": request_id, "status": "applying"})
     if not entry:
         raise HTTPException(404, "Applying request not found")
+    raw = entry.get("approved_at")
+    try:
+        approved_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if approved_at.tzinfo is None:
+            approved_at = approved_at.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError, AttributeError):
+        approved_at = None
+    if approved_at is not None and approved_at > datetime.now(timezone.utc) - timedelta(minutes=5):
+        raise HTTPException(409, "Approval may still be in progress; wait five minutes before reconciling")
     target = await db.users.find_one({"id": entry["target_id"]})
     granted = bool(target and PROD_ORG in target.get("org_ids", []))
     final_status = "approved" if granted else "failed"
