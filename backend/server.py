@@ -802,11 +802,65 @@ async def set_user_workspaces(user_id: str, body: dict, user=Depends(require_rol
         raise HTTPException(400, "Cannot remove production access from a super administrator")
     if set(org_ids) == set(target.get("org_ids", [])):
         return {"ok": True, "org_ids": target.get("org_ids", []), "default_org": target.get("default_org"), "unchanged": True}
+    if PROD_ORG in org_ids and PROD_ORG not in target.get("org_ids", []):
+        raise HTTPException(409, "Production grants require a separate super-admin approval request")
     default_org = target.get("default_org") if target.get("default_org") in org_ids else org_ids[0]
     result = await db.users.update_one({"id": user_id}, {"$set": {"org_ids": org_ids, "default_org": default_org}})
     await audit(user.get("default_org"), user, "set_workspaces", "user", user_id,
                 {"old_org_ids": target.get("org_ids", []), "new_org_ids": org_ids})
     return {"ok": result.matched_count == 1, "org_ids": org_ids, "default_org": default_org}
+
+
+@api.post("/admin/users/{user_id}/production-access-requests")
+async def request_production_access(user_id: str, user=Depends(require_role("super_admin"))):
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if PROD_ORG in target.get("org_ids", []):
+        raise HTTPException(409, "User already has production access")
+    if target["id"] == user["id"]:
+        raise HTTPException(400, "Cannot request production access for yourself")
+    existing = await db.production_access_requests.find_one({"target_id": user_id, "status": "pending"})
+    if existing:
+        raise HTTPException(409, "A production access request is already pending")
+    entry = {"id": new_id(), "target_id": user_id, "requester_id": user["id"],
+             "status": "pending", "created_at": now_iso()}
+    await db.production_access_requests.insert_one(dict(entry))
+    await audit(user.get("default_org"), user, "request_production_access", "user", user_id, {"request_id": entry["id"]})
+    return clean(entry)
+
+
+@api.get("/admin/production-access-requests")
+async def list_production_access_requests(user=Depends(require_role("super_admin"))):
+    rows = await db.production_access_requests.find({}, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+    return {"requests": rows}
+
+
+@api.post("/admin/production-access-requests/{request_id}/approve")
+async def approve_production_access(request_id: str, user=Depends(require_role("super_admin"))):
+    entry = await db.production_access_requests.find_one({"id": request_id, "status": "pending"})
+    if not entry:
+        raise HTTPException(404, "Pending request not found")
+    if entry["requester_id"] == user["id"]:
+        raise HTTPException(403, "A different super administrator must approve this request")
+    target = await db.users.find_one({"id": entry["target_id"]})
+    if not target:
+        raise HTTPException(404, "Target user not found")
+    if PROD_ORG in target.get("org_ids", []):
+        raise HTTPException(409, "Target already has production access")
+    claim = await db.production_access_requests.update_one(
+        {"id": request_id, "status": "pending"},
+        {"$set": {"status": "approved", "approver_id": user["id"], "approved_at": now_iso()}})
+    if claim.modified_count != 1:
+        raise HTTPException(409, "Request already processed")
+    result = await db.users.update_one({"id": target["id"], "org_ids": {"$ne": PROD_ORG}},
+                                       {"$addToSet": {"org_ids": PROD_ORG}})
+    if result.modified_count != 1:
+        await db.production_access_requests.update_one({"id": request_id}, {"$set": {"status": "failed"}})
+        raise HTTPException(409, "Production grant could not be applied; review account state")
+    await audit(user.get("default_org"), user, "approve_production_access", "user", target["id"],
+                {"request_id": request_id, "requester_id": entry["requester_id"]})
+    return {"ok": True, "target_id": target["id"], "request_id": request_id}
 
 
 @api.get("/admin/audit")
