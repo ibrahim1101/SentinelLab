@@ -1,3 +1,4 @@
+import re
 from dotenv import load_dotenv
 from pathlib import Path
 load_dotenv(Path(__file__).parent / ".env")
@@ -298,7 +299,7 @@ async def list_events(request: Request, q: Optional[str] = None, severity: Optio
     if username: filt["username"] = username
     if ip: filt["$or"] = [{"src_ip": ip}, {"dest_ip": ip}]
     if q:
-        filt["$or"] = [{"host": {"$regex": q, "$options": "i"}},
+        filt["$or"] = [{"host": {"$regex": re.escape(q[:128]), "$options": "i"}},
                        {"username": {"$regex": q, "$options": "i"}},
                        {"src_ip": {"$regex": q, "$options": "i"}},
                        {"dest_ip": {"$regex": q, "$options": "i"}},
