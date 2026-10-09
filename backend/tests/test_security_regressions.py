@@ -32,3 +32,11 @@ def test_regex_policy_is_bounded():
     source = (ROOT / "detection.py").read_text()
     assert "len(pattern) > 128" in source
     assert "len(str(value)) > 4096" in source
+
+
+def test_alert_detail_joins_are_tenant_scoped():
+    source = (ROOT / "server.py").read_text()
+    alert_detail = source.split('async def alert_detail(', 1)[1].split('@api.put("/alerts/{alert_id}")', 1)[0]
+    assert '"org_id": org' in alert_detail
+    assert 'db.events.find({"id": {"$in": a.get("related_events", [])}, "org_id": org}' in alert_detail
+    assert 'db.detection_rules.find_one({"id": a.get("rule_id"), "org_id": org}' in alert_detail
