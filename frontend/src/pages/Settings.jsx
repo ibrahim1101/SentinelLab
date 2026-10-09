@@ -24,17 +24,36 @@ export default function Settings() {
   const [audit, setAudit] = useState([]);
   const [health, setHealth] = useState(null);
   const isAdmin = ["admin", "super_admin"].includes(user?.role);
+  const isSuperAdmin = user?.role === "super_admin";
+  const [members, setMembers] = useState([]);
+  const [savingMember, setSavingMember] = useState("");
 
   useEffect(() => {
     client.get("/settings").then(({ data }) => setS(data.settings));
     client.get("/admin/health").then(({ data }) => setHealth(data)).catch(() => {});
     if (isAdmin) client.get("/admin/users").then(({ data }) => setUsers(data.users)).catch(() => {});
+    if (isSuperAdmin) client.get("/admin/membership-review").then(({ data }) => setMembers(data.production_members)).catch(() => toast.error("Could not load production membership review"));
     client.get("/admin/audit").then(({ data }) => setAudit(data.audit)).catch(() => {});
   }, []);
 
   const save = async (patch) => { const { data } = await client.put("/settings", patch); setS(data); toast.success("Settings saved"); };
   const resetDemo = async () => { if (!window.confirm("Reset Training Lab synthetic data?")) return; await client.post("/demo/reset"); toast.success("Demo data regenerated"); };
   const setUserRole = async (id, role) => { await client.put(`/admin/users/${id}/role`, { role }); toast.success("Role updated"); setUsers(users.map((u) => u.id === id ? { ...u, role } : u)); };
+
+  const changeMembership = async (target, enableProduction) => {
+    const org_ids = enableProduction ? [...new Set([...(target.org_ids || []), "org-production"])] : (target.org_ids || []).filter((id) => id !== "org-production");
+    if (!org_ids.length) org_ids.push("org-training");
+    if (!window.confirm(`${enableProduction ? "Grant" : "Revoke"} production workspace access for ${target.email}?`)) return;
+    setSavingMember(target.id);
+    try {
+      const { data } = await client.put(`/admin/users/${target.id}/workspaces`, { org_ids });
+      setUsers((prev) => prev.map((u) => u.id === target.id ? { ...u, org_ids: data.org_ids, default_org: data.default_org } : u));
+      const review = await client.get("/admin/membership-review");
+      setMembers(review.data.production_members);
+      toast.success("Workspace membership updated");
+    } catch (err) { toast.error(err.response?.data?.detail || "Workspace membership update failed"); }
+    finally { setSavingMember(""); }
+  };
 
   if (!s) return null;
 
@@ -82,6 +101,17 @@ export default function Settings() {
                     {users.map((u) => (<tr key={u.id} className="border-t"><td style={{ color: "var(--text)" }}>{u.name}</td><td className="font-mono" style={{ color: "var(--text-2)" }}>{u.email}</td>
                       <td><select className="inp max-w-[180px]" value={u.role} onChange={(e) => setUserRole(u.id, e.target.value)} data-testid={`role-${u.id}`}>{Object.entries(roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td></tr>))}
                   </tbody></table>
+                  {isSuperAdmin && <div className="mt-5 space-y-3" data-testid="membership-review">
+                    <div className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Production workspace membership review</div>
+                    <p className="text-[12px]" style={{ color: "var(--text-2)" }}>Currently approved production members: {members.length}. Review older accounts before deployment. Changes are audited and require confirmation.</p>
+                    <div className="space-y-2">{users.map((u) => {
+                      const approved = (u.org_ids || []).includes("org-production");
+                      return <div key={u.id} className="flex items-center justify-between gap-3 border-b py-2">
+                        <div className="min-w-0"><div className="truncate">{u.name || u.email}</div><div className="text-[11px] truncate" style={{ color: "var(--text-3)" }}>{u.email} · {approved ? "Production approved" : "Training only"}</div></div>
+                        <button type="button" className="btn btn-sm" disabled={!!savingMember || (u.role === "super_admin" && approved)} onClick={() => changeMembership(u, !approved)} data-testid={`membership-${u.id}`}>{savingMember === u.id ? "Saving…" : approved ? "Revoke production" : "Grant production"}</button>
+                      </div>;
+                    })}</div>
+                  </div>}
                 </>
               )}
             </div>
