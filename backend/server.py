@@ -780,6 +780,33 @@ async def set_role(user_id: str, body: dict, request: Request, user=Depends(requ
     return {"ok": True}
 
 
+@api.get("/admin/membership-review")
+async def membership_review(user=Depends(require_role("super_admin"))):
+    """Read-only review of legacy production memberships; no automatic revocation."""
+    rows = await db.users.find({"org_ids": PROD_ORG}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    return {"production_members": rows, "count": len(rows), "requires_manual_review": True}
+
+
+@api.put("/admin/users/{user_id}/workspaces")
+async def set_user_workspaces(user_id: str, body: dict, user=Depends(require_role("super_admin"))):
+    """Explicit super-admin approval or revocation of built-in workspace access."""
+    org_ids = body.get("org_ids")
+    if not isinstance(org_ids, list) or not org_ids or len(org_ids) != len(set(map(str, org_ids))) or any(not isinstance(v, str) or v not in (PROD_ORG, TRAIN_ORG) for v in org_ids):
+        raise HTTPException(400, "Specify a nonempty, unique list of known workspace IDs")
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target["id"] == user["id"] and PROD_ORG not in org_ids:
+        raise HTTPException(400, "Cannot remove your own production access")
+    if target.get("role") == "super_admin" and PROD_ORG not in org_ids:
+        raise HTTPException(400, "Cannot remove production access from a super administrator")
+    default_org = target.get("default_org") if target.get("default_org") in org_ids else org_ids[0]
+    result = await db.users.update_one({"id": user_id}, {"$set": {"org_ids": org_ids, "default_org": default_org}})
+    await audit(user.get("default_org"), user, "set_workspaces", "user", user_id,
+                {"old_org_ids": target.get("org_ids", []), "new_org_ids": org_ids})
+    return {"ok": result.matched_count == 1, "org_ids": org_ids, "default_org": default_org}
+
+
 @api.get("/admin/audit")
 async def admin_audit(request: Request, user=Depends(require_role("soc_manager"))):
     org = active_org(user, request)
