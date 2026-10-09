@@ -1,0 +1,19 @@
+name: Phase 1 security checks
+on:
+  push:
+    branches: [main, "fix/**"]
+  pull_request:
+jobs:
+  static-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Python modules
+        run: python -m compileall -q backend
+      - name: Install lightweight test dependencies
+        run: python -m pip install pytest python-dateutil
+      - name: Run isolated regression tests
+        run: python -m pytest -q backend/tests/test_security_regressions.py
