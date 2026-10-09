@@ -74,6 +74,8 @@ status, _ = request("PUT", endpoint, {"org_ids": ["org-invalid"]}, token=token)
 assert status == 400, f"Unknown workspace was accepted: {status}"
 status, changed = request("PUT", endpoint, {"org_ids": ["org-training", "org-production"]}, token=token)
 assert status == 200 and "org-production" in changed["org_ids"], f"Membership grant failed: {status}: {changed}"
+status, same = request("PUT", endpoint, {"org_ids": ["org-production", "org-training"]}, token=token)
+assert status == 200 and same.get("unchanged") is True, f"Idempotent membership update failed: {status}: {same}"
 status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
 assert status == 200, f"Approved production membership not effective: {status}"
 status, changed = request("PUT", endpoint, {"org_ids": ["org-training"]}, token=token)
