@@ -64,3 +64,22 @@ async def test_investigation_detail_filters_cross_tenant_alerts(monkeypatch):
         await database.investigations.delete_many({"org_id": tenant_a})
         await database.alerts.delete_many({"org_id": {"$in": [tenant_a, tenant_b]}})
         client.close()
+
+@pytest.mark.asyncio
+async def test_bulk_alerts_only_updates_current_tenant_and_reports_real_count(monkeypatch):
+    client = AsyncIOMotorClient(os.environ["MONGO_URL"], serverSelectionTimeoutMS=5000)
+    database = client[os.environ["DB_NAME"]]
+    tenant_a, tenant_b = "ci-bulk-a", "ci-bulk-b"
+    request = Request({"type": "http", "headers": [(b"x-workspace-id", tenant_a.encode())]})
+    user_a = {"id": "ci-bulk-user", "email": "a@example.com", "role": "analyst", "org_ids": [tenant_a], "default_org": tenant_a}
+    monkeypatch.setattr(server, "db", database)
+    try:
+        await database.alerts.delete_many({"org_id": {"$in": [tenant_a, tenant_b]}})
+        await database.alerts.insert_many([{"id": "ci-bulk-local", "org_id": tenant_a, "status": "open"}, {"id": "ci-bulk-foreign", "org_id": tenant_b, "status": "open"}])
+        result = await server.bulk_alerts(request, {"ids": ["ci-bulk-local", "ci-bulk-foreign", "nonexistent"], "status": "closed"}, user_a)
+        assert result["updated"] == 1
+        assert (await database.alerts.find_one({"id": "ci-bulk-local"}))["status"] == "closed"
+        assert (await database.alerts.find_one({"id": "ci-bulk-foreign"}))["status"] == "open"
+    finally:
+        await database.alerts.delete_many({"org_id": {"$in": [tenant_a, tenant_b]}})
+        client.close()
