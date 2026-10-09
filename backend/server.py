@@ -857,18 +857,39 @@ async def approve_production_access(request_id: str, user=Depends(require_role("
         raise HTTPException(409, "Target already has production access")
     claim = await db.production_access_requests.update_one(
         {"id": request_id, "status": "pending"},
-        {"$set": {"status": "approved", "approver_id": user["id"], "approved_at": now_iso()}})
+        {"$set": {"status": "applying", "approver_id": user["id"], "approved_at": now_iso()}})
     if claim.modified_count != 1:
         raise HTTPException(409, "Request already processed")
     result = await db.users.update_one({"id": target["id"], "org_ids": {"$ne": PROD_ORG}},
                                        {"$addToSet": {"org_ids": PROD_ORG}})
     if result.modified_count != 1:
-        await db.production_access_requests.update_one({"id": request_id, "status": "approved"},
+        await db.production_access_requests.update_one({"id": request_id, "status": "applying"},
             {"$set": {"status": "failed", "failure_reason": "membership_update_not_applied", "failed_at": now_iso()}})
         raise HTTPException(409, "Production grant could not be applied; review account state")
+    await db.production_access_requests.update_one({"id": request_id, "status": "applying"},
+        {"$set": {"status": "approved", "completed_at": now_iso()}})
     await audit(user.get("default_org"), user, "approve_production_access", "user", target["id"],
                 {"request_id": request_id, "requester_id": entry["requester_id"]})
     return {"ok": True, "target_id": target["id"], "request_id": request_id}
+
+
+@api.post("/admin/production-access-requests/{request_id}/reconcile")
+async def reconcile_production_access(request_id: str, user=Depends(require_role("super_admin"))):
+    """Resolve a request left in applying after a process interruption; never grant access here."""
+    entry = await db.production_access_requests.find_one({"id": request_id, "status": "applying"})
+    if not entry:
+        raise HTTPException(404, "Applying request not found")
+    target = await db.users.find_one({"id": entry["target_id"]})
+    granted = bool(target and PROD_ORG in target.get("org_ids", []))
+    final_status = "approved" if granted else "failed"
+    result = await db.production_access_requests.update_one({"id": request_id, "status": "applying"},
+        {"$set": {"status": final_status, "reconciled_at": now_iso(),
+                  "failure_reason": None if granted else "membership_not_present"}})
+    if result.modified_count != 1:
+        raise HTTPException(409, "Request state changed; reload before reconciling")
+    await audit(user.get("default_org"), user, "reconcile_production_access", "user", entry["target_id"],
+                {"request_id": request_id, "final_status": final_status})
+    return {"ok": True, "status": final_status, "request_id": request_id}
 
 
 @api.get("/admin/audit")
