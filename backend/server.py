@@ -432,8 +432,8 @@ async def alert_detail(alert_id: str, request: Request, user=Depends(get_current
     a = await db.alerts.find_one({"id": alert_id, "org_id": org}, {"_id": 0})
     if not a:
         raise HTTPException(404, "Alert not found")
-    events = await db.events.find({"id": {"$in": a.get("related_events", [])}}, {"_id": 0, "raw": 0}).limit(50).to_list(50)
-    rule = await db.detection_rules.find_one({"id": a.get("rule_id")}, {"_id": 0})
+    events = await db.events.find({"id": {"$in": a.get("related_events", [])}, "org_id": org}, {"_id": 0, "raw": 0}).limit(50).to_list(50)
+    rule = await db.detection_rules.find_one({"id": a.get("rule_id"), "org_id": org}, {"_id": 0})
     return {"alert": a, "events": events, "rule": rule}
 
 
