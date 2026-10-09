@@ -840,7 +840,19 @@ async def request_production_access(user_id: str, user=Depends(require_role("sup
 @api.get("/admin/production-access-requests")
 async def list_production_access_requests(user=Depends(require_role("super_admin"))):
     rows = await db.production_access_requests.find({}, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
-    return {"requests": rows}
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+    for entry in rows:
+        if entry.get("status") != "applying":
+            continue
+        raw = entry.get("approved_at")
+        try:
+            timestamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
+            entry["needs_reconciliation"] = timestamp <= cutoff
+        except (ValueError, TypeError, AttributeError):
+            entry["needs_reconciliation"] = True
+    return {"requests": rows, "stale_after_minutes": 5}
 
 
 @api.post("/admin/production-access-requests/{request_id}/approve")
