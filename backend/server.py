@@ -300,11 +300,11 @@ async def list_events(request: Request, q: Optional[str] = None, severity: Optio
     if ip: filt["$or"] = [{"src_ip": ip}, {"dest_ip": ip}]
     if q:
         filt["$or"] = [{"host": {"$regex": re.escape(q[:128]), "$options": "i"}},
-                       {"username": {"$regex": q, "$options": "i"}},
-                       {"src_ip": {"$regex": q, "$options": "i"}},
-                       {"dest_ip": {"$regex": q, "$options": "i"}},
-                       {"process_name": {"$regex": q, "$options": "i"}},
-                       {"event_type": {"$regex": q, "$options": "i"}}]
+                       {"username": {"$regex": re.escape(q[:128]), "$options": "i"}},
+                       {"src_ip": {"$regex": re.escape(q[:128]), "$options": "i"}},
+                       {"dest_ip": {"$regex": re.escape(q[:128]), "$options": "i"}},
+                       {"process_name": {"$regex": re.escape(q[:128]), "$options": "i"}},
+                       {"event_type": {"$regex": re.escape(q[:128]), "$options": "i"}}]
     total = await db.events.count_documents(filt)
     skip = (page - 1) * page_size
     rows = await db.events.find(filt, {"_id": 0, "raw": 0}).sort(sort, order).skip(skip).limit(page_size).to_list(page_size)
@@ -420,7 +420,7 @@ async def list_alerts(request: Request, status: Optional[str] = None, severity: 
     filt = {"org_id": org}
     if status: filt["status"] = status
     if severity: filt["severity"] = severity
-    if q: filt["title"] = {"$regex": q, "$options": "i"}
+    if q: filt["title"] = {"$regex": re.escape(q[:128]), "$options": "i"}
     total = await db.alerts.count_documents(filt)
     rows = await db.alerts.find(filt, {"_id": 0}).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
     return {"total": total, "alerts": rows, "page": page, "page_size": page_size}
@@ -503,7 +503,7 @@ def _apply_conditions(filt, conds):
         if field not in allowed:
             continue
         if op == "contains":
-            filt[field] = {"$regex": str(value), "$options": "i"}
+            filt[field] = {"$regex": re.escape(str(value)[:128]), "$options": "i"}
         elif op in op_map:
             if op in ("gt", "lt"):
                 try: value = float(value)
@@ -730,7 +730,7 @@ async def read_notifications(request: Request, user=Depends(get_current_user)):
 @api.get("/search")
 async def global_search(request: Request, q: str, user=Depends(get_current_user)):
     org = active_org(user, request)
-    rx = {"$regex": q, "$options": "i"}
+    rx = {"$regex": re.escape(q[:128]), "$options": "i"}
     events = await db.events.find({"org_id": org, "$or": [{"host": rx}, {"src_ip": rx}, {"username": rx}]},
                                   {"_id": 0, "raw": 0}).limit(5).to_list(5)
     alerts = await db.alerts.find({"org_id": org, "title": rx}, {"_id": 0}).limit(5).to_list(5)
@@ -848,7 +848,7 @@ async def list_indicators(request: Request, ioc_type: Optional[str] = None, acti
     filt = {"org_id": org}
     if ioc_type: filt["ioc_type"] = ioc_type
     if active is not None: filt["active"] = active
-    if q: filt["value"] = {"$regex": q, "$options": "i"}
+    if q: filt["value"] = {"$regex": re.escape(q[:128]), "$options": "i"}
     rows = await db.indicators.find(filt, {"_id": 0}).sort("created_at", -1).limit(1000).to_list(1000)
     stats = {}
     for t in ["ip", "domain", "url", "hash", "email"]:
@@ -893,7 +893,7 @@ async def indicator_hits(ind_id: str, request: Request, user=Depends(get_current
     v = str(ind["value"]).lower()
     fields = {"ip": ["src_ip", "dest_ip"], "domain": ["dns_query"], "hash": ["file_hash"],
               "url": ["dns_query"], "email": ["username"]}.get(ind["ioc_type"], [])
-    ors = [{f: {"$regex": f"^{v}$", "$options": "i"}} for f in fields]
+    ors = [{f: {"$regex": f"^{re.escape(v[:256])}$", "$options": "i"}} for f in fields]
     events = await db.events.find({"org_id": org, "$or": ors or [{"id": "__none__"}]},
                                   {"_id": 0, "raw": 0}).limit(100).to_list(100) if ors else []
     return {"indicator": ind, "hits": events, "count": len(events)}
