@@ -117,6 +117,7 @@ def _set_cookie(response: Response, token: str):
 
 @api.post("/auth/register")
 async def register(body: RegisterReq, response: Response):
+    raise HTTPException(status_code=403, detail="Registration requires administrator approval")
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Email already registered")
