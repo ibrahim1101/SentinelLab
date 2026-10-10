@@ -190,14 +190,13 @@ export default function Settings() {
             </div>
           )}
           {tab === "security" && (
-            <div className="space-y-3 max-w-lg text-[13px]">
+            <div className="space-y-4 w-full min-w-0 text-[13px]">
               <Row k="Password Hashing" v="bcrypt (Argon2id-ready adapter)" />
               <Row k="Session Token" v="JWT · 8h expiry · httpOnly cookie + Bearer" />
               <Row k="Login Rate Limiting" v="5 attempts → 15 min lockout" />
               <Row k="RBAC" v="Server-enforced · 5 roles" />
               <Row k="Audit Logging" v="Enabled" />
               <Row k="Organization Isolation" v="All resources workspace-scoped" />
-               </div>
               {isAdmin && (
                 <>
                   <form className="space-y-3 border rounded-md p-4 mt-4 w-full max-w-5xl" onSubmit={createAnalyst} data-testid="create-analyst-form">
@@ -214,7 +213,7 @@ export default function Settings() {
                   <div className="w-full overflow-x-auto"><table className="dense w-full min-w-[780px] table-auto"><thead><tr><th className="text-left">User</th><th className="text-left">Email</th><th className="text-left">Role</th>{isSuperAdmin && <th className="text-left">Account actions</th>}</tr></thead><tbody>
                     {users.map((u) => (<tr key={u.id} className="border-t"><td style={{ color: "var(--text)" }}>{u.name}</td><td className="font-mono" style={{ color: "var(--text-2)" }}>{u.email}</td>
                       <td className="min-w-[180px]"><select className="inp w-full min-w-[165px]" value={u.role} onChange={(e) => setUserRole(u.id, e.target.value)} data-testid={`role-${u.id}`}>{Object.entries(roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>{isSuperAdmin && <td className="min-w-[310px]"><div className="flex flex-wrap gap-2 items-center"><span className="text-[11px] font-mono whitespace-nowrap">{u.username || "No username"}</span><button className="btn btn-sm" type="button" onClick={() => { setEditingAccount({ id: u.id, email: u.email, mode: "username" }); setAccountInput(u.username || ""); }}>Username</button>{u.id !== user.id && <><button className="btn btn-sm" type="button" onClick={() => { setEditingAccount({ id: u.id, email: u.email, mode: "password" }); setAccountInput(""); }}>Reset password</button>{u.role !== "super_admin" && <button className="btn btn-sm" type="button" onClick={() => toggleAccount(u)}>{u.enabled === false ? "Enable" : "Disable"}</button>}</>}</div></td>}</tr>))}
-                  </tbody></table>
+                  </tbody></table></div>
                   {isSuperAdmin && editingAccount && <form onSubmit={submitAccountEdit} className="border rounded p-3 my-3 space-y-2"><div className="text-sm font-semibold">{editingAccount.mode === "username" ? "Assign username" : "Reset password"} · {editingAccount.email}</div><input className="inp" autoFocus required type={editingAccount.mode === "password" ? "password" : "text"} autoComplete="off" minLength={editingAccount.mode === "password" ? 12 : 3} maxLength={editingAccount.mode === "password" ? 128 : 32} value={accountInput} onChange={(e) => setAccountInput(e.target.value)} placeholder={editingAccount.mode === "password" ? "New temporary password (12+ characters)" : "Username"} /><div className="flex gap-2"><button className="btn btn-primary" type="submit">Continue</button><button className="btn" type="button" onClick={() => { setEditingAccount(null); setAccountInput(""); }}>Cancel</button></div></form>}
                   {isSuperAdmin && <div className="mt-6 space-y-4 w-full max-w-5xl" data-testid="membership-review">
                     <div className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Production workspace membership review</div>
