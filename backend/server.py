@@ -146,7 +146,7 @@ async def login(body: LoginReq, request: Request, response: Response):
         if datetime.now(timezone.utc) < locked_until:
             raise HTTPException(429, "Account temporarily locked. Try again later.")
     user = await db.users.find_one({"email": identifier} if "@" in identifier else {"username": identifier})
-    if not user or user.get("enabled", True) is False or not verify_password(body.password, user["password_hash"]):
+    if not user or not verify_password(body.password, user["password_hash"]):
         count = (att.get("count", 0) if att else 0) + 1
         await db.login_attempts.update_one(
             {"identifier": ident},
@@ -155,6 +155,8 @@ async def login(body: LoginReq, request: Request, response: Response):
             upsert=True)
         raise HTTPException(401, "Invalid credentials")
     await db.login_attempts.delete_one({"identifier": ident})
+    if user.get("enabled", True) is False:
+        raise HTTPException(status_code=403, detail="This account has been disabled. Contact your SentinelLab administrator.")
     token = create_access_token(user["id"], user["email"], user["role"], user.get("session_version", 0))
     _set_cookie(response, token)
     await audit(user.get("default_org"), user, "login", "session")
