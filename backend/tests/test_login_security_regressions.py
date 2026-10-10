@@ -121,6 +121,29 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(args[1]["$inc"]["session_version"], 1)
 
 
+    async def test_second_failure_does_not_trigger_source_throttle(self):
+        user = {"id": "u1", "email": "analyst@example.invalid",
+                "username": "analyst", "enabled": True, "password_hash": "hashed"}
+        db = SimpleNamespace(
+            users=SimpleNamespace(
+                find_one=AsyncMock(return_value=user),
+                find_one_and_update=AsyncMock(return_value={"login_failed_count": 2}),
+            ),
+            login_attempts=SimpleNamespace(
+                find_one=AsyncMock(return_value={"count": 1, "locked_until": "2099-01-01T00:00:00+00:00"}),
+                update_one=AsyncMock(),
+                delete_one=AsyncMock(),
+            ),
+        )
+        with patch.object(server, "db", db), patch.object(server, "verify_password", return_value=False):
+            with self.assertRaises(HTTPException) as caught:
+                await server.login(server.LoginReq(email="analyst", password="wrong"), request(), Response())
+        self.assertEqual(caught.exception.status_code, 401)
+        self.assertIn("3 attempts remaining", caught.exception.detail)
+        db.login_attempts.update_one.assert_awaited_once()
+        self.assertIsNone(db.login_attempts.update_one.await_args.args[1]["$set"]["locked_until"])
+
+
 
 if __name__ == "__main__":
     unittest.main()
