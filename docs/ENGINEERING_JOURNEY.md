@@ -237,3 +237,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Documentation publication:** confirmed `ibrahim1101/Portfolio` main contains `docs/SentinelLab_Complete_User_Guide_v1.pdf` (Git blob `11a7d7b1`). GitHub Pages serving the PDF and the website link are not yet independently verified.
 - **Security observation:** playbook `create_investigation` links alerts with a query by `id` alone; review tenant scoping before public deployment. Existing `completed` aggregate status can coexist with a simulated external action; frontend must explicitly distinguish simulated from real containment.
 - **Next:** run regression suite in CI, add UI assertions and deterministic reconciliation integration tests. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Active development: playbook simulation UI clarity
+- Commit [86dfb06](https://github.com/ibrahim1101/SentinelLab/commit/86dfb0660f3080185946ac2578435bdb2ff1c88c) on `fix/phase1-security-regressions` changed the run button to **Record Run**, clarified disconnected EDR/firewall/email/IdP simulation, renamed persisted history labels, and added status-specific notifications for failed, pending-approval, skipped and simulated runs.
+- GitHub accepted the commit. Browser/UI automated verification and post-commit CI are **not yet verified**; no external containment was performed.
+- Next: locate active workflow file, include playbook regression tests in CI, run test suite, address tenant-scoped investigation writes and production-access applying-state reconciliation tests. PR #1 must remain unmerged.
