@@ -55,7 +55,7 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.status_code, 401)
         self.assertEqual(caught.exception.detail, "Invalid credentials")
 
-    async def test_locked_account_rejected_before_password_verification(self):
+    async def test_locked_account_requires_correct_password_for_lock_message(self):
         user = {
             "id": "test-user", "email": "test@example.invalid", "username": "testuser",
             "login_locked_until": "2099-01-01T00:00:00+00:00",
@@ -65,12 +65,12 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
             users=SimpleNamespace(find_one=AsyncMock(return_value=user)),
             login_attempts=SimpleNamespace(find_one=AsyncMock(return_value=None)),
         )
-        with patch.object(server, "db", db), patch.object(server, "verify_password") as verify:
+        with patch.object(server, "db", db), patch.object(server, "verify_password", return_value=True) as verify:
             with self.assertRaises(HTTPException) as caught:
                 await server.login(server.LoginReq(email="testuser", password="correct"),
                                    request(), Response())
         self.assertEqual(caught.exception.status_code, 423)
-        verify.assert_not_called()
+        verify.assert_called_once()
 
     async def test_fifth_failure_locks_once_and_creates_incident(self):
         user = {"id": "u1", "email": "analyst@example.invalid", "username": "analyst",
@@ -243,6 +243,22 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         with patch.object(server, "db", db):
             with self.assertRaises(HTTPException) as caught:
                 await server.login(server.LoginReq(email="analyst", password="wrong"),
+                                   request(), Response())
+        self.assertEqual(caught.exception.status_code, 401)
+        self.assertEqual(caught.exception.detail, "Invalid credentials")
+
+
+    async def test_locked_account_wrong_password_does_not_reveal_lock(self):
+        user = {"id": "test-user", "email": "test@example.invalid",
+                "username": "testuser", "password_hash": "hashed",
+                "login_locked_until": "2099-01-01T00:00:00+00:00"}
+        db = SimpleNamespace(
+            users=SimpleNamespace(find_one=AsyncMock(return_value=user)),
+            login_attempts=SimpleNamespace(find_one=AsyncMock(return_value=None)),
+        )
+        with patch.object(server, "db", db), patch.object(server, "verify_password", return_value=False):
+            with self.assertRaises(HTTPException) as caught:
+                await server.login(server.LoginReq(email="testuser", password="wrong"),
                                    request(), Response())
         self.assertEqual(caught.exception.status_code, 401)
         self.assertEqual(caught.exception.detail, "Invalid credentials")
