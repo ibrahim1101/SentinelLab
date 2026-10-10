@@ -182,3 +182,8 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - [Run 38047331311](https://github.com/ibrahim1101/SentinelLab/actions/runs/38047331311) succeeded: **28 passed, 8 warnings**, Docker smoke success.
 - Added `scripts/check_release_gates.py` (commit `8102c55`): lists pending P0 requirements from this release checklist and exits nonzero (NO-GO) until completed. Missing/empty P0 sections also fail closed. Regression test commit `f0de1de`; CI pending.
 - Run `python scripts/check_release_gates.py` before release. This checks checklist state, **not independent truth of evidence**. Existing P0 gates still open; PR #1 unmerged.
+
+
+### 2026-10-10 — Docker registry retry CI gate closed
+- [Run 38048195479](https://github.com/ibrahim1101/SentinelLab/actions/runs/38048195479) succeeded: **30 passed, 8 warnings**, docker-smoke success. Docker logs explicitly show `bash scripts/pull-mongo-with-retry.sh` executing before Compose and successfully pulling `public.ecr.aws/docker/library/mongo:7`.
+- Beta checklist now marks this P0 gate complete (3 complete, 6 pending). This confirms normal-path execution, not an induced rate-limit recovery scenario. Remaining P0 include browser UI, end-to-end SOC workflows, clean install, security review, backup/restore, and final bug triage. PR #1 unmerged.
