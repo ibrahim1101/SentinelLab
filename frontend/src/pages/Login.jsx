@@ -6,7 +6,7 @@ import { apiErr } from "@/lib/api";
 export default function Login() {
   const { login } = useAuth();
   const [email, setEmail] = useState("admin@sentinellab.io");
-  const [password, setPassword] = useState("Sentinel@2026");
+  const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -18,8 +18,6 @@ export default function Login() {
     catch (ex) { setErr(apiErr(ex)); }
     finally { setBusy(false); }
   };
-
-  const quick = (em, pw) => { setEmail(em); setPassword(pw); };
 
   return (
     <div className="min-h-screen grid place-items-center p-4" style={{ background: "var(--bg)" }} data-testid="login-screen">
@@ -56,13 +54,7 @@ export default function Login() {
           <button className="btn btn-primary w-full justify-center" disabled={busy} data-testid="login-submit">
             {busy ? "Authenticating…" : "Sign In"}
           </button>
-          <div className="mt-4 pt-3 border-t">
-            <div className="text-[10px] uppercase mb-2" style={{ color: "var(--text-3)" }}>Quick demo login</div>
-            <div className="flex gap-2">
-              <button type="button" className="btn btn-sm flex-1 justify-center" onClick={() => quick("admin@sentinellab.io", "Sentinel@2026")} data-testid="demo-admin">Administrator</button>
-              <button type="button" className="btn btn-sm flex-1 justify-center" onClick={() => quick("analyst@sentinellab.io", "Analyst@2026")} data-testid="demo-analyst">SOC Analyst</button>
-            </div>
-          </div>
+
         </form>
         <p className="text-center text-[11px] mt-4" style={{ color: "var(--text-3)" }}>
           Self-hosted SOC platform for detection, investigation & research.
