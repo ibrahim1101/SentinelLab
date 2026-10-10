@@ -55,3 +55,22 @@ Last evidence checked: 2026-10-10, workflow 38043724553.
 - [Run 38047331311](https://github.com/ibrahim1101/SentinelLab/actions/runs/38047331311) succeeded: **28 passed, 8 warnings**, Docker smoke success.
 - Added `scripts/check_release_gates.py` (commit `8102c55`): lists pending P0 requirements from this release checklist and exits nonzero (NO-GO) until completed. Missing/empty P0 sections also fail closed. Regression test commit `f0de1de`; CI pending.
 - Run `python scripts/check_release_gates.py` before release. This checks checklist state, **not independent truth of evidence**. Existing P0 gates still open; PR #1 unmerged.
+
+
+## Product delivery requirement — standalone cross-platform application (2026-10-10)
+
+The owner explicitly requires SentinelLab to ship as a **standalone desktop application on Windows, Linux, and macOS**, with an install-and-launch experience. Docker is a development/test/deployment option, **not** the intended primary end-user installation path.
+
+**Release decision:** The existing 9 P0 gates cover security/functional readiness of the current stack only. **9/9 does not authorize a public desktop release** until the additional packaging and per-platform gates below are satisfied. Keep status NO-GO until both sets are complete. Do not check a gate based solely on a CI green build or a mock.
+
+### Desktop packaging and compatibility gates — mandatory for standalone public release
+- [ ] Choose and document desktop shell (evaluate Tauri), backend packaging, secure loopback IPC, process lifecycle and crash recovery; produce a working proof of concept.
+- [ ] Decide and implement a supported embedded/local persistence architecture or a transparently managed database without requiring Docker or manual MongoDB installation; validate data migration and integrity.
+- [ ] Package backend and frontend with no visible console and no external Python/Node runtime prerequisite; provide secure first-run setup, secrets handling, local-only binding and update strategy.
+- [ ] Produce and test Windows installer on a clean Windows machine, including install, launch, uninstall, restart, backup and upgrade.
+- [ ] Produce and test Linux distribution packages (at least one documented supported distribution), including dependencies, desktop integration, permissions and upgrade.
+- [ ] Produce and test macOS app/DMG on supported hardware, including architecture coverage, signing/notarization where applicable, permissions and upgrade.
+- [ ] Run end-to-end SOC and security regression tests on the **packaged desktop artifacts** for all claimed platforms, including offline behavior, tenant isolation, persistence and recovery.
+- [ ] Publish platform-specific installation docs, supported OS/CPU matrix, hashes/signatures, known limitations and release notes; review licensing and redistribution of all bundled components.
+
+Do not advertise untested platforms as supported. CI builds alone are not evidence of clean-host compatibility.
