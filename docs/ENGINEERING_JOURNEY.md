@@ -267,3 +267,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - Commit [94e5d1c](https://github.com/ibrahim1101/SentinelLab/commit/94e5d1cab39f092f49b01ece47ebde6ed9b1be1d) created `.github/workflows/playbook-regressions.yml` on `fix/phase1-security-regressions`, installing isolated dependencies and explicitly running `python -m pytest -q backend/tests/test_playbook_regressions.py`.
 - Previous Phase 1 [run 38036818916](https://github.com/ibrahim1101/SentinelLab/actions/runs/38036818916) passed both jobs; its static test command still ran 13 other tests, not playbook regressions.
 - Dedicated workflow execution result **not yet confirmed**. Next: verify new workflow appears and passes, fix any import/dependency/assertion errors, then extend production-access reconciliation tests. PR #1 stays unmerged.
+
+
+### 2026-10-10 — Intermittent Docker registry failure and CI tenant guard
+- [Phase 1 run 38037758618](https://github.com/ibrahim1101/SentinelLab/actions/runs/38037758618): static-security passed; docker-smoke failed before application assertions due to MongoDB image registry `toomanyrequests: Rate exceeded`. [Run 38037748002](https://github.com/ibrahim1101/SentinelLab/actions/runs/38037748002) passed both jobs. No Docker retry change has been deployed; intermittent registry failure remains open.
+- Commit [35e8823](https://github.com/ibrahim1101/SentinelLab/commit/35e882361c6d5e5b3a4e295061aeaeeac8350f14) adds an AST-based playbook tenant-write guard to the **existing** static-security test file, which the Phase 1 workflow already runs. This is source-level regression coverage, not a substitute for mocked playbook execution tests.
+- Dedicated playbook workflow file exists but its successful execution remains unconfirmed. Next: inspect its Actions registration/run and verify new static guard; implement reliable image-pull retries in actual CI workflow after identifying its path. PR #1 remains unmerged.
