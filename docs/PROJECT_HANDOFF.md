@@ -204,3 +204,8 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - User screenshot: selected `Known Malicious IOC Match — IOC match (64) (critical)`, approval checkbox **unchecked**, clicked **Dry Run**.
 - UI displayed 64 collected events; IOC enrichment checked one indicator and reported one known-bad match; investigation creation and containment tasks described as hypothetical; EDR isolation step status **Simulated** with `DRY-RUN: external action simulated, no changes made.` Summary rendered. This supports UI rendering and dry-run simulation labeling only; database immutability and external action absence have not been independently instrumented.
 - Next: recorded run with approval unchecked must show `pending_approval` and no EDR execution; then explicit approval must still show `simulated` (disconnected EDR), with persisted execution history. P0 Playbooks browser gate remains open pending these checks.
+
+
+### 2026-10-10 — Dedicated playbook CI missing pytest plugin
+- [Run 38050487796](https://github.com/ibrahim1101/SentinelLab/actions/runs/38050487796) failed before test collection: `ERROR: Missing required plugins: pytest-xdist`, exit code 4. This is a CI dependency configuration issue; not evidence of failed playbook runtime behavior.
+- Commit [3727153](https://github.com/ibrahim1101/SentinelLab/commit/3727153d63478ab4f93e7446ab5dc4cceff8fc64) adds `pytest-xdist` and `pytest-asyncio` to `.github/workflows/playbook-regressions.yml` dependency installation. CI verification pending; preserve PR #1 unmerged.
