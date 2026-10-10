@@ -5,7 +5,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 from uuid import uuid4
 
 os.environ.setdefault("MONGO_URL", "mongodb://127.0.0.1:27017")
@@ -58,6 +58,25 @@ class MongoLoginLockoutIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.db.security_notifications.count_documents({
             "user_id": self.user_id, "type": "account_login_locked"
         }), 1)
+
+    async def test_expired_lock_allows_valid_login_and_resets_counter(self):
+        await self.db.users.update_one(
+            {"id": self.user_id},
+            {"$set": {"login_failed_count": 5,
+                      "login_locked_until": "2000-01-01T00:00:00+00:00"}},
+        )
+        req = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"))
+        with patch.object(server, "db", self.db), \
+             patch.object(server, "verify_password", return_value=True), \
+             patch.object(server, "audit", new_callable=AsyncMock):
+            result = await server.login(
+                server.LoginReq(email=self.username, password="correct"), req, Response()
+            )
+        self.assertTrue(result["access_token"])
+        user = await self.db.users.find_one({"id": self.user_id})
+        self.assertNotIn("login_locked_until", user)
+        self.assertNotIn("login_failed_count", user)
+
 
 
 if __name__ == "__main__":
