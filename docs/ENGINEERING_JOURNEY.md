@@ -424,3 +424,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - User confirmed Playbooks execution history shows the correct local timestamp after the shared formatter fix. Previous screenshots verified unapproved EDR pending, approved EDR simulated, and persisted execution detail.
 - Updated `docs/BETA_RELEASE_GATES.md` in commit `a7663d9`: Playbooks browser gate checked, now **4/9 P0 complete, 5 outstanding**. Does not assert external endpoint side-effect testing.
 - Next priority: capture live-stack evidence for ingest → detect → alert → investigation → playbook → report, including tenant boundaries. Use Training Lab/synthetic data; avoid mutating production data. Record actual IDs, test results, screenshots and failures before checking gate. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Product owner clarifies cross-platform standalone release requirement
+- Target is a real install-and-launch SentinelLab desktop application on **Windows, Linux and macOS**, not Docker-only distribution. No manual Docker, Python, Node or MongoDB installation for desktop end users.
+- Existing 9 P0 gates remain required but are insufficient alone for desktop public release. Added eight separate mandatory desktop packaging/compatibility gates in `docs/BETA_RELEASE_GATES.md` (commit `53fdb04`); release remains NO-GO until both sets pass.
+- Proposed first technical spike: evaluate Tauri desktop shell with bundled FastAPI backend, then resolve local persistence (MongoDB packaging/licensing/operations vs supported migration), secure localhost binding, process lifecycle, clean-host platform packaging and testing. Architecture is not yet selected or implemented. Preserve PR #1 unmerged.
