@@ -290,3 +290,17 @@ def test_compose_security_baseline_checker_runtime():
     assert module.check(compose.replace("127.0.0.1:8000:8000", "0.0.0.0:8000:8000"))
     assert module.check(compose.replace("ENABLE_DEMO_ACCOUNTS:-false", "ENABLE_DEMO_ACCOUNTS:-true"))
     assert module.check(compose + "\n    ports:\n      - '27017:27017'\n")
+
+
+def test_release_gate_checker_blocks_pending_p0_and_missing_section():
+    import importlib.util
+    path = ROOT.parent / "scripts" / "check_release_gates.py"
+    spec = importlib.util.spec_from_file_location("sentinellab_release_gates", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    pending, checked = module.evaluate((ROOT.parent / "docs" / "BETA_RELEASE_GATES.md").read_text())
+    assert pending, "Beta must remain NO-GO while mandatory release gates are open"
+    assert checked
+    assert module.evaluate("# empty\n")[0] == ["P0 section missing"]
+    assert module.evaluate("## P0 — mandatory before public beta\n\n## P1\n")[0] == ["No P0 checklist items found"]
+    assert module.evaluate("## P0 — mandatory before public beta\n- [x] Verified\n\n## P1\n") == ([], ["Verified"])
