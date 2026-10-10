@@ -46,7 +46,7 @@ def test_unapproved_action_requires_approval():
     pb = {"id": "approval-test", "name": "Approval", "severity": "high", "steps": [
         {"id": "isolate", "name": "Isolate", "action": "isolate_host", "approval": True}
     ]}
-    with patch.object(playbooks.db.automation_executions, "insert_one", new_callable=AsyncMock):
+    with patch.object(playbooks, "db", SimpleNamespace(automation_executions=SimpleNamespace(insert_one=AsyncMock()))):
         result = run(pb, dry_run=False)
     assert result["status"] == "needs_approval"
     assert result["steps"][0]["status"] == "pending_approval"
