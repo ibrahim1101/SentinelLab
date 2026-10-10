@@ -167,19 +167,32 @@ async def login(body: LoginReq, request: Request, response: Response):
                       "locked_until": (now + timedelta(minutes=15)).isoformat()}},
             upsert=True)
         if user and user.get("enabled", True):
-            failures = int(user.get("login_failed_count", 0)) + 1
+            # Atomic increment prevents concurrent failures from losing counts.
+            updated = await db.users.find_one_and_update(
+                {"id": user["id"], "enabled": {"$ne": False},
+                 "login_locked_until": {"$exists": False}},
+                {"$inc": {"login_failed_count": 1}},
+                return_document=True,
+            )
+            if updated is None:
+                raise HTTPException(423, "Account temporarily locked. Contact your administrator.")
+            failures = updated.get("login_failed_count", 0)
             if failures >= 5:
                 until = (now + timedelta(minutes=15)).isoformat()
-                await db.users.update_one({"id": user["id"]}, {"$set": {"login_failed_count": failures, "login_locked_until": until}})
-                await db.security_notifications.insert_one({
-                    "id": new_id(), "type": "account_login_locked", "user_id": user["id"],
-                    "email": user["email"], "source_ip": ip, "failed_count": failures,
-                    "created_at": now.isoformat(), "locked_until": until,
-                    "status": "open",
-                })
-                raise HTTPException(423, "Account temporarily locked after 5 failed sign-ins. Contact your administrator.")
-            await db.users.update_one({"id": user["id"]}, {"$set": {"login_failed_count": failures}})
-            # Remaining attempts are only disclosed for a verified existing identifier.
+                # Only one concurrent request can create the lock incident.
+                claimed = await db.users.update_one(
+                    {"id": user["id"], "login_locked_until": {"$exists": False},
+                     "login_failed_count": {"$gte": 5}},
+                    {"$set": {"login_locked_until": until}},
+                )
+                if claimed.modified_count:
+                    await db.security_notifications.insert_one({
+                        "id": new_id(), "type": "account_login_locked", "user_id": user["id"],
+                        "email": user["email"], "source_ip": ip, "failed_count": failures,
+                        "created_at": now.isoformat(), "locked_until": until,
+                        "status": "open",
+                    })
+                raise HTTPException(423, "Account temporarily locked after repeated failed sign-ins. Contact your administrator.")
             raise HTTPException(401, f"Invalid credentials. {5 - failures} attempts remaining before account lock.")
         if count >= 5:
             raise HTTPException(429, "Too many login attempts. Try again later.")
@@ -188,7 +201,13 @@ async def login(body: LoginReq, request: Request, response: Response):
     await db.login_attempts.delete_one({"identifier": ident})
     if user.get("enabled", True) is False:
         raise HTTPException(status_code=403, detail="This account has been disabled. Contact your SentinelLab administrator.")
-    await db.users.update_one({"id": user["id"]}, {"$unset": {"login_failed_count": "", "login_locked_until": ""}})
+    # A concurrent fifth failure must not be bypassed by a successful password check.
+    cleared = await db.users.update_one(
+        {"id": user["id"], "login_locked_until": {"$exists": False}},
+        {"$unset": {"login_failed_count": ""}},
+    )
+    if not cleared.matched_count:
+        raise HTTPException(423, "Account temporarily locked. Contact your administrator.")
     token = create_access_token(user["id"], user["email"], user["role"], user.get("session_version", 0))
     _set_cookie(response, token)
     await audit(user.get("default_org"), user, "login", "session")
