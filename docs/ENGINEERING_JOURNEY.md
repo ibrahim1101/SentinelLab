@@ -286,3 +286,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - [Phase 1 run 38038550423](https://github.com/ibrahim1101/SentinelLab/actions/runs/38038550423): docker-smoke passed; static-security **failed** with 16 passed, 3 failed. Three playbook tests raised `RuntimeError: Event loop is closed` from Motor `automation_executions.insert_one`, because repeated `asyncio.run` created and closed loops while Motor retained its first loop.
 - Commit [11ce5da](https://github.com/ibrahim1101/SentinelLab/commit/11ce5da5951fb7f112a55c9f09654f58498e59f1) changes playbook test helper to reuse a single module-level event loop. **CI result for this fix pending.** This fixes test harness lifecycle, not product runtime logic.
 - Still needed: verify all 19 tests pass, ensure dedicated playbook workflow execution, and mitigate intermittent MongoDB registry pulls. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Playbook tenant regression mock correction
+- [Run 38038794945](https://github.com/ibrahim1101/SentinelLab/actions/runs/38038794945) static-security failed with **17 passed, 2 failed**. The event-loop fix eliminated the prior closed-loop failures, but both tenant-scoping tests failed because patching a Motor collection object's method did not reliably intercept subsequent `db.collection` accesses.
+- Commit [56f5d39](https://github.com/ibrahim1101/SentinelLab/commit/56f5d39fda93d3c5d301c6640549fdc4c59adcef) patches `playbooks.db` with a stable `SimpleNamespace` fake, including explicit `AsyncMock` collection methods, so database mutation assertions can observe the calls.
+- CI validation of this change is pending. Continue checking test results; do not claim green until confirmed. PR #1 remains unmerged.
