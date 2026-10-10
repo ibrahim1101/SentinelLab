@@ -146,7 +146,7 @@ async def login(body: LoginReq, request: Request, response: Response):
         if datetime.now(timezone.utc) < locked_until:
             raise HTTPException(429, "Account temporarily locked. Try again later.")
     user = await db.users.find_one({"email": identifier} if "@" in identifier else {"username": identifier})
-    if not user or not verify_password(body.password, user["password_hash"]):
+    if not user or user.get("enabled", True) is False or not verify_password(body.password, user["password_hash"]):
         count = (att.get("count", 0) if att else 0) + 1
         await db.login_attempts.update_one(
             {"identifier": ident},
@@ -155,7 +155,7 @@ async def login(body: LoginReq, request: Request, response: Response):
             upsert=True)
         raise HTTPException(401, "Invalid credentials")
     await db.login_attempts.delete_one({"identifier": ident})
-    token = create_access_token(user["id"], user["email"], user["role"])
+    token = create_access_token(user["id"], user["email"], user["role"], user.get("session_version", 0))
     _set_cookie(response, token)
     await audit(user.get("default_org"), user, "login", "session")
     user.pop("password_hash", None)
@@ -801,6 +801,57 @@ async def admin_create_user(body: AdminCreateUserReq, user=Depends(require_role(
                 {"email": email, "role": "analyst"})
     return {"user": {k: v for k, v in entry.items() if k != "password_hash"}}
 
+
+class AdminUsernameReq(BaseModel):
+    username: str = Field(min_length=3, max_length=32)
+
+class AdminPasswordReq(BaseModel):
+    password: str = Field(min_length=12, max_length=128)
+
+@api.put("/admin/users/{user_id}/username")
+async def admin_set_username(user_id: str, body: AdminUsernameReq, actor=Depends(require_role("super_admin"))):
+    username = body.username.strip().lower()
+    if not USERNAME_RE.fullmatch(username):
+        raise HTTPException(422, "Invalid username format")
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if await db.users.find_one({"username": username, "id": {"$ne": user_id}}):
+        raise HTTPException(409, "Username already in use")
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await db.users.update_one({"id": user_id}, {"$set": {"username": username}})
+    except DuplicateKeyError as exc:
+        raise HTTPException(409, "Username already in use") from exc
+    await audit(actor.get("default_org"), actor, "set_username", "user", user_id)
+    return {"ok": True, "username": username}
+
+@api.put("/admin/users/{user_id}/password")
+async def admin_reset_password(user_id: str, body: AdminPasswordReq, actor=Depends(require_role("super_admin"))):
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target["id"] == actor["id"]:
+        raise HTTPException(400, "Use your own password-change flow")
+    await db.users.update_one({"id": user_id}, {"$set": {"password_hash": hash_password(body.password), "must_change_password": True}, "$inc": {"session_version": 1}})
+    await audit(actor.get("default_org"), actor, "reset_password", "user", user_id)
+    return {"ok": True}
+
+@api.put("/admin/users/{user_id}/status")
+async def admin_set_status(user_id: str, body: dict, actor=Depends(require_role("super_admin"))):
+    enabled = body.get("enabled")
+    if not isinstance(enabled, bool):
+        raise HTTPException(422, "enabled must be boolean")
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target["id"] == actor["id"]:
+        raise HTTPException(400, "Cannot disable your own account")
+    if target.get("role") == "super_admin":
+        raise HTTPException(403, "Cannot disable a super administrator")
+    await db.users.update_one({"id": user_id}, {"$set": {"enabled": enabled}, "$inc": {"session_version": 1}})
+    await audit(actor.get("default_org"), actor, "enable_user" if enabled else "disable_user", "user", user_id)
+    return {"ok": True, "enabled": enabled}
 
 @api.get("/admin/users")
 async def admin_users(request: Request, user=Depends(require_role("admin"))):
