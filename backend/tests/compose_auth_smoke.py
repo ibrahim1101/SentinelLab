@@ -38,12 +38,18 @@ print("PASS: anonymous access, admin login, identity, workspace listing, invalid
 
 # Create a disposable account and verify role-based access using live API calls.
 email = "ci-" + uuid.uuid4().hex[:16] + "@example.com"
-status, registered = request("POST", "/api/auth/register", {"email": email, "password": "ci-temporary-strong-password", "name": "CI Security Analyst"})
-assert status == 200, f"Account registration failed: {status}: {registered}"
-analyst_token = registered["access_token"]
-analyst_id = registered["user"]["id"]
-assert registered["user"]["org_ids"] == ["org-training"], "Self-registration granted unexpected tenant access"
-assert registered["user"]["default_org"] == "org-training", "Self-registration selected privileged workspace"
+status, rejected = request("POST", "/api/auth/register", {"email": email, "password": "ci-temporary-strong-password", "name": "CI Security Analyst"})
+assert status == 403, f"Public registration not blocked: {status}: {rejected}"
+status, created = request("POST", "/api/admin/users", {"email": email, "password": "ci-temporary-strong-password", "name": "CI Security Analyst"}, token=token)
+assert status == 201, f"Admin user provisioning failed: {status}: {created}"
+analyst_id = created["user"]["id"]
+assert created["user"]["org_ids"] == ["org-training"], "Admin provisioning granted unexpected tenant access"
+assert created["user"]["default_org"] == "org-training", "Admin provisioning selected privileged workspace"
+status, analyst_login = request("POST", "/api/auth/login", {"email": email, "password": "ci-temporary-strong-password"})
+assert status == 200, f"Provisioned analyst login failed: {status}: {analyst_login}"
+analyst_token = analyst_login["access_token"]
+status, _ = request("POST", "/api/admin/users", {"email": "forbidden-" + email, "password": "ci-temporary-strong-password", "name": "Forbidden"}, token=analyst_token)
+assert status == 403, f"Analyst created another account: {status}"
 status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
 assert status == 403, f"Self-registered user accessed production: {status}"
 status, _ = request("GET", "/api/admin/users", token=analyst_token)
@@ -86,9 +92,12 @@ status, _ = request("GET", "/api/admin/production-access-requests", token=analys
 assert status == 403, f"Auditor read approval queue: {status}"
 # Create a distinct second administrator to verify the successful approval path.
 second_email = "ci-approver-" + uuid.uuid4().hex[:12] + "@example.com"
-status, second = request("POST", "/api/auth/register", {"email": second_email, "password": "ci-temporary-strong-password", "name": "CI Second Approver"})
-assert status == 200, f"Second approver registration failed: {status}: {second}"
-second_id, second_token = second["user"]["id"], second["access_token"]
+status, second = request("POST", "/api/admin/users", {"email": second_email, "password": "ci-temporary-strong-password", "name": "CI Second Approver"}, token=token)
+assert status == 201, f"Second approver provisioning failed: {status}: {second}"
+second_id = second["user"]["id"]
+status, second_login = request("POST", "/api/auth/login", {"email": second_email, "password": "ci-temporary-strong-password"})
+assert status == 200, f"Second approver login failed: {status}: {second_login}"
+second_token = second_login["access_token"]
 status, _ = request("PUT", "/api/admin/users/" + second_id + "/role", {"role": "admin"}, token=token)
 assert status == 200, f"Admin role provisioning failed: {status}"
 status, _ = request("PUT", "/api/admin/users/" + analyst_id + "/role", {"role": "super_admin"}, token=second_token)
