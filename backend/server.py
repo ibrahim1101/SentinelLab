@@ -147,10 +147,8 @@ async def login(body: LoginReq, request: Request, response: Response):
     if attempt and attempt.get("locked_until") and attempt.get("count", 0) >= 5:
         until = datetime.fromisoformat(attempt["locked_until"])
         if now < until:
-            # An unknown identifier must never be described as a locked account.
-            if not user:
-                raise HTTPException(401, "Invalid credentials")
-            raise HTTPException(429, "Too many login attempts from this source. Try again later.")
+            # Do not reveal whether the throttled identifier belongs to a user.
+            raise HTTPException(401, "Invalid credentials")
         await db.login_attempts.delete_one({"identifier": ident})
         attempt = None
 
