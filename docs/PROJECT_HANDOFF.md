@@ -134,3 +134,9 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - [Run 38038905653](https://github.com/ibrahim1101/SentinelLab/actions/runs/38038905653) completed successfully: **19 passed, 8 warnings** in static-security; docker-smoke succeeded. Five playbook behavioral regressions now run in established Phase 1 CI.
 - Commit [2ad793b](https://github.com/ibrahim1101/SentinelLab/commit/2ad793b58f55dba51770e4f64e72c3265461a3ad) adds three source-level production-access reconciliation regression guards: reconciliation cannot write memberships, must require stale `applying` requests, and must derive terminal status from actual membership with compare-and-set protection.
 - New reconciliation guards are **not yet CI-verified**; they are source-level checks, not simulated interruption integration tests. Next: verify CI, add behavior tests for present/absent membership, fresh guard and malformed timestamps, and harden intermittent Docker Hub pull rate limits. PR #1 stays unmerged.
+
+
+### 2026-10-10 — Reconciliation guard CI passed; Docker Hub rate-limit recurrence
+- [Run 38039377419](https://github.com/ibrahim1101/SentinelLab/actions/runs/38039377419) passed both jobs, static-security **22 passed, 8 warnings** (including three new source-level reconciliation guards).
+- Later [run 38039386230](https://github.com/ibrahim1101/SentinelLab/actions/runs/38039386230) passed static-security but failed docker-smoke because Docker Hub returned `toomanyrequests: Rate exceeded` while pulling MongoDB. The failed jobs were re-run through GitHub Actions; rerun result pending.
+- Durable fix still needed: identify active Phase 1 workflow filename and implement image pull retry / authenticated or alternate registry strategy without weakening tests. PR #1 remains unmerged.
