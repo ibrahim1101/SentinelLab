@@ -193,7 +193,7 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
 
     async def test_expired_account_lock_resets_failed_counter(self):
         user = {"id": "u1", "email": "analyst@example.invalid", "username": "analyst",
-                "enabled": True, "password_hash": "hashed", "login_failed_count": 5,
+                "enabled": True, "role": "analyst", "password_hash": "hashed", "login_failed_count": 5,
                 "login_locked_until": "2000-01-01T00:00:00+00:00"}
         db = SimpleNamespace(
             users=SimpleNamespace(
