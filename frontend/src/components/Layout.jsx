@@ -97,8 +97,8 @@ export default function Layout({ children }) {
           style={{ background: "color-mix(in srgb, var(--bg) 82%, transparent)" }} data-testid="topbar">
           {/* search */}
           <div className="relative flex-1 max-w-md">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-3)" }} />
-            <input className="inp pl-8 font-mono text-[12.5px]" placeholder="Search events, alerts, hosts, IPs…"
+            <Search size={14} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-3)" }} />
+            <input className="inp font-mono text-[12.5px]" style={{ paddingLeft: 40 }} aria-label="Search events, alerts, hosts, and IPs" placeholder="Search events, alerts, hosts, IPs…"
               value={search} onChange={(e) => doSearch(e.target.value)}
               onBlur={() => setTimeout(() => setResults(null), 200)} data-testid="global-search" />
             {results && (
