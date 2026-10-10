@@ -887,6 +887,32 @@ async def admin_set_status(user_id: str, body: dict, actor=Depends(require_role(
     await audit(actor.get("default_org"), actor, "enable_user" if enabled else "disable_user", "user", user_id)
     return {"ok": True, "enabled": enabled}
 
+@api.get("/admin/login-security-events")
+async def admin_login_security_events(actor=Depends(require_role("super_admin"))):
+    rows = await db.security_notifications.find(
+        {"type": "account_login_locked"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return {"events": rows, "open_count": sum(e.get("status") == "open" for e in rows)}
+
+
+@api.post("/admin/users/{user_id}/unlock-login")
+async def admin_unlock_login(user_id: str, actor=Depends(require_role("super_admin"))):
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    await db.users.update_one({"id": user_id}, {"$unset": {"login_locked_until": "", "login_failed_count": ""}})
+    # Clear throttles for this user's known identifiers, not other users.
+    identifiers = [target.get("email", ""), target.get("username", "")]
+    for identifier in filter(None, identifiers):
+        await db.login_attempts.delete_many({"identifier": {"$regex": ":" + re.escape(identifier) + "$"}})
+    await db.security_notifications.update_many(
+        {"type": "account_login_locked", "user_id": user_id, "status": "open"},
+        {"$set": {"status": "resolved", "resolved_at": now_iso(), "resolved_by": actor["id"]}}
+    )
+    await audit(actor.get("default_org"), actor, "unlock_login", "user", user_id)
+    return {"ok": True}
+
+
 @api.get("/admin/users")
 async def admin_users(request: Request, user=Depends(require_role("admin"))):
     rows = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
