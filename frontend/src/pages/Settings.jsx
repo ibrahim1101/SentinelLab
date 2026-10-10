@@ -21,7 +21,7 @@ export default function Settings() {
   const [tab, setTab] = useState("general");
   const [s, setS] = useState(null);
   const [users, setUsers] = useState([]);
-  const [newUser, setNewUser] = useState({ name: "", email: "", password: "" });
+  const [newUser, setNewUser] = useState({ name: "", email: "", username: "", password: "" });
   const [creatingUser, setCreatingUser] = useState(false);
   const [audit, setAudit] = useState([]);
   const [health, setHealth] = useState(null);
@@ -64,7 +64,7 @@ export default function Settings() {
 
   const createAnalyst = async (e) => {
     e.preventDefault();
-    askConfirm("Create analyst account?", `${newUser.name} (${newUser.email}) will receive analyst permissions in Training Lab only.`, () => submitAnalyst());
+    askConfirm("Create analyst account?", `${newUser.name} (${newUser.email}, @${newUser.username}) will receive analyst permissions in Training Lab only.`, () => submitAnalyst());
   };
 
   const submitAnalyst = async () => {
@@ -72,7 +72,7 @@ export default function Settings() {
     try {
       const { data } = await client.post("/admin/users", newUser);
       setUsers((prev) => [...prev, data.user]);
-      setNewUser({ name: "", email: "", password: "" });
+      setNewUser({ name: "", email: "", username: "", password: "" });
       toast.success("Analyst created with Training Lab access");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Could not create analyst");
@@ -180,6 +180,7 @@ export default function Settings() {
                       <input className="inp" aria-label="Analyst name" placeholder="Full name" required maxLength={120} value={newUser.name} onChange={(e) => setNewUser((v) => ({ ...v, name: e.target.value }))} />
                       <input className="inp" aria-label="Analyst email" placeholder="Email address" type="email" required value={newUser.email} onChange={(e) => setNewUser((v) => ({ ...v, email: e.target.value }))} />
                     </div>
+                    <input className="inp" aria-label="Analyst username" placeholder="Username (3–32 characters)" required minLength={3} maxLength={32} pattern="[A-Za-z][A-Za-z0-9_.-]{2,31}" value={newUser.username} onChange={(e) => setNewUser((v) => ({ ...v, username: e.target.value }))} />
                     <input className="inp" aria-label="Initial analyst password" placeholder="Initial password (12+ characters)" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newUser.password} onChange={(e) => setNewUser((v) => ({ ...v, password: e.target.value }))} />
                     <button type="submit" className="btn btn-primary" disabled={creatingUser}>{creatingUser ? "Creating…" : "Create Analyst"}</button>
                   </form>
