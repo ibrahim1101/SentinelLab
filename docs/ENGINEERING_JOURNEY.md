@@ -255,3 +255,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - GitHub Actions [run 38035843116](https://github.com/ibrahim1101/SentinelLab/actions/runs/38035843116) concluded **success** for the earlier test import setup commit; this does not establish that the playbook regression file was included in the workflow's explicit test command.
 - Commit [0ca52d6](https://github.com/ibrahim1101/SentinelLab/commit/0ca52d60965cdcfb0a0c6b30d5c736e7aeb92033) adds `org_id` constraints to playbook alert linking and investigation analyst/task update filters, addressing a potential cross-tenant write risk. Post-fix CI and targeted tenant isolation tests are still pending.
 - Next: identify workflow YAML to include playbook tests, add cross-tenant negative-case coverage, validate production-access reconciliation applying-state behavior. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Cross-tenant playbook regression assertions
+- [Run 38036778445](https://github.com/ibrahim1101/SentinelLab/actions/runs/38036778445): static-security **success**, docker-smoke **failure** while pulling MongoDB image (`toomanyrequests: Rate exceeded`); smoke failure is registry infrastructure, not evidence of failed app assertions.
+- Commit [739441c](https://github.com/ibrahim1101/SentinelLab/commit/739441c0e91b53a6008164918d34d81ef4a55494) adds two mocked async database-call regression tests for org-scoped alert linking and investigation assignment/task writes. Not yet observed executing in CI; explicit workflow test list still omits playbook tests.
+- Pending: locate/update actual CI workflow, run new tests, add production-access reconciliation integration coverage, and verify Portfolio guide public URL. PR #1 remains unmerged.
