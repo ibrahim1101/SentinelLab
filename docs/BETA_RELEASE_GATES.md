@@ -6,7 +6,7 @@ Status: **candidate planning, NOT approved for public release**. Working branch:
 
 - [x] Existing security suite including playbook and production-access reconciliation regressions: **25 passed, 8 warnings** in [CI run 38043724553](https://github.com/ibrahim1101/SentinelLab/actions/runs/38043724553).
 - [x] Docker smoke passed in that run.
-- [ ] Integrate bounded MongoDB image-pull retry helper (`scripts/pull-mongo-with-retry.sh`) into the actual Phase 1 workflow; the existing job still calls Compose directly.
+- [ ] Verify bounded MongoDB image-pull retry integration in the active Phase 1 workflow (`.github/workflows/security-phase1.yml`) with a green CI run; integration committed as `0ad9f85`.
 - [ ] Browser-verify Playbooks labels, approval gates, and `simulated` status for disconnected external actions; record screenshots or reproducible steps.
 - [ ] Run and record end-to-end ingest → detect → alert → investigation → playbook → report smoke, including tenant boundaries.
 - [ ] Verify installation from a clean host using documented environment variables, safe secrets, and non-public default bind addresses.
