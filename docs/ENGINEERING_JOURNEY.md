@@ -280,3 +280,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Validation pending:** no successful run for commit 7f61dfb confirmed at time of entry; do not count five tests as passing until logs prove collection and execution. The previous static-security suite passed 14 tests.
 - Docker smoke remains intermittently blocked by upstream MongoDB registry `toomanyrequests` errors. No reliable image-pull retry/fallback has yet been installed in the existing workflow; actual workflow filename must be identified before editing.
 - PR #1 remains unmerged.
+
+
+### 2026-10-10 — Playbook regression CI failure diagnosed and test loop fix
+- [Phase 1 run 38038550423](https://github.com/ibrahim1101/SentinelLab/actions/runs/38038550423): docker-smoke passed; static-security **failed** with 16 passed, 3 failed. Three playbook tests raised `RuntimeError: Event loop is closed` from Motor `automation_executions.insert_one`, because repeated `asyncio.run` created and closed loops while Motor retained its first loop.
+- Commit [11ce5da](https://github.com/ibrahim1101/SentinelLab/commit/11ce5da5951fb7f112a55c9f09654f58498e59f1) changes playbook test helper to reuse a single module-level event loop. **CI result for this fix pending.** This fixes test harness lifecycle, not product runtime logic.
+- Still needed: verify all 19 tests pass, ensure dedicated playbook workflow execution, and mitigate intermittent MongoDB registry pulls. PR #1 remains unmerged.
