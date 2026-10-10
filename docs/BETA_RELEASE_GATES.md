@@ -43,3 +43,9 @@ Last evidence checked: 2026-10-10, workflow 38043724553.
 - Added `scripts/smoke_release.py` (commit `4e83bd1`): read-only health, readiness, and unauthenticated `/api/auth/me` + `/api/dashboard/overview` denial checks. Run `python scripts/smoke_release.py --base-url http://127.0.0.1:8000` against a **running** stack.
 - Added source regression guard in commit `8cd474c`; CI verification pending. This is not yet evidence of a clean-host installation or a live smoke run.
 - P0 deployment/browser/end-to-end/backup gates remain unchecked; PR #1 stays unmerged.
+
+
+### 2026-10-10 — Docker Compose beta security baseline
+- [Run 38045681744](https://github.com/ibrahim1101/SentinelLab/actions/runs/38045681744) succeeded: **27 passed, 8 warnings**, docker-smoke success.
+- Added `scripts/check_compose_security.py` (commit `8f95642`) to check mandatory JWT/admin secrets, demo accounts disabled by default, loopback API/web bindings, Mongo persistence, readiness dependency and no published MongoDB port. Added runtime regression against unsafe edits in commit `710a64f`.
+- This is a static baseline, **not** an external penetration test or TLS/firewall verification. New CI pending. PR #1 remains unmerged.
