@@ -42,12 +42,12 @@ export default function Login() {
           <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Email</label>
           <div className="relative mt-1 mb-3">
             <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-3)" }} />
-            <input className="inp pl-9" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email" />
+            <input className="inp" style={{ paddingLeft: "2.5rem" }} autoComplete="username" type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email" />
           </div>
           <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Password</label>
           <div className="relative mt-1 mb-4">
             <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-3)" }} />
-            <input className="inp pl-9 pr-9" type={show ? "text" : "password"} value={password}
+            <input className="inp" style={{ paddingLeft: "2.5rem", paddingRight: "2.5rem" }} autoComplete="current-password" type={show ? "text" : "password"} value={password}
               onChange={(e) => setPassword(e.target.value)} data-testid="login-password" />
             <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setShow(!show)} style={{ color: "var(--text-3)" }}>
               {show ? <EyeOff size={14} /> : <Eye size={14} />}
