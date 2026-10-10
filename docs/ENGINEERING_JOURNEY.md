@@ -448,3 +448,10 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - Created `desktop/package.json`, `desktop/src-tauri/{Cargo.toml,build.rs,tauri.conf.json,src/lib.rs,src/main.rs,capabilities/default.json}` on `fix/phase1-security-regressions`. Native window points to React dev server at localhost:3000 and CRA production build. Bundling disabled intentionally.
 - Updated `desktop/README.md` with Windows development run instructions and caveats. This is unverified scaffolding, NOT a working installer. No backend sidecar process management, secure desktop cookie/origin solution, tested CI build, hardened CSP, or OS packages yet.
 - Next: verify `npm run tauri:dev` on Windows; implement controlled backend lifecycle, authenticated API transport and packaging; Linux/macOS validation after Windows. PR #1 remains unmerged; release NO-GO.
+
+### 2026-10-11 — Atomic source login throttle under concurrency
+- **Finding:** the source-IP/identifier failure counter used a read/modify/write sequence; concurrent failures could lose increments. The account-level counter already used atomic MongoDB updates.
+- **Change:** use one MongoDB aggregation-pipeline find_one_and_update to increment the throttle counter and set a 15-minute lock threshold. Existing users and account state remain untouched.
+- **Regression:** real-Mongo integration test for concurrent unknown-identifier attempts verifies generic 401 responses and no lost increments.
+- **Validation:** pending GitHub Actions verification; no local MongoDB test execution claimed.
+- **Unresolved:** a unique index for the identifier is needed to guarantee collision-safe first upserts. Before adding it, audit duplicate legacy throttle documents and design a data-preserving migration. Continue timing/anti-enumeration hardening and session controls.

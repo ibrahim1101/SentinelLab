@@ -164,12 +164,27 @@ async def login(body: LoginReq, request: Request, response: Response):
         user.pop("login_failed_count", None)
 
     if not user or not verify_password(body.password, user["password_hash"]):
-        count = (attempt.get("count", 0) if attempt else 0) + 1
-        await db.login_attempts.update_one(
+        # Atomic per-document increment prevents lost concurrent failures.
+        await db.login_attempts.find_one_and_update(
             {"identifier": ident},
-            {"$set": {"identifier": ident, "count": count,
-                      "locked_until": (now + timedelta(minutes=15)).isoformat() if count >= 5 else None}},
-            upsert=True)
+            [
+                {"$set": {
+                    "identifier": ident,
+                    "count": {"$add": [{"$ifNull": ["$count", 0]}, 1]},
+                }},
+                {"$set": {
+                    "locked_until": {
+                        "$cond": [
+                            {"$gte": ["$count", 5]},
+                            (now + timedelta(minutes=15)).isoformat(),
+                            None,
+                        ],
+                    },
+                }},
+            ],
+            upsert=True,
+            return_document=True,
+        )
         if user and user.get("enabled", True):
             # Atomic increment prevents concurrent failures from losing counts.
             updated = await db.users.find_one_and_update(

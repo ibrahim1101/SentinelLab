@@ -59,6 +59,26 @@ class MongoLoginLockoutIntegration(unittest.IsolatedAsyncioTestCase):
             "user_id": self.user_id, "type": "account_login_locked"
         }), 1)
 
+    async def test_concurrent_unknown_source_failures_are_not_lost(self):
+        """Real MongoDB should retain every source identifier failure."""
+        username = "unknown_" + uuid4().hex[:16]
+        ident = "127.0.0.1:" + username
+        req = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"))
+        with patch.object(server, "db", self.db):
+            async def fail():
+                try:
+                    await server.login(server.LoginReq(email=username, password="bad"), req, Response())
+                except HTTPException as exc:
+                    return exc.status_code
+                return 200
+            statuses = await asyncio.gather(*(fail() for _ in range(5)))
+        self.assertEqual(statuses, [401] * 5)
+        record = await self.db.login_attempts.find_one({"identifier": ident})
+        self.assertIsNotNone(record)
+        self.assertEqual(record["count"], 5)
+        self.assertTrue(record["locked_until"])
+        await self.db.login_attempts.delete_many({"identifier": ident})
+
     async def test_expired_lock_allows_valid_login_and_resets_counter(self):
         await self.db.users.update_one(
             {"id": self.user_id},
