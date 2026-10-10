@@ -396,3 +396,8 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 ### 2026-10-10 — Dedicated playbook CI missing pytest plugin
 - [Run 38050487796](https://github.com/ibrahim1101/SentinelLab/actions/runs/38050487796) failed before test collection: `ERROR: Missing required plugins: pytest-xdist`, exit code 4. This is a CI dependency configuration issue; not evidence of failed playbook runtime behavior.
 - Commit [3727153](https://github.com/ibrahim1101/SentinelLab/commit/3727153d63478ab4f93e7446ab5dc4cceff8fc64) adds `pytest-xdist` and `pytest-asyncio` to `.github/workflows/playbook-regressions.yml` dependency installation. CI verification pending; preserve PR #1 unmerged.
+
+
+### 2026-10-10 — Dedicated Playbooks CI MongoDB test isolation
+- [Run 38050793821](https://github.com/ibrahim1101/SentinelLab/actions/runs/38050793821) failed **1 failed, 4 passed** after pytest plugins were installed. The unapproved-action test patched a collection method on a live Motor client; execution instead attempted to write to `localhost:27017` and timed out with `ServerSelectionTimeoutError`.
+- Commit [9a86d15](https://github.com/ibrahim1101/SentinelLab/commit/9a86d15f0c8b3df3089b8fa56dca0f0be58b4b33) replaces the entire `playbooks.db` object with a fake containing `AsyncMock` for execution persistence, preventing unintended real database access. Dedicated workflow CI result pending. No production playbook behavior changed.
