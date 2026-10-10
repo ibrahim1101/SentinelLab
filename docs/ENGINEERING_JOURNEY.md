@@ -310,3 +310,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - [Run 38040276134](https://github.com/ibrahim1101/SentinelLab/actions/runs/38040276134) failed docker-smoke (`toomanyrequests: Rate exceeded`), while static-security succeeded. The prior failed run 38039386230 passed on rerun.
 - Requested rerun of failed jobs for run 38040276134; outcome pending. This is only temporary recovery, **not a permanent registry mitigation**.
 - Active workflow path has not been identified; do not claim retry/backoff or registry mirror is implemented. Next: locate workflow in GitHub Actions UI, add bounded pull retries or authenticated/alternate image registry, verify CI. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Registry retry helper added
+- GitHub Actions [run 38040276134](https://github.com/ibrahim1101/SentinelLab/actions/runs/38040276134) succeeded on rerun (both jobs green).
+- Commit [d4106ec](https://github.com/ibrahim1101/SentinelLab/commit/d4106ec0ae7a3cb4b1c1115b7c6df706ac9eff16) adds `scripts/pull-mongo-with-retry.sh` with up to five image-pull attempts and bounded waits. **Not wired into the existing Phase 1 workflow yet**; the workflow filename still needs identifying. Attempt to add a separate hardened workflow was blocked by tool safety checks.
+- Docker Hub rate limiting is not considered permanently resolved until a CI workflow invokes the helper and succeeds. PR #1 remains unmerged.
