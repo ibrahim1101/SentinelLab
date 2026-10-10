@@ -40,11 +40,12 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(user_id: str, email: str, role: str) -> str:
+def create_access_token(user_id: str, email: str, role: str, session_version: int = 0) -> str:
     payload = {
         "sub": user_id,
         "email": email,
         "role": role,
+        "session_version": session_version,
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TTL_MIN),
         "type": "access",
     }
@@ -93,8 +94,10 @@ async def get_current_user(request: Request) -> dict:
         if payload.get("type") != "access":
             raise HTTPException(status_code=401, detail="Invalid token type")
         user = await db.users.find_one({"id": payload["sub"]})
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
+        if not user or user.get("enabled", True) is False:
+            raise HTTPException(status_code=401, detail="Account unavailable")
+        if payload.get("session_version", 0) != user.get("session_version", 0):
+            raise HTTPException(status_code=401, detail="Session revoked")
         user.pop("password_hash", None)
         return clean(user)
     except jwt.ExpiredSignatureError:

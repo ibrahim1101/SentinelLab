@@ -1,0 +1,73 @@
+name: Phase 1 security checks
+on:
+  push:
+    branches: [main, "fix/**"]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  static-security:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: public.ecr.aws/docker/library/mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      MONGO_URL: mongodb://127.0.0.1:27017
+      DB_NAME: sentinellab_phase1_ci
+      JWT_SECRET: ci-only-test-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Python modules
+        run: python -m compileall -q backend
+      - name: Install lightweight test dependencies
+        run: python -m pip install pytest pytest-xdist pytest-asyncio python-dateutil motor pymongo PyJWT bcrypt fastapi python-dotenv python-multipart email-validator pydantic
+      - name: Run isolated regression tests
+        run: python -m pytest -q backend/tests/test_security_regressions.py backend/tests/test_detection_behavior.py backend/tests/test_detection_mongo_integration.py backend/tests/test_alert_tenant_integration.py
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: ci-only-32-character-secret-value
+      ADMIN_PASSWORD: ci-only-strong-admin-password
+      MONGO_IMAGE: public.ecr.aws/docker/library/mongo:7
+      PYTHON_BASE_IMAGE: public.ecr.aws/docker/library/python:3.12-slim
+      NODE_BASE_IMAGE: public.ecr.aws/docker/library/node:22-alpine
+      NGINX_BASE_IMAGE: public.ecr.aws/docker/library/nginx:1.27-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        env:
+          JWT_SECRET: ci-only-32-character-secret-value
+          ADMIN_PASSWORD: ci-only-strong-admin-password
+        run: docker compose config --quiet
+      - name: Pull MongoDB image with bounded retries
+        run: bash scripts/pull-mongo-with-retry.sh
+      - name: Build and start API
+        env:
+          JWT_SECRET: ci-only-32-character-secret-value
+          ADMIN_PASSWORD: ci-only-strong-admin-password
+        run: docker compose up -d --build --wait
+      - name: Check API and MongoDB connectivity
+        run: |
+          curl --fail --retry 12 --retry-delay 5 --retry-all-errors --retry-connrefused http://127.0.0.1:8000/openapi.json -o /dev/null
+          docker compose ps
+          curl --fail --retry 12 --retry-delay 5 --retry-all-errors --retry-connrefused http://127.0.0.1:8080/ -o /tmp/sentinellab-home.html
+          grep -qi '<html' /tmp/sentinellab-home.html
+          curl --fail --retry 12 --retry-delay 5 --retry-all-errors --retry-connrefused http://127.0.0.1:8080/api/workspaces -o /dev/null || test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/workspaces)" = '401'
+      - name: Exercise login and tenant boundaries through Nginx
+        run: python backend/tests/compose_auth_smoke.py
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --tail=100
+      - name: Tear down containers
+        if: always()
+        run: docker compose down -v

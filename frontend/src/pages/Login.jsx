@@ -5,8 +5,8 @@ import { apiErr } from "@/lib/api";
 
 export default function Login() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("admin@sentinellab.io");
-  const [password, setPassword] = useState("Sentinel@2026");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -15,11 +15,13 @@ export default function Login() {
     e.preventDefault();
     setErr(""); setBusy(true);
     try { await login(email, password); }
-    catch (ex) { setErr(apiErr(ex)); }
+    catch (ex) {
+      setErr(!ex.response
+        ? "Cannot reach SentinelLab API. Confirm the backend is running and retry."
+        : apiErr(ex));
+    }
     finally { setBusy(false); }
   };
-
-  const quick = (em, pw) => { setEmail(em); setPassword(pw); };
 
   return (
     <div className="min-h-screen grid place-items-center p-4" style={{ background: "var(--bg)" }} data-testid="login-screen">
@@ -39,15 +41,15 @@ export default function Login() {
             <div className="text-[12px]" style={{ color: "var(--text-3)" }}>Sign in to your analyst workspace</div>
           </div>
           {err && <div className="mb-3 text-[12px] px-3 py-2 rounded" style={{ background: "rgba(248,113,113,.12)", color: "#F87171", border: "1px solid rgba(248,113,113,.3)" }} data-testid="login-error">{err}</div>}
-          <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Email</label>
+          <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Email or username</label>
           <div className="relative mt-1 mb-3">
             <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-3)" }} />
-            <input className="inp pl-9" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email" />
+            <input className="inp" style={{ paddingLeft: "2.5rem" }} autoComplete="username" type="text" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email" placeholder="Email or username" />
           </div>
           <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Password</label>
           <div className="relative mt-1 mb-4">
             <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-3)" }} />
-            <input className="inp pl-9 pr-9" type={show ? "text" : "password"} value={password}
+            <input className="inp" style={{ paddingLeft: "2.5rem", paddingRight: "2.5rem" }} autoComplete="current-password" type={show ? "text" : "password"} value={password}
               onChange={(e) => setPassword(e.target.value)} data-testid="login-password" />
             <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setShow(!show)} style={{ color: "var(--text-3)" }}>
               {show ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -56,13 +58,7 @@ export default function Login() {
           <button className="btn btn-primary w-full justify-center" disabled={busy} data-testid="login-submit">
             {busy ? "Authenticating…" : "Sign In"}
           </button>
-          <div className="mt-4 pt-3 border-t">
-            <div className="text-[10px] uppercase mb-2" style={{ color: "var(--text-3)" }}>Quick demo login</div>
-            <div className="flex gap-2">
-              <button type="button" className="btn btn-sm flex-1 justify-center" onClick={() => quick("admin@sentinellab.io", "Sentinel@2026")} data-testid="demo-admin">Administrator</button>
-              <button type="button" className="btn btn-sm flex-1 justify-center" onClick={() => quick("analyst@sentinellab.io", "Analyst@2026")} data-testid="demo-analyst">SOC Analyst</button>
-            </div>
-          </div>
+
         </form>
         <p className="text-center text-[11px] mt-4" style={{ color: "var(--text-3)" }}>
           Self-hosted SOC platform for detection, investigation & research.

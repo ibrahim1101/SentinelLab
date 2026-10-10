@@ -58,4 +58,14 @@ export function PageHead({ title, desc, children, testId }) {
 }
 
 export const SEV_COLORS = { critical: "#F87171", high: "#FB923C", medium: "#FBBF24", low: "#60A5FA", info: "#38BDF8" };
-export const fmtTime = (t) => { try { return new Date(t).toISOString().slice(0, 19).replace("T", " "); } catch { return t; } };
+export const fmtTime = (t) => {
+  if (!t) return "—";
+  const date = new Date(t);
+  if (Number.isNaN(date.getTime())) return String(t);
+  // Store UTC in the backend; display the viewer's local timezone in the UI.
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).format(date);
+};

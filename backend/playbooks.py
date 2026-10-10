@@ -113,7 +113,12 @@ async def execute(playbook, org_id, alert, user, dry_run=True, approvals=None):
                 entry["status"] = "ok"
                 entry["detail"] = f"Collected {len(related)} related event(s)."
             elif action == "enrich_iocs":
-                iocs = alert.get("src_ip") and [alert["src_ip"]] or []
+                iocs = [alert["src_ip"]] if alert and alert.get("src_ip") else []
+                if not iocs:
+                    entry["status"] = "skipped"
+                    entry["detail"] = "No indicators available for enrichment."
+                    results.append(entry)
+                    continue
                 matches = 0
                 for v in iocs:
                     if await db.indicators.find_one({"org_id": org_id, "value": v, "active": True}):
@@ -136,7 +141,7 @@ async def execute(playbook, org_id, alert, user, dry_run=True, approvals=None):
                     await db.investigations.insert_one(dict(inv))
                     created_investigation_id = inv["id"]
                     if alert:
-                        await db.alerts.update_one({"id": alert["id"]},
+                        await db.alerts.update_one({"id": alert["id"], "org_id": org_id},
                                                    {"$set": {"investigation_id": inv["id"], "status": "investigating"}})
                     entry["detail"] = f"Created investigation {inv['id'][:8]}."
                     entry["investigation_id"] = created_investigation_id
@@ -144,14 +149,14 @@ async def execute(playbook, org_id, alert, user, dry_run=True, approvals=None):
             elif action == "assign_analyst":
                 entry["status"] = "ok"
                 if not dry_run and created_investigation_id:
-                    await db.investigations.update_one({"id": created_investigation_id},
+                    await db.investigations.update_one({"id": created_investigation_id, "org_id": org_id},
                                                        {"$set": {"lead": user["email"]}})
                 entry["detail"] = f"Assigned to {user['email']}."
             elif action == "add_tasks":
                 tasks = step.get("tasks", [])
                 if not dry_run and created_investigation_id:
                     for t in tasks:
-                        await db.investigations.update_one({"id": created_investigation_id},
+                        await db.investigations.update_one({"id": created_investigation_id, "org_id": org_id},
                             {"$push": {"tasks": {"id": new_id(), "text": t, "done": False, "ts": now_iso()}}})
                 entry["status"] = "ok"
                 entry["detail"] = f"{'Would add' if dry_run else 'Added'} {len(tasks)} task(s)."
@@ -162,7 +167,7 @@ async def execute(playbook, org_id, alert, user, dry_run=True, approvals=None):
                                    f"{len(related)} related events.")
             elif action in ("notify", "isolate_host", "block_indicator", "disable_account"):
                 # approved external action — recorded, not actually performed against real systems
-                entry["status"] = "ok"
+                entry["status"] = "simulated"
                 entry["detail"] = f"APPROVED external action '{action}' recorded in audit trail (no live system connected)."
             else:
                 entry["status"] = "skipped"
@@ -177,7 +182,9 @@ async def execute(playbook, org_id, alert, user, dry_run=True, approvals=None):
         "playbook_name": playbook["name"], "alert_id": alert["id"] if alert else None,
         "dry_run": dry_run, "run_by": user["email"], "created_at": now_iso(),
         "investigation_id": created_investigation_id,
-        "status": "completed" if all(r["status"] in ("ok", "simulated") for r in results) else "needs_approval",
+        "status": ("failed" if any(r["status"] == "error" for r in results) else
+                   "needs_approval" if any(r["status"] == "pending_approval" for r in results) else
+                   "completed_with_skips" if any(r["status"] == "skipped" for r in results) else "completed"),
         "steps": results,
     }
     if not dry_run:

@@ -21,20 +21,144 @@ export default function Settings() {
   const [tab, setTab] = useState("general");
   const [s, setS] = useState(null);
   const [users, setUsers] = useState([]);
+  const [loginEvents, setLoginEvents] = useState([]);
+  const [newUser, setNewUser] = useState({ name: "", email: "", username: "", password: "" });
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [editingAccount, setEditingAccount] = useState(null);
+  const [accountInput, setAccountInput] = useState("");
   const [audit, setAudit] = useState([]);
   const [health, setHealth] = useState(null);
   const isAdmin = ["admin", "super_admin"].includes(user?.role);
+  const isSuperAdmin = user?.role === "super_admin";
+  const [members, setMembers] = useState([]);
+  const [approvalQueue, setApprovalQueue] = useState([]);
+  const [savingMember, setSavingMember] = useState("");
+  const [confirmation, setConfirmation] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const askConfirm = (title, description, action, destructive = false) => setConfirmation({ title, description, action, destructive });
+  const executeConfirmed = async () => {
+    if (!confirmation || confirmBusy) return;
+    setConfirmBusy(true);
+    try { await confirmation.action(); setConfirmation(null); }
+    catch (err) { toast.error(err.response?.data?.detail || "Action failed"); }
+    finally { setConfirmBusy(false); }
+  };
 
   useEffect(() => {
     client.get("/settings").then(({ data }) => setS(data.settings));
     client.get("/admin/health").then(({ data }) => setHealth(data)).catch(() => {});
     if (isAdmin) client.get("/admin/users").then(({ data }) => setUsers(data.users)).catch(() => {});
+    if (isSuperAdmin) client.get("/admin/login-security-events").then(({ data }) => setLoginEvents(data.events || [])).catch(() => {});
+    if (isSuperAdmin) client.get("/admin/production-access-requests").then(({ data }) => setApprovalQueue(data.requests)).catch(() => {});
+    if (isSuperAdmin) client.get("/admin/membership-review").then(({ data }) => setMembers(data.production_members)).catch(() => toast.error("Could not load production membership review"));
     client.get("/admin/audit").then(({ data }) => setAudit(data.audit)).catch(() => {});
   }, []);
 
   const save = async (patch) => { const { data } = await client.put("/settings", patch); setS(data); toast.success("Settings saved"); };
-  const resetDemo = async () => { if (!window.confirm("Reset Training Lab synthetic data?")) return; await client.post("/demo/reset"); toast.success("Demo data regenerated"); };
-  const setUserRole = async (id, role) => { await client.put(`/admin/users/${id}/role`, { role }); toast.success("Role updated"); setUsers(users.map((u) => u.id === id ? { ...u, role } : u)); };
+  const resetDemo = () => askConfirm("Reset Training Lab data?", "This regenerates synthetic demo data. Existing Training Lab demo records may be replaced.", async () => { await client.post("/demo/reset"); toast.success("Demo data regenerated"); }, true);
+  const setUserRole = (id, role) => {
+    const target = users.find((u) => u.id === id);
+    if (!target || target.role === role) return;
+    askConfirm("Confirm role change", `${target.email}: ${roles[target.role] || target.role} → ${roles[role] || role}. This changes account permissions.`, async () => {
+      await client.put(`/admin/users/${id}/role`, { role });
+      setUsers((prev) => prev.map((u) => u.id === id ? { ...u, role } : u));
+      toast.success("Role updated");
+    }, true);
+  };
+
+  const createAnalyst = async (e) => {
+    e.preventDefault();
+    askConfirm("Create analyst account?", `${newUser.name} (${newUser.email}, @${newUser.username}) will receive analyst permissions in Training Lab only.`, () => submitAnalyst());
+  };
+
+  const submitAnalyst = async () => {
+    setCreatingUser(true);
+    try {
+      const { data } = await client.post("/admin/users", newUser);
+      setUsers((prev) => [...prev, data.user]);
+      setNewUser({ name: "", email: "", username: "", password: "" });
+      toast.success("Analyst created with Training Lab access");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not create analyst");
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  const changeMembership = async (target, enableProduction) => {
+    const org_ids = enableProduction ? [...new Set([...(target.org_ids || []), "org-production"])] : (target.org_ids || []).filter((id) => id !== "org-production");
+    if (!org_ids.length) org_ids.push("org-training");
+    askConfirm(enableProduction ? "Request production access?" : "Revoke production access?", `${target.email}: ${enableProduction ? "A separate super administrator must approve before access is granted." : "Production access will be removed immediately."}`, () => submitMembership(target, enableProduction, org_ids), true);
+  };
+
+  const submitMembership = async (target, enableProduction, org_ids) => {
+    setSavingMember(target.id);
+    try {
+      const { data } = enableProduction
+        ? await client.post(`/admin/users/${target.id}/production-access-requests`)
+        : await client.put(`/admin/users/${target.id}/workspaces`, { org_ids });
+      if (!enableProduction) setUsers((prev) => prev.map((u) => u.id === target.id ? { ...u, org_ids: data.org_ids, default_org: data.default_org } : u));
+      const review = await client.get("/admin/membership-review");
+      setMembers(review.data.production_members);
+      const queue = await client.get("/admin/production-access-requests");
+      setApprovalQueue(queue.data.requests);
+      toast.success(enableProduction ? "Approval requested — a different super admin must approve" : "Workspace membership updated");
+    } catch (err) { toast.error(err.response?.data?.detail || "Workspace membership update failed"); }
+    finally { setSavingMember(""); }
+  };
+
+  const approveRequest = async (entry) => {
+    askConfirm("Approve production access?", `This grants production access to ${users.find((u) => u.id === entry.target_id)?.email || entry.target_id}. Verify the request and independent approval before continuing.`, () => submitApproval(entry), true);
+  };
+
+  const submitApproval = async (entry) => {
+    setSavingMember(entry.target_id);
+    try {
+      await client.post(`/admin/production-access-requests/${entry.id}/approve`);
+      const [queue, people, review] = await Promise.all([client.get("/admin/production-access-requests"), client.get("/admin/users"), client.get("/admin/membership-review")]);
+      setApprovalQueue(queue.data.requests); setUsers(people.data.users); setMembers(review.data.production_members);
+      toast.success("Production access approved");
+    } catch (err) { toast.error(err.response?.data?.detail || "Approval failed"); }
+    finally { setSavingMember(""); }
+  };
+
+  const reconcileRequest = async (entry) => {
+    askConfirm("Reconcile interrupted approval?", "Compare the interrupted approval with actual membership. This operation does not grant access.", () => submitReconciliation(entry), true);
+  };
+
+  const submitReconciliation = async (entry) => {
+    setSavingMember(entry.target_id);
+    try {
+      const { data } = await client.post(`/admin/production-access-requests/${entry.id}/reconcile`);
+      const queue = await client.get("/admin/production-access-requests");
+      setApprovalQueue(queue.data.requests);
+      toast.success(`Reconciliation completed: ${data.status}`);
+    } catch (err) { toast.error(err.response?.data?.detail || "Reconciliation failed"); }
+    finally { setSavingMember(""); }
+  };
+
+  const submitAccountEdit = (e) => {
+    e.preventDefault();
+    if (!editingAccount) return;
+    const { id, email, mode } = editingAccount;
+    const endpoint = mode === "username" ? "username" : "password";
+    const payload = { [endpoint]: accountInput };
+    askConfirm(mode === "username" ? "Change username?" : "Reset account password?", `Update ${email}? ${mode === "password" ? "Existing sessions will be revoked." : "Email login remains available."}`, async () => {
+      try {
+        const { data } = await client.put(`/admin/users/${id}/${endpoint}`, payload);
+        if (mode === "username") setUsers((prev) => prev.map((u) => u.id === id ? { ...u, username: data.username } : u));
+        toast.success(mode === "username" ? "Username updated" : "Password reset; previous sessions revoked");
+        setEditingAccount(null); setAccountInput("");
+      } catch (err) { toast.error(err.response?.data?.detail || "Account update failed"); }
+    }, true);
+  };
+  const toggleAccount = (u) => askConfirm(u.enabled === false ? "Enable account?" : "Disable account?", `${u.email}: ${u.enabled === false ? "restore sign-in" : "block sign-in and revoke existing sessions"}?`, async () => {
+    try {
+      const { data } = await client.put(`/admin/users/${u.id}/status`, { enabled: u.enabled === false });
+      setUsers((prev) => prev.map((v) => v.id === u.id ? { ...v, enabled: data.enabled } : v));
+      toast.success(data.enabled ? "Account enabled" : "Account disabled");
+    } catch (err) { toast.error(err.response?.data?.detail || "Account status update failed"); }
+  }, true);
 
   if (!s) return null;
 
@@ -68,7 +192,7 @@ export default function Settings() {
             </div>
           )}
           {tab === "security" && (
-            <div className="space-y-3 max-w-lg text-[13px]">
+            <div className="space-y-4 w-full min-w-0 text-[13px]">
               <Row k="Password Hashing" v="bcrypt (Argon2id-ready adapter)" />
               <Row k="Session Token" v="JWT · 8h expiry · httpOnly cookie + Bearer" />
               <Row k="Login Rate Limiting" v="5 attempts → 15 min lockout" />
@@ -77,11 +201,52 @@ export default function Settings() {
               <Row k="Organization Isolation" v="All resources workspace-scoped" />
               {isAdmin && (
                 <>
+                  {isSuperAdmin && <div className="border rounded-md p-4 mt-4 w-full max-w-5xl space-y-3" data-testid="login-security-events">
+                    <div className="font-semibold text-[13px]">Login security alerts ({loginEvents.filter((e) => e.status === "open").length} open)</div>
+                    {loginEvents.length === 0 ? <p className="text-[12px]">No account lock incidents recorded.</p> :
+                      <div className="space-y-2">{loginEvents.map((event) => <div key={event.id} className="border rounded p-3 flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-[12px]"><strong>{event.email}</strong> · {event.failed_count} failed attempts · Source: {event.source_ip} · {event.created_at} · {event.status}</div>
+                        {event.status === "open" && <button type="button" className="btn btn-sm" onClick={() => askConfirm("Unlock account login?", `Clear failed sign-in lock for ${event.email}? Verify the user's identity before proceeding.`, async () => {
+                          await client.post(`/admin/users/${event.user_id}/unlock-login`);
+                          const { data } = await client.get("/admin/login-security-events");
+                          setLoginEvents(data.events || []);
+                          toast.success("Login lock cleared");
+                        }, true)}>Unlock login</button>}
+                      </div>)}</div>}
+                    <p className="text-[11px]" style={{ color: "var(--text-3)" }}>For account recovery, verify the user out of band and use Reset password in the account actions below.</p>
+                  </div>}
+                  <form className="space-y-3 border rounded-md p-4 mt-4 w-full max-w-5xl" onSubmit={createAnalyst} data-testid="create-analyst-form">
+                    <div className="text-[12px] font-semibold">Create analyst · Training Lab only</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input className="inp" aria-label="Analyst name" placeholder="Full name" required maxLength={120} value={newUser.name} onChange={(e) => setNewUser((v) => ({ ...v, name: e.target.value }))} />
+                      <input className="inp" aria-label="Analyst email" placeholder="Email address" type="email" required value={newUser.email} onChange={(e) => setNewUser((v) => ({ ...v, email: e.target.value }))} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3"><input className="inp" aria-label="Analyst username" placeholder="Username (3–32 characters)" required minLength={3} maxLength={32} pattern="[A-Za-z][A-Za-z0-9_.-]{2,31}" value={newUser.username} onChange={(e) => setNewUser((v) => ({ ...v, username: e.target.value }))} />
+                    <input className="inp" aria-label="Initial analyst password" placeholder="Initial password (12+ characters)" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newUser.password} onChange={(e) => setNewUser((v) => ({ ...v, password: e.target.value }))} /></div>
+                    <button type="submit" className="btn btn-primary" disabled={creatingUser}>{creatingUser ? "Creating…" : "Create Analyst"}</button>
+                  </form>
                   <div className="text-[11px] uppercase mt-5 mb-2" style={{ color: "var(--text-3)" }}>User & Role Management</div>
-                  <table className="dense w-full"><thead><tr><th>User</th><th>Email</th><th>Role</th></tr></thead><tbody>
+                  <div className="w-full overflow-x-auto"><table className="dense w-full min-w-[780px] table-auto"><thead><tr><th className="text-left">User</th><th className="text-left">Email</th><th className="text-left">Role</th>{isSuperAdmin && <th className="text-left">Account actions</th>}</tr></thead><tbody>
                     {users.map((u) => (<tr key={u.id} className="border-t"><td style={{ color: "var(--text)" }}>{u.name}</td><td className="font-mono" style={{ color: "var(--text-2)" }}>{u.email}</td>
-                      <td><select className="inp max-w-[180px]" value={u.role} onChange={(e) => setUserRole(u.id, e.target.value)} data-testid={`role-${u.id}`}>{Object.entries(roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td></tr>))}
-                  </tbody></table>
+                      <td className="min-w-[180px]"><select className="inp w-full min-w-[165px]" value={u.role} onChange={(e) => setUserRole(u.id, e.target.value)} data-testid={`role-${u.id}`}>{Object.entries(roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>{isSuperAdmin && <td className="min-w-[310px]"><div className="flex flex-wrap gap-2 items-center"><span className="text-[11px] font-mono whitespace-nowrap">{u.username || "No username"}</span><button className="btn btn-sm" type="button" onClick={() => { setEditingAccount({ id: u.id, email: u.email, mode: "username" }); setAccountInput(u.username || ""); }}>Username</button>{u.id !== user.id && <><button className="btn btn-sm" type="button" onClick={() => { setEditingAccount({ id: u.id, email: u.email, mode: "password" }); setAccountInput(""); }}>Reset password</button>{u.role !== "super_admin" && <button className="btn btn-sm" type="button" onClick={() => toggleAccount(u)}>{u.enabled === false ? "Enable" : "Disable"}</button>}</>}</div></td>}</tr>))}
+                  </tbody></table></div>
+                  {isSuperAdmin && editingAccount && <form onSubmit={submitAccountEdit} className="border rounded p-3 my-3 space-y-2"><div className="text-sm font-semibold">{editingAccount.mode === "username" ? "Assign username" : "Reset password"} · {editingAccount.email}</div><input className="inp" autoFocus required type={editingAccount.mode === "password" ? "password" : "text"} autoComplete="off" minLength={editingAccount.mode === "password" ? 12 : 3} maxLength={editingAccount.mode === "password" ? 128 : 32} value={accountInput} onChange={(e) => setAccountInput(e.target.value)} placeholder={editingAccount.mode === "password" ? "New temporary password (12+ characters)" : "Username"} /><div className="flex gap-2"><button className="btn btn-primary" type="submit">Continue</button><button className="btn" type="button" onClick={() => { setEditingAccount(null); setAccountInput(""); }}>Cancel</button></div></form>}
+                  {isSuperAdmin && <div className="mt-6 space-y-4 w-full max-w-5xl" data-testid="membership-review">
+                    <div className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Production workspace membership review</div>
+                    <p className="text-[12px]" style={{ color: "var(--text-2)" }}>Currently approved production members: {members.length}. Review older accounts before deployment. Changes are audited and require confirmation.</p>
+                    <div className="space-y-2">{approvalQueue.filter((q) => q.status === "pending").map((q) => <div key={q.id} className="flex items-center justify-between gap-2 border-b py-2"><span className="text-[12px]">Pending approval: {users.find((u) => u.id === q.target_id)?.email || q.target_id}</span><button className="btn btn-sm" disabled={!!savingMember || q.requester_id === user.id} onClick={() => approveRequest(q)}>{q.requester_id === user.id ? "Awaiting second admin" : "Approve"}</button></div>)}</div>
+                    {approvalQueue.some((q) => q.status === "applying" || q.status === "failed") && <div className="space-y-2 border-t pt-3" data-testid="approval-recovery">
+                      <div className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Approval recovery review</div>
+                      {approvalQueue.filter((q) => q.status === "applying" || q.status === "failed").map((q) => <div key={q.id} className="flex items-center justify-between gap-2 py-1 text-[12px]"><span>{users.find((u) => u.id === q.target_id)?.email || q.target_id} · {q.status}{q.needs_reconciliation ? " · Needs reconciliation (>5 min)" : ""}{q.failure_reason ? ` · ${q.failure_reason}` : ""}</span>{q.status === "applying" && <button className="btn btn-sm" disabled={!!savingMember || !q.needs_reconciliation} onClick={() => reconcileRequest(q)}>{q.needs_reconciliation ? "Reconcile" : "Wait for completion"}</button>}</div>)}
+                    </div>}
+                    <div className="space-y-2">{users.map((u) => {
+                      const approved = (u.org_ids || []).includes("org-production");
+                      return <div key={u.id} className="flex items-center justify-between gap-3 border-b py-2">
+                        <div className="min-w-0"><div className="truncate">{u.name || u.email}</div><div className="text-[11px] truncate" style={{ color: "var(--text-3)" }}>{u.email} · {approved ? "Production approved" : "Training only"}</div></div>
+                        <button type="button" className="btn btn-sm" disabled={!!savingMember || (u.role === "super_admin" && approved)} onClick={() => changeMembership(u, !approved)} data-testid={`membership-${u.id}`}>{savingMember === u.id ? "Saving…" : approved ? "Revoke production" : "Request production access"}</button>
+                      </div>;
+                    })}</div>
+                  </div>}
                 </>
               )}
             </div>
@@ -128,6 +293,13 @@ export default function Settings() {
           )}
         </div>
       </div>
+      {confirmation && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget && !confirmBusy) setConfirmation(null); }}>
+        <div role="alertdialog" aria-modal="true" aria-labelledby="security-confirm-title" aria-describedby="security-confirm-description" className="card w-full max-w-md p-5 space-y-4 shadow-2xl border" style={{ background: "var(--bg-2, #171b22)" }}>
+          <div className="flex items-center gap-2"><Shield size={18} style={{ color: confirmation.destructive ? "#f59e0b" : "var(--cyan)" }} /><h2 id="security-confirm-title" className="font-semibold text-base">{confirmation.title}</h2></div>
+          <p id="security-confirm-description" className="text-[13px] leading-relaxed" style={{ color: "var(--text-2)" }}>{confirmation.description}</p>
+          <div className="flex justify-end gap-2"><button type="button" className="btn btn-sm" disabled={confirmBusy} onClick={() => setConfirmation(null)}>Cancel</button><button type="button" className="btn btn-primary btn-sm" disabled={confirmBusy} onClick={executeConfirmed}>{confirmBusy ? "Processing…" : "Confirm action"}</button></div>
+        </div>
+      </div>}
     </div>
   );
 }

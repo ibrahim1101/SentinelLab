@@ -1,0 +1,313 @@
+"""Dependency-light security regression checks."""
+import ast
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+def test_all_backend_modules_compile():
+    for path in ROOT.glob("*.py"):
+        ast.parse(path.read_text(), filename=str(path))
+
+def test_search_regex_inputs_are_escaped():
+    source = (ROOT / "server.py").read_text()
+    assert '{"$regex": q, "$options": "i"}' not in source
+    assert '{"$regex": str(value), "$options": "i"}' not in source
+    assert 'f"^{v}$"' not in source
+    assert 're.escape(q[:128])' in source
+    assert 're.escape(str(value)[:128])' in source
+    assert 're.escape(v[:256])' in source
+
+def test_ai_context_is_scoped():
+    source = (ROOT / "ai_assistant.py").read_text()
+    assert '"org_id": org_id, "id": {"$in": a.get("related_events", [])[:10]}' in source
+
+def test_detection_replay_is_read_only():
+    source = (ROOT / "detection.py").read_text()
+    assert "if matched and persist:" in source
+    assert "if not persist:\\n                continue".replace("\\n", "\n") in source
+    assert "if persist:\\n            await db.detection_rules.update_one".replace("\\n", "\n") in source
+    assert '"org_id": org_id, "id": {"$in": list(matched)}' in source
+
+def test_regex_policy_is_bounded():
+    source = (ROOT / "detection.py").read_text()
+    assert "len(pattern) > 128" in source
+    assert "len(str(value)) > 4096" in source
+
+
+def test_alert_detail_joins_are_tenant_scoped():
+    source = (ROOT / "server.py").read_text()
+    alert_detail = source.split('async def alert_detail(', 1)[1].split('@api.put("/alerts/{alert_id}")', 1)[0]
+    assert '"org_id": org' in alert_detail
+    assert 'db.events.find({"id": {"$in": a.get("related_events", [])}, "org_id": org}' in alert_detail
+    assert 'db.detection_rules.find_one({"id": a.get("rule_id"), "org_id": org}' in alert_detail
+
+
+def test_playbook_mutations_include_tenant_scope():
+    """Fail the existing CI suite if playbook writes lose org_id isolation."""
+    tree = ast.parse((ROOT / "playbooks.py").read_text())
+    collection_names = {"alerts", "investigations"}
+    checked = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "update_one" or not node.args:
+            continue
+        collection = node.func.value
+        if not isinstance(collection, ast.Attribute) or collection.attr not in collection_names:
+            continue
+        if not isinstance(collection.value, ast.Name) or collection.value.id != "db":
+            continue
+        selector = node.args[0]
+        assert isinstance(selector, ast.Dict), "Playbook mutation must use a literal scoped selector"
+        keys = [key.value for key in selector.keys if isinstance(key, ast.Constant)]
+        assert "org_id" in keys, f"Playbook {collection.attr} update_one is missing org_id"
+        checked.append(collection.attr)
+    assert checked.count("alerts") >= 1
+    assert checked.count("investigations") >= 2
+
+
+# Include the behavioral playbook regressions in the existing Phase 1 security
+# pytest invocation until the dedicated workflow is independently verified.
+# Pytest collects imported test_* functions from this module.
+from test_playbook_regressions import (
+    test_manual_malware_enrichment_skips_without_alert,
+    test_approved_edr_action_is_simulated_not_containment,
+    test_unapproved_action_requires_approval,
+    test_playbook_alert_link_is_tenant_scoped,
+    test_playbook_investigation_mutations_are_tenant_scoped,
+)
+
+
+def _production_reconciliation_source():
+    source = (ROOT / "server.py").read_text()
+    return source.split('async def reconcile_production_access(', 1)[1].split('\n@api.', 1)[0]
+
+
+def test_production_reconciliation_is_read_only_for_membership():
+    """Recovery may finalize request state, but must never grant membership."""
+    source = _production_reconciliation_source()
+    tree = ast.parse("async def reconcile_production_access(" + source)
+    writes = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in {"update_one", "update_many", "replace_one", "insert_one", "find_one_and_update"}:
+                writes.append(ast.unparse(node.func.value))
+    assert writes == ["db.production_access_requests"], (
+        "Reconciliation must not write user memberships or other collections"
+    )
+
+
+def test_production_reconciliation_requires_stale_applying_state():
+    source = _production_reconciliation_source()
+    assert '{"id": request_id, "status": "applying"}' in source
+    assert 'timedelta(minutes=5)' in source
+    assert 'HTTPException(409, "Approval may still be in progress' in source
+    assert 'HTTPException(404, "Applying request not found")' in source
+
+
+def test_production_reconciliation_checks_membership_and_cas():
+    source = _production_reconciliation_source()
+    assert 'PROD_ORG in target.get("org_ids", [])' in source
+    assert 'final_status = "approved" if granted else "failed"' in source
+    assert '"failure_reason": None if granted else "membership_not_present"' in source
+    assert 'result.modified_count != 1' in source
+    assert '"status": "applying"' in source
+
+
+def test_docker_registry_retry_helper_is_bounded_and_configurable():
+    """Prevent accidental removal of the Docker Hub transient-failure workaround."""
+    script = (ROOT.parent / "scripts" / "pull-mongo-with-retry.sh").read_text()
+    assert 'set -euo pipefail' in script
+    assert 'MONGO_IMAGE:-mongo:7' in script
+    assert 'for attempt in 1 2 3 4 5' in script
+    assert 'docker pull "$image"' in script
+    assert 'exit 1' in script
+
+
+def test_reconciliation_runtime_membership_present_and_absent():
+    """Execute the real reconciliation body with fake DB, without booting the server."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    source = _production_reconciliation_source()
+    # Extract the actual function body; avoid importing the full API app and its
+    # startup integrations into this focused, dependency-light regression.
+    definition = "async def reconcile_production_access(request_id, user):" + source.split("):", 1)[1]
+    definition = definition.split("\n\n", 1)[0] if False else definition
+    namespace = {
+        "datetime": datetime, "timedelta": timedelta, "timezone": timezone,
+        "PROD_ORG": "org-production",
+        "now_iso": lambda: "2026-10-10T00:00:00+00:00",
+        "HTTPException": type("HTTPException", (Exception,), {
+            "__init__": lambda self, status_code, detail: (
+                setattr(self, "status_code", status_code),
+                Exception.__init__(self, detail)
+            )[-1]
+        }),
+    }
+    exec(compile(definition, "<reconciliation-under-test>", "exec"), namespace)
+    fn = namespace["reconcile_production_access"]
+    for has_membership in (True, False):
+        request = {"id": "req", "target_id": "target",
+                   "approved_at": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()}
+        update = AsyncMock(return_value=SimpleNamespace(modified_count=1))
+        namespace["db"] = SimpleNamespace(
+            production_access_requests=SimpleNamespace(
+                find_one=AsyncMock(return_value=request), update_one=update),
+            users=SimpleNamespace(find_one=AsyncMock(return_value={
+                "id": "target", "org_ids": ["org-production"] if has_membership else ["org-training"]
+            })),
+        )
+        namespace["audit"] = AsyncMock()
+        result = asyncio.run(fn("req", {"default_org": "org-training"}))
+        expected = "approved" if has_membership else "failed"
+        assert result["status"] == expected
+        assert update.await_args.args[0] == {"id": "req", "status": "applying"}
+        assert update.await_args.args[1]["$set"]["status"] == expected
+        assert namespace["db"].users.find_one.await_count == 1
+
+
+def test_reconciliation_runtime_fresh_malformed_and_concurrent():
+    """Recovery refuses fresh approvals, tolerates malformed timestamps, and CAS guards races."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    source = _production_reconciliation_source()
+    definition = "async def reconcile_production_access(request_id, user):" + source.split("):", 1)[1]
+
+    class FakeHTTPException(Exception):
+        def __init__(self, status_code, detail):
+            super().__init__(detail)
+            self.status_code = status_code
+
+    ns = {"datetime": datetime, "timedelta": timedelta, "timezone": timezone,
+          "PROD_ORG": "org-production", "now_iso": lambda: "now",
+          "HTTPException": FakeHTTPException}
+    exec(compile(definition, "<reconciliation-under-test>", "exec"), ns)
+    fn = ns["reconcile_production_access"]
+
+    for timestamp, expected_status, modified in [
+        (datetime.now(timezone.utc).isoformat(), 409, 1),
+        ("not-a-timestamp", None, 1),
+        (None, None, 1),
+        ((datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat(), 409, 0),
+    ]:
+        update = AsyncMock(return_value=SimpleNamespace(modified_count=modified))
+        users = SimpleNamespace(find_one=AsyncMock(return_value={"org_ids": ["org-training"]}))
+        ns["db"] = SimpleNamespace(
+            production_access_requests=SimpleNamespace(
+                find_one=AsyncMock(return_value={
+                    "id": "req", "target_id": "target", "approved_at": timestamp
+                }), update_one=update),
+            users=users,
+        )
+        ns["audit"] = AsyncMock()
+        try:
+            result = asyncio.run(fn("req", {"default_org": "org-training"}))
+        except FakeHTTPException as exc:
+            assert exc.status_code == expected_status
+            if modified == 0:
+                assert update.await_count == 1
+                assert ns["audit"].await_count == 0
+            else:
+                assert update.await_count == 0
+                assert users.find_one.await_count == 0
+        else:
+            assert expected_status is None
+            assert result["status"] == "failed"
+            assert update.await_count == 1
+            assert update.await_args.args[1]["$set"]["failure_reason"] == "membership_not_present"
+
+
+def test_release_smoke_checker_is_read_only_and_checks_auth():
+    """Keep the public beta smoke checker safe to run against live installs."""
+    source = (ROOT.parent / "scripts" / "smoke_release.py").read_text()
+    tree = ast.parse(source)
+    assert '"/api/health"' in source
+    assert '"/api/ready"' in source
+    assert '"/api/auth/me"' in source
+    assert '"/api/dashboard/overview"' in source
+    assert 'status in (401, 403)' in source
+    assert not any(
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"urlencode", "Request"} and
+        any(keyword.arg == "method" for keyword in node.keywords)
+        for node in ast.walk(tree)
+    )
+
+
+def test_release_smoke_checker_runtime_responses():
+    """Exercise the real release checker without a running API or network calls."""
+    import importlib.util
+    from unittest.mock import patch
+
+    path = ROOT.parent / "scripts" / "smoke_release.py"
+    spec = importlib.util.spec_from_file_location("sentinellab_smoke_release", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    good = {
+        "/api/health": (200, b'{"status":"ok"}'),
+        "/api/ready": (200, b'{"ready":true}'),
+        "/api/auth/me": (401, b'{"detail":"unauthorized"}'),
+        "/api/dashboard/overview": (403, b'{"detail":"forbidden"}'),
+    }
+    with patch.object(module, "probe", side_effect=lambda base, path, timeout: good[path]):
+        assert module.run("http://localhost:8000", 1) is True
+
+    scenarios = [
+        {"/api/ready": (503, b'{"ready":false}')},
+        {"/api/ready": (200, b'{"ready":false}')},
+        {"/api/health": (200, b'not-json')},
+        {"/api/auth/me": (200, b'{"id":"leaked"}')},
+        {"/api/dashboard/overview": (200, b'{"events":10}')},
+    ]
+    for changes in scenarios:
+        responses = {**good, **changes}
+        with patch.object(module, "probe", side_effect=lambda base, path, timeout: responses[path]):
+            assert module.run("http://localhost:8000", 1) is False
+
+    def offline(base, path, timeout):
+        raise OSError("connection refused")
+
+    with patch.object(module, "probe", side_effect=offline):
+        assert module.run("http://localhost:8000", 1) is False
+
+
+def test_compose_security_baseline_checker_runtime():
+    """Default deployment passes; insecure changes are rejected."""
+    import importlib.util
+    path = ROOT.parent / "scripts" / "check_compose_security.py"
+    spec = importlib.util.spec_from_file_location("sentinellab_compose_check", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    compose = (ROOT.parent / "compose.yaml").read_text()
+    assert module.check(compose) == []
+    assert module.check(compose.replace("127.0.0.1:8000:8000", "0.0.0.0:8000:8000"))
+    assert module.check(compose.replace("ENABLE_DEMO_ACCOUNTS:-false", "ENABLE_DEMO_ACCOUNTS:-true"))
+    assert module.check(compose + "\n    ports:\n      - '27017:27017'\n")
+
+
+def test_release_gate_checker_blocks_pending_p0_and_missing_section():
+    import importlib.util
+    path = ROOT.parent / "scripts" / "check_release_gates.py"
+    spec = importlib.util.spec_from_file_location("sentinellab_release_gates", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    pending, checked = module.evaluate((ROOT.parent / "docs" / "BETA_RELEASE_GATES.md").read_text())
+    assert pending, "Beta must remain NO-GO while mandatory release gates are open"
+    assert checked
+    assert module.evaluate("# empty\n")[0] == ["P0 section missing"]
+    assert module.evaluate("## P0 — mandatory before public beta\n\n## P1\n")[0] == ["No P0 checklist items found"]
+    assert module.evaluate("## P0 — mandatory before public beta\n- [x] Verified\n\n## P1\n") == ([], ["Verified"])
+
+
+def test_docker_smoke_invokes_bounded_mongo_pull_retry():
+    workflow = (ROOT.parent / ".github" / "workflows" / "security-phase1.yml").read_text()
+    assert "bash scripts/pull-mongo-with-retry.sh" in workflow
+    assert workflow.index("bash scripts/pull-mongo-with-retry.sh") < workflow.index("docker compose up -d --build --wait")
+    assert "MONGO_IMAGE: public.ecr.aws/docker/library/mongo:7" in workflow

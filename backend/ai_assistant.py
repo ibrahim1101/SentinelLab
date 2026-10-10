@@ -25,7 +25,7 @@ async def _gather_context(org_id, ctx_type, ctx_id):
         if not a:
             return "No alert found."
         evs = await db.events.find(
-            {"id": {"$in": a.get("related_events", [])[:10]}}, {"_id": 0, "raw": 0}).to_list(10)
+            {"org_id": org_id, "id": {"$in": a.get("related_events", [])[:10]}}, {"_id": 0, "raw": 0}).to_list(10)
         return f"ALERT {a['id']}: {a['title']} | severity={a['severity']} | " \
                f"rule={a.get('rule_name')} | host={a.get('host')} | mitre={a.get('mitre')}\n" \
                f"Supporting events: {evs}"
