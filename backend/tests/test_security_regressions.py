@@ -40,3 +40,27 @@ def test_alert_detail_joins_are_tenant_scoped():
     assert '"org_id": org' in alert_detail
     assert 'db.events.find({"id": {"$in": a.get("related_events", [])}, "org_id": org}' in alert_detail
     assert 'db.detection_rules.find_one({"id": a.get("rule_id"), "org_id": org}' in alert_detail
+
+
+def test_playbook_mutations_include_tenant_scope():
+    """Fail the existing CI suite if playbook writes lose org_id isolation."""
+    tree = ast.parse((ROOT / "playbooks.py").read_text())
+    collection_names = {"alerts", "investigations"}
+    checked = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "update_one" or not node.args:
+            continue
+        collection = node.func.value
+        if not isinstance(collection, ast.Attribute) or collection.attr not in collection_names:
+            continue
+        if not isinstance(collection.value, ast.Name) or collection.value.id != "db":
+            continue
+        selector = node.args[0]
+        assert isinstance(selector, ast.Dict), "Playbook mutation must use a literal scoped selector"
+        keys = [key.value for key in selector.keys if isinstance(key, ast.Constant)]
+        assert "org_id" in keys, f"Playbook {collection.attr} update_one is missing org_id"
+        checked.append(collection.attr)
+    assert checked.count("alerts") >= 1
+    assert checked.count("investigations") >= 2
