@@ -833,7 +833,7 @@ async def admin_reset_password(user_id: str, body: AdminPasswordReq, actor=Depen
         raise HTTPException(404, "User not found")
     if target["id"] == actor["id"]:
         raise HTTPException(400, "Use your own password-change flow")
-    await db.users.update_one({"id": user_id}, {"$set": {"password_hash": hash_password(body.password), "must_change_password": True}, "$inc": {"session_version": 1}})
+    await db.users.update_one({"id": user_id}, {"$set": {"password_hash": hash_password(body.password)}, "$inc": {"session_version": 1}})
     await audit(actor.get("default_org"), actor, "reset_password", "user", user_id)
     return {"ok": True}
 
