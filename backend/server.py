@@ -139,24 +139,56 @@ async def register(body: RegisterReq, response: Response):
 async def login(body: LoginReq, request: Request, response: Response):
     identifier = body.email.strip().lower()
     ip = request.client.host if request.client else "?"
+    now = datetime.now(timezone.utc)
     ident = f"{ip}:{identifier}"
-    att = await db.login_attempts.find_one({"identifier": ident})
-    if att and att.get("count", 0) >= 5:
-        locked_until = datetime.fromisoformat(att["locked_until"])
-        if datetime.now(timezone.utc) < locked_until:
-            raise HTTPException(429, "Account temporarily locked. Try again later.")
     user = await db.users.find_one({"email": identifier} if "@" in identifier else {"username": identifier})
+    # Keep a separate IP/identifier throttle for unknown accounts and credential stuffing.
+    attempt = await db.login_attempts.find_one({"identifier": ident})
+    if attempt and attempt.get("locked_until"):
+        until = datetime.fromisoformat(attempt["locked_until"])
+        if now < until:
+            raise HTTPException(429, "Too many login attempts. Try again later.")
+        await db.login_attempts.delete_one({"identifier": ident})
+        attempt = None
+
+    if user and user.get("login_locked_until"):
+        until = datetime.fromisoformat(user["login_locked_until"])
+        if now < until:
+            raise HTTPException(423, "Account temporarily locked due to repeated failed sign-ins. Contact your administrator for recovery.")
+        await db.users.update_one({"id": user["id"]}, {"$unset": {"login_locked_until": "", "login_failed_count": ""}})
+        user.pop("login_locked_until", None)
+        user.pop("login_failed_count", None)
+
     if not user or not verify_password(body.password, user["password_hash"]):
-        count = (att.get("count", 0) if att else 0) + 1
+        count = (attempt.get("count", 0) if attempt else 0) + 1
         await db.login_attempts.update_one(
             {"identifier": ident},
             {"$set": {"identifier": ident, "count": count,
-                      "locked_until": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()}},
+                      "locked_until": (now + timedelta(minutes=15)).isoformat()}},
             upsert=True)
+        if user and user.get("enabled", True):
+            failures = int(user.get("login_failed_count", 0)) + 1
+            if failures >= 5:
+                until = (now + timedelta(minutes=15)).isoformat()
+                await db.users.update_one({"id": user["id"]}, {"$set": {"login_failed_count": failures, "login_locked_until": until}})
+                await db.security_notifications.insert_one({
+                    "id": new_id(), "type": "account_login_locked", "user_id": user["id"],
+                    "email": user["email"], "source_ip": ip, "failed_count": failures,
+                    "created_at": now.isoformat(), "locked_until": until,
+                    "status": "open",
+                })
+                raise HTTPException(423, "Account temporarily locked after 5 failed sign-ins. Contact your administrator.")
+            await db.users.update_one({"id": user["id"]}, {"$set": {"login_failed_count": failures}})
+            # Remaining attempts are only disclosed for a verified existing identifier.
+            raise HTTPException(401, f"Invalid credentials. {5 - failures} attempts remaining before account lock.")
+        if count >= 5:
+            raise HTTPException(429, "Too many login attempts. Try again later.")
         raise HTTPException(401, "Invalid credentials")
+
     await db.login_attempts.delete_one({"identifier": ident})
     if user.get("enabled", True) is False:
         raise HTTPException(status_code=403, detail="This account has been disabled. Contact your SentinelLab administrator.")
+    await db.users.update_one({"id": user["id"]}, {"$unset": {"login_failed_count": "", "login_locked_until": ""}})
     token = create_access_token(user["id"], user["email"], user["role"], user.get("session_version", 0))
     _set_cookie(response, token)
     await audit(user.get("default_org"), user, "login", "session")
