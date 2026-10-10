@@ -391,3 +391,8 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 ### 2026-10-10 — Playbooks recorded run without EDR approval
 - User screenshot of Malware Alert Triage with `Known Malicious IOC Match (64)` and EDR approval **unchecked**, after **Record Run**: 64 related events collected, 1 known-bad IOC match, investigation `4f0eb76c...` created, 3 containment tasks added, and EDR isolation visibly **Pending Approval** with `Approval required before this action runs.`
 - This is browser evidence for enforcement of the unapproved action, not an independent audit of external systems. Next test: check EDR approval and Record Run; disconnected EDR should still show **Simulated**, not executed. Verify execution-history persistence and detail. P0 Playbooks gate stays open until these checks.
+
+
+### 2026-10-10 — Dedicated playbook CI missing pytest plugin
+- [Run 38050487796](https://github.com/ibrahim1101/SentinelLab/actions/runs/38050487796) failed before test collection: `ERROR: Missing required plugins: pytest-xdist`, exit code 4. This is a CI dependency configuration issue; not evidence of failed playbook runtime behavior.
+- Commit [3727153](https://github.com/ibrahim1101/SentinelLab/commit/3727153d63478ab4f93e7446ab5dc4cceff8fc64) adds `pytest-xdist` and `pytest-asyncio` to `.github/workflows/playbook-regressions.yml` dependency installation. CI verification pending; preserve PR #1 unmerged.
