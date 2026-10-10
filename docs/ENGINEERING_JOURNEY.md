@@ -328,3 +328,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - [Run 38042562958](https://github.com/ibrahim1101/SentinelLab/actions/runs/38042562958) succeeded: **23 passed, 8 warnings**, docker-smoke success.
 - Commit [d1badff](https://github.com/ibrahim1101/SentinelLab/commit/d1badffcce1bf68907d8fe31e5ff042f25b4ea99) adds a runtime unit test that executes the actual reconciliation function body with mocked database dependencies, checking membership-present and membership-absent terminal outcomes, scoped compare-and-set selector, and no direct user mutation. CI result pending; test deliberately avoids importing the full server.
 - Remaining: verify new test CI, add fresh/malformed timestamp and concurrent-update cases, wire image-pull retry into active workflow. PR #1 unmerged.
+
+
+### 2026-10-10 — Runtime reconciliation edge-case coverage
+- [Run 38043331144](https://github.com/ibrahim1101/SentinelLab/actions/runs/38043331144) passed both jobs: **24 passed, 8 warnings** in static-security, docker-smoke success.
+- Commit [a3727cf](https://github.com/ibrahim1101/SentinelLab/commit/a3727cf567b85dc3788bed1415cc0140681129da) extends runtime reconciliation tests for fresh approvals (409 without DB mutation), malformed or missing approval timestamps (reconcile using actual membership), and compare-and-set concurrent state change (409, no audit).
+- New edge-case test CI pending. Remaining: integrate bounded Docker image pull retries into active workflow, browser verify simulated-action UI. PR #1 stays unmerged.
