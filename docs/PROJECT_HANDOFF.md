@@ -258,3 +258,7 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 
 ## Windows desktop alpha test — 2026-10-10
 User screenshot verifies native Tauri window renders SentinelLab login screen; React dev server is at 3100 (Locat uses 3000). Login currently reports HTTP 404. `frontend/src/lib/api.js` uses `REACT_APP_BACKEND_URL` but Tauri's dev command does not set it. Investigate actual request URL and backend health, then implement API origin/CORS/auth integration. Locally generated Tauri icon assets and local npm dependency adjustments (`date-fns` 3.6.0, `react-day-picker` ^9.11.1) are not committed, so a clean checkout is not yet reproducible. npm audit reported 102 findings; triage needed. No sidecar/installer; PR #1 remains unmerged.
+
+## 2026-10-10 — Windows desktop end-to-end alpha verification
+
+User confirmed `GET /api/health` returned `status=ok, service=sentinellab`, `GET /api/ready` returned `ready=true`, and the native Tauri Windows desktop successfully authenticated an administrator and displayed the SOC dashboard/navigation. Login required four attempts and a Network Error was observed; authentication reliability remains unverified. The global search input icon/placeholder overlap was fixed in `frontend/src/components/Layout.jsx` (40px explicit left padding and noninteractive icon); visual retest pending. Desktop backend remains manually launched; automatic lifecycle, reproducible dependencies/assets, installer and release security gates are pending. PR #1 must remain unmerged.
