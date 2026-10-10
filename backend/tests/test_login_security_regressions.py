@@ -144,6 +144,53 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(db.login_attempts.update_one.await_args.args[1]["$set"]["locked_until"])
 
 
+    async def test_five_concurrent_failures_create_one_lock_incident(self):
+        user = {"id": "u1", "email": "analyst@example.invalid",
+                "username": "analyst", "enabled": True, "password_hash": "hashed"}
+        state = {"failures": 0, "locked": False, "incidents": 0}
+        guard = asyncio.Lock()
+
+        async def increment(*args, **kwargs):
+            async with guard:
+                if state["locked"]:
+                    return None
+                state["failures"] += 1
+                return {"login_failed_count": state["failures"]}
+
+        async def claim(*args, **kwargs):
+            async with guard:
+                if state["locked"] or state["failures"] < 5:
+                    return SimpleNamespace(modified_count=0)
+                state["locked"] = True
+                return SimpleNamespace(modified_count=1)
+
+        async def incident(*args, **kwargs):
+            state["incidents"] += 1
+
+        db = SimpleNamespace(
+            users=SimpleNamespace(find_one=AsyncMock(return_value=user),
+                                  find_one_and_update=AsyncMock(side_effect=increment),
+                                  update_one=AsyncMock(side_effect=claim)),
+            login_attempts=SimpleNamespace(find_one=AsyncMock(return_value=None),
+                                           update_one=AsyncMock()),
+            security_notifications=SimpleNamespace(insert_one=AsyncMock(side_effect=incident)),
+        )
+        with patch.object(server, "db", db), patch.object(server, "verify_password", return_value=False):
+            async def fail():
+                try:
+                    await server.login(server.LoginReq(email="analyst", password="wrong"),
+                                       request(), Response())
+                except HTTPException as exc:
+                    return exc.status_code
+                return 200
+            statuses = await asyncio.gather(*(fail() for _ in range(5)))
+        self.assertEqual(len(statuses), 5)
+        self.assertNotIn(200, statuses)
+        self.assertTrue(state["locked"])
+        self.assertEqual(state["failures"], 5)
+        self.assertEqual(state["incidents"], 1)
+
+
 
 if __name__ == "__main__":
     unittest.main()
