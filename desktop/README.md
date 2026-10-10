@@ -7,7 +7,7 @@
 - Frontend: React 19, CRACO / Create React App (not Vite).
 - Backend: Python FastAPI / Uvicorn.
 - Persistence: MongoDB via Motor/PyMongo.
-- Desktop shell candidate: Tauri; not installed or configured in this spike.
+- Desktop shell: Tauri 2 alpha scaffold; Windows development window successfully launched on 2026-10-10.
 - This directory contains a loopback-only backend launcher to establish the future sidecar contract. It is **not** yet a self-contained binary, and requires Python and the backend dependencies for development.
 
 ## Development-only launcher
@@ -32,11 +32,11 @@ Test `http://127.0.0.1:18765/api/health` only after configuring backend secrets 
 4. Verify user-installed MongoDB connection and authenticated database access; add first-run connection wizard later.
 5. Test Windows first, then Linux, then macOS; verify clean-host installation and platform-specific signing/packaging.
 
-No platform is yet verified, and no installer should be published from this spike.
+Windows Tauri development window launch has been verified; no installer, authentication flow or bundled backend has been verified.
 
 ## Tauri 2 shell scaffold (2026-10-10)
 
-A minimal Tauri 2 desktop window now lives in `desktop/src-tauri/`. **Experimental and unverified:** no sidecar lifecycle, installer or release artifact exists yet. Bundling is intentionally disabled; the CSP is currently unset for the spike and MUST be hardened before distribution.
+A minimal Tauri 2 desktop window now lives in `desktop/src-tauri/`. **Experimental:** the Windows development window launched successfully, but no sidecar lifecycle, installer or release artifact exists yet. Bundling is intentionally disabled; the CSP is currently unset for the spike and MUST be hardened before distribution.
 
 On Windows, install Rust toolchain, Node.js and Tauri system prerequisites (including WebView2 and Microsoft C++ build tools). With the existing frontend dependencies installed:
 
@@ -46,6 +46,12 @@ npm install
 npm run tauri:dev
 ```
 
-The Tauri dev command starts the React development server at localhost:3000. **The backend is NOT automatically started yet**; separately start the existing FastAPI backend and MongoDB. The frontend currently uses `REACT_APP_BACKEND_URL` at build time; configure it to match the running backend (the desktop launcher defaults to 127.0.0.1:18765). If login fails due to CORS/cookies, that is an expected unresolved integration issue, not a passing desktop test.
+The Tauri dev command starts React on localhost:3100 and sets `REACT_APP_BACKEND_URL=http://127.0.0.1:18765` for the development frontend. **The backend is NOT automatically started yet**; separately start the existing FastAPI backend and MongoDB. The frontend currently uses `REACT_APP_BACKEND_URL` at build time; configure it to match the running backend (the desktop launcher defaults to 127.0.0.1:18765). If login fails due to CORS/cookies, that is an expected unresolved integration issue, not a passing desktop test.
 
 Do not run `tauri:build` expecting an installer: bundling is intentionally disabled until lifecycle, authentication and clean-host checks pass.
+
+## Windows desktop alpha integration status (2026-10-10)
+
+User-verified FastAPI `GET /api/health` returned `{ "status": "ok", "service": "sentinellab" }` and `GET /api/ready` returned `{ "ready": true }` with local MongoDB reachable. The development shell previously showed login HTTP 404 because the CRA frontend lacked `REACT_APP_BACKEND_URL`. Tauri dev configuration now supplies the loopback API origin; login, CORS and cookie behavior still require verification. Restart the Tauri dev process after pulling the change.
+
+On Windows, backend dependencies were installed into a local `.venv` after excluding unavailable `emergentintegrations` and an Emergent-hosted LiteLLM wheel from a temporary dev requirements copy. This is not a vetted production dependency solution. Backend startup requires `MONGO_URL`, `DB_NAME`, `JWT_SECRET` and a unique `ADMIN_PASSWORD` of at least 12 characters; never commit secrets. Local frontend dependency compatibility edits and generated Tauri icons also need reproducible repository changes. Keep PR #1 unmerged and release NO-GO until gates pass.
