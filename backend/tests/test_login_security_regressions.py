@@ -139,7 +139,7 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(HTTPException) as caught:
                 await server.login(server.LoginReq(email="analyst", password="wrong"), request(), Response())
         self.assertEqual(caught.exception.status_code, 401)
-        self.assertIn("3 attempts remaining", caught.exception.detail)
+        self.assertEqual(caught.exception.detail, "Invalid credentials")
         db.login_attempts.update_one.assert_awaited_once()
         self.assertIsNone(db.login_attempts.update_one.await_args.args[1]["$set"]["locked_until"])
 
