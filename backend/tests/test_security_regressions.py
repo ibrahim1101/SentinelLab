@@ -112,3 +112,13 @@ def test_production_reconciliation_checks_membership_and_cas():
     assert '"failure_reason": None if granted else "membership_not_present"' in source
     assert 'result.modified_count != 1' in source
     assert '"status": "applying"' in source
+
+
+def test_docker_registry_retry_helper_is_bounded_and_configurable():
+    """Prevent accidental removal of the Docker Hub transient-failure workaround."""
+    script = (ROOT.parent / "scripts" / "pull-mongo-with-retry.sh").read_text()
+    assert 'set -euo pipefail' in script
+    assert 'MONGO_IMAGE:-mongo:7' in script
+    assert 'for attempt in 1 2 3 4 5' in script
+    assert 'docker pull "$image"' in script
+    assert 'exit 1' in script
