@@ -187,3 +187,8 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 ### 2026-10-10 — Docker registry retry CI gate closed
 - [Run 38048195479](https://github.com/ibrahim1101/SentinelLab/actions/runs/38048195479) succeeded: **30 passed, 8 warnings**, docker-smoke success. Docker logs explicitly show `bash scripts/pull-mongo-with-retry.sh` executing before Compose and successfully pulling `public.ecr.aws/docker/library/mongo:7`.
 - Beta checklist now marks this P0 gate complete (3 complete, 6 pending). This confirms normal-path execution, not an induced rate-limit recovery scenario. Remaining P0 include browser UI, end-to-end SOC workflows, clean install, security review, backup/restore, and final bug triage. PR #1 unmerged.
+
+
+### 2026-10-10 — Login input/icon overlap found during browser QA
+- User screenshot showed email and password values visually colliding with leading icons on the login screen.
+- Commit [15c3579](https://github.com/ibrahim1101/SentinelLab/commit/15c3579726236e6adaac2471bf34e28c35ef00dc) changed Login.jsx input padding to explicit inline left/right values and added browser autocomplete hints. Browser recheck pending; this does not close the Playbooks UI P0 gate.
