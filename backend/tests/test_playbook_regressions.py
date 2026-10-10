@@ -1,6 +1,7 @@
 """Regression coverage for manual playbook execution and disconnected response actions."""
 import asyncio
 from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 import os
 import sys
 from pathlib import Path
@@ -34,7 +35,7 @@ def test_approved_edr_action_is_simulated_not_containment():
     pb = {"id": "edr-test", "name": "EDR test", "severity": "high", "steps": [
         {"id": "isolate", "name": "Isolate", "action": "isolate_host", "approval": True}
     ]}
-    with patch.object(playbooks.db.automation_executions, "insert_one", new_callable=AsyncMock):
+    with patch.object(playbooks, "db", SimpleNamespace(automation_executions=SimpleNamespace(insert_one=AsyncMock()))):
         result = run(pb, dry_run=False, approvals=["isolate"])
     assert result["steps"][0]["status"] == "simulated"
     assert "no live system connected" in result["steps"][0]["detail"]
@@ -57,9 +58,13 @@ def test_playbook_alert_link_is_tenant_scoped():
         {"id": "case", "name": "Open case", "action": "create_investigation", "approval": False}
     ]}
     alert = {"id": "shared-alert-id", "title": "Suspicious login", "severity": "high"}
-    with patch.object(playbooks.db.investigations, "insert_one", new_callable=AsyncMock), \
-         patch.object(playbooks.db.alerts, "update_one", new_callable=AsyncMock) as update_alert, \
-         patch.object(playbooks.db.automation_executions, "insert_one", new_callable=AsyncMock):
+    update_alert = AsyncMock()
+    fake_db = SimpleNamespace(
+        investigations=SimpleNamespace(insert_one=AsyncMock()),
+        alerts=SimpleNamespace(update_one=update_alert),
+        automation_executions=SimpleNamespace(insert_one=AsyncMock()),
+    )
+    with patch.object(playbooks, "db", fake_db):
         result = run(pb, alert=alert, dry_run=False)
     assert result["status"] == "completed"
     assert update_alert.await_args.args[0] == {
@@ -74,9 +79,12 @@ def test_playbook_investigation_mutations_are_tenant_scoped():
         {"id": "tasks", "name": "Add tasks", "action": "add_tasks", "approval": False,
          "tasks": ["Review evidence"]},
     ]}
-    with patch.object(playbooks.db.investigations, "insert_one", new_callable=AsyncMock), \
-         patch.object(playbooks.db.investigations, "update_one", new_callable=AsyncMock) as update_inv, \
-         patch.object(playbooks.db.automation_executions, "insert_one", new_callable=AsyncMock):
+    update_inv = AsyncMock()
+    fake_db = SimpleNamespace(
+        investigations=SimpleNamespace(insert_one=AsyncMock(), update_one=update_inv),
+        automation_executions=SimpleNamespace(insert_one=AsyncMock()),
+    )
+    with patch.object(playbooks, "db", fake_db):
         result = run(pb, dry_run=False)
     assert result["status"] == "completed"
     assert update_inv.await_count == 2
