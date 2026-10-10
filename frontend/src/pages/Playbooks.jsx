@@ -53,7 +53,7 @@ export default function Playbooks() {
                   <td><span className="pill">{e.dry_run ? "dry-run" : "recorded"}</span></td>
                   <td style={{ color: e.status === "completed" ? "#22c55e" : "#FB923C", textTransform: "capitalize" }}>{e.status.replace(/_/g, " ")}</td>
                   <td className="font-mono" style={{ color: "var(--text-2)" }}>{e.run_by}</td>
-                  <td className="font-mono" style={{ color: "var(--text-3)" }}>{fmtTime(e.created_at).slice(0, 16)}</td>
+                  <td className="font-mono" style={{ color: "var(--text-3)" }}>{fmtTime(e.created_at)}</td>
                   <td style={{ color: "var(--cyan)" }}>View</td>
                 </tr>
               ))}
