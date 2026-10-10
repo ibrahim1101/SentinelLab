@@ -97,3 +97,9 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - [Workflow run 38035266786](https://github.com/ibrahim1101/SentinelLab/actions/runs/38035266786): static-security and docker-smoke both **passed**. Static job log confirms **13 passed, 8 warnings**, but command only named security, detection and alert-tenant suites; playbook tests were **not** executed.
 - Commit [88456cc](https://github.com/ibrahim1101/SentinelLab/commit/88456cc508ab82681d3a8aa8070e5e8367ef0fb6) adds explicit backend import path and isolated Mongo environment defaults to `backend/tests/test_playbook_regressions.py` to support standalone pytest collection. **Not yet tested in CI.**
 - The active workflow file path was not located through attempted `.github/workflows/` filenames; do not claim playbook tests run until the actual workflow is updated and logs prove it. Continue with workflow discovery, tenant-scoping security fix and reconciliation tests. PR #1 stays unmerged.
+
+
+### 2026-10-10 — Cross-tenant playbook regression assertions
+- [Run 38036778445](https://github.com/ibrahim1101/SentinelLab/actions/runs/38036778445): static-security **success**, docker-smoke **failure** while pulling MongoDB image (`toomanyrequests: Rate exceeded`); smoke failure is registry infrastructure, not evidence of failed app assertions.
+- Commit [739441c](https://github.com/ibrahim1101/SentinelLab/commit/739441c0e91b53a6008164918d34d81ef4a55494) adds two mocked async database-call regression tests for org-scoped alert linking and investigation assignment/task writes. Not yet observed executing in CI; explicit workflow test list still omits playbook tests.
+- Pending: locate/update actual CI workflow, run new tests, add production-access reconciliation integration coverage, and verify Portfolio guide public URL. PR #1 remains unmerged.
