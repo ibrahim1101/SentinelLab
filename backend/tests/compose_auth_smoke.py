@@ -40,7 +40,7 @@ print("PASS: anonymous access, admin login, identity, workspace listing, invalid
 email = "ci-" + uuid.uuid4().hex[:16] + "@example.com"
 status, rejected = request("POST", "/api/auth/register", {"email": email, "password": "ci-temporary-strong-password", "name": "CI Security Analyst"})
 assert status == 403, f"Public registration not blocked: {status}: {rejected}"
-status, created = request("POST", "/api/admin/users", {"email": email, "password": "ci-temporary-strong-password", "name": "CI Security Analyst"}, token=token)
+status, created = request("POST", "/api/admin/users", {"email": email, "username": "ci" + uuid.uuid4().hex[:14], "password": "ci-temporary-strong-password", "name": "CI Security Analyst"}, token=token)
 assert status == 201, f"Admin user provisioning failed: {status}: {created}"
 analyst_id = created["user"]["id"]
 assert created["user"]["org_ids"] == ["org-training"], "Admin provisioning granted unexpected tenant access"
@@ -48,6 +48,8 @@ assert created["user"]["default_org"] == "org-training", "Admin provisioning sel
 status, analyst_login = request("POST", "/api/auth/login", {"email": email, "password": "ci-temporary-strong-password"})
 assert status == 200, f"Provisioned analyst login failed: {status}: {analyst_login}"
 analyst_token = analyst_login["access_token"]
+status, username_login = request("POST", "/api/auth/login", {"email": created["user"]["username"].upper(), "password": "ci-temporary-strong-password"})
+assert status == 200 and username_login["user"]["id"] == analyst_id, f"Username login failed: {status}"
 status, _ = request("POST", "/api/admin/users", {"email": "forbidden-" + email, "password": "ci-temporary-strong-password", "name": "Forbidden"}, token=analyst_token)
 assert status == 403, f"Analyst created another account: {status}"
 status, _ = request("GET", "/api/events", token=analyst_token, workspace="org-production")
@@ -92,7 +94,7 @@ status, _ = request("GET", "/api/admin/production-access-requests", token=analys
 assert status == 403, f"Auditor read approval queue: {status}"
 # Create a distinct second administrator to verify the successful approval path.
 second_email = "ci-approver-" + uuid.uuid4().hex[:12] + "@example.com"
-status, second = request("POST", "/api/admin/users", {"email": second_email, "password": "ci-temporary-strong-password", "name": "CI Second Approver"}, token=token)
+status, second = request("POST", "/api/admin/users", {"email": second_email, "username": "approver" + uuid.uuid4().hex[:12], "password": "ci-temporary-strong-password", "name": "CI Second Approver"}, token=token)
 assert status == 201, f"Second approver provisioning failed: {status}: {second}"
 second_id = second["user"]["id"]
 status, second_login = request("POST", "/api/auth/login", {"email": second_email, "password": "ci-temporary-strong-password"})
