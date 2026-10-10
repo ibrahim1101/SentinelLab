@@ -21,6 +21,7 @@ export default function Settings() {
   const [tab, setTab] = useState("general");
   const [s, setS] = useState(null);
   const [users, setUsers] = useState([]);
+  const [loginEvents, setLoginEvents] = useState([]);
   const [newUser, setNewUser] = useState({ name: "", email: "", username: "", password: "" });
   const [creatingUser, setCreatingUser] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
@@ -47,6 +48,7 @@ export default function Settings() {
     client.get("/settings").then(({ data }) => setS(data.settings));
     client.get("/admin/health").then(({ data }) => setHealth(data)).catch(() => {});
     if (isAdmin) client.get("/admin/users").then(({ data }) => setUsers(data.users)).catch(() => {});
+    if (isSuperAdmin) client.get("/admin/login-security-events").then(({ data }) => setLoginEvents(data.events || [])).catch(() => {});
     if (isSuperAdmin) client.get("/admin/production-access-requests").then(({ data }) => setApprovalQueue(data.requests)).catch(() => {});
     if (isSuperAdmin) client.get("/admin/membership-review").then(({ data }) => setMembers(data.production_members)).catch(() => toast.error("Could not load production membership review"));
     client.get("/admin/audit").then(({ data }) => setAudit(data.audit)).catch(() => {});
@@ -199,6 +201,20 @@ export default function Settings() {
               <Row k="Organization Isolation" v="All resources workspace-scoped" />
               {isAdmin && (
                 <>
+                  {isSuperAdmin && <div className="border rounded-md p-4 mt-4 w-full max-w-5xl space-y-3" data-testid="login-security-events">
+                    <div className="font-semibold text-[13px]">Login security alerts ({loginEvents.filter((e) => e.status === "open").length} open)</div>
+                    {loginEvents.length === 0 ? <p className="text-[12px]">No account lock incidents recorded.</p> :
+                      <div className="space-y-2">{loginEvents.map((event) => <div key={event.id} className="border rounded p-3 flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-[12px]"><strong>{event.email}</strong> · {event.failed_count} failed attempts · Source: {event.source_ip} · {event.created_at} · {event.status}</div>
+                        {event.status === "open" && <button type="button" className="btn btn-sm" onClick={() => askConfirm("Unlock account login?", `Clear failed sign-in lock for ${event.email}? Verify the user's identity before proceeding.`, async () => {
+                          await client.post(`/admin/users/${event.user_id}/unlock-login`);
+                          const { data } = await client.get("/admin/login-security-events");
+                          setLoginEvents(data.events || []);
+                          toast.success("Login lock cleared");
+                        }, true)}>Unlock login</button>}
+                      </div>)}</div>}
+                    <p className="text-[11px]" style={{ color: "var(--text-3)" }}>For account recovery, verify the user out of band and use Reset password in the account actions below.</p>
+                  </div>}
                   <form className="space-y-3 border rounded-md p-4 mt-4 w-full max-w-5xl" onSubmit={createAnalyst} data-testid="create-analyst-form">
                     <div className="text-[12px] font-semibold">Create analyst · Training Lab only</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
