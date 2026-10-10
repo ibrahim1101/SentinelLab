@@ -30,6 +30,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem("sl_token", data.access_token);
     localStorage.setItem("sl_workspace", data.user.default_org);
     setUser(data.user);
+    await refresh();
     return data.user;
   };
   const register = async (email, password, name) => {
