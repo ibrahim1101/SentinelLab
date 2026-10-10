@@ -374,3 +374,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 ### 2026-10-10 — Login input/icon overlap found during browser QA
 - User screenshot showed email and password values visually colliding with leading icons on the login screen.
 - Commit [15c3579](https://github.com/ibrahim1101/SentinelLab/commit/15c3579726236e6adaac2471bf34e28c35ef00dc) changed Login.jsx input padding to explicit inline left/right values and added browser autocomplete hints. Browser recheck pending; this does not close the Playbooks UI P0 gate.
+
+
+### 2026-10-10 — Playbooks overview browser QA evidence
+- User-provided screenshot confirms the Playbooks overview renders seven playbook cards, severity/step/approval badges, and execution-history empty state. This does **not** establish that the approval modal, simulated actions or persisted run details behave correctly.
+- Source review confirmed `backend/playbooks.py` persists only non-dry-run executions; UI `frontend/src/pages/Playbooks.jsx` already labels external actions as simulated in the run modal and uses `Record Run` rather than `Execute Live`.
+- Commit [d4e1897](https://github.com/ibrahim1101/SentinelLab/commit/d4e1897182ecc773ac9a071d58c3beef126799f3) improves history wording to `recorded runs` / `No recorded runs yet — dry-runs are not saved`. Rebuild and browser recheck pending. P0 browser gate remains open pending modal screenshots and actual action checks.
