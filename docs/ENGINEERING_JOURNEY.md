@@ -316,3 +316,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - GitHub Actions [run 38040276134](https://github.com/ibrahim1101/SentinelLab/actions/runs/38040276134) succeeded on rerun (both jobs green).
 - Commit [d4106ec](https://github.com/ibrahim1101/SentinelLab/commit/d4106ec0ae7a3cb4b1c1115b7c6df706ac9eff16) adds `scripts/pull-mongo-with-retry.sh` with up to five image-pull attempts and bounded waits. **Not wired into the existing Phase 1 workflow yet**; the workflow filename still needs identifying. Attempt to add a separate hardened workflow was blocked by tool safety checks.
 - Docker Hub rate limiting is not considered permanently resolved until a CI workflow invokes the helper and succeeds. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Retry helper regression guard
+- [Run 38041028649](https://github.com/ibrahim1101/SentinelLab/actions/runs/38041028649) succeeded for both static-security and docker-smoke. Logs show Docker still invokes `docker compose up -d --build --wait` directly, without the retry helper.
+- Commit [9fb92bd](https://github.com/ibrahim1101/SentinelLab/commit/9fb92bdb6493b8906f367408df6d2455f49939ea) adds a source-level CI guard verifying `scripts/pull-mongo-with-retry.sh` remains bounded and configurable. This is not proof that CI invokes the helper.
+- Next: locate active workflow filename, integrate helper into docker-smoke, verify run, then add executable reconciliation recovery tests. PR #1 unmerged.
