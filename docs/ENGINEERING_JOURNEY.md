@@ -386,3 +386,8 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - User screenshot: selected `Known Malicious IOC Match — IOC match (64) (critical)`, approval checkbox **unchecked**, clicked **Dry Run**.
 - UI displayed 64 collected events; IOC enrichment checked one indicator and reported one known-bad match; investigation creation and containment tasks described as hypothetical; EDR isolation step status **Simulated** with `DRY-RUN: external action simulated, no changes made.` Summary rendered. This supports UI rendering and dry-run simulation labeling only; database immutability and external action absence have not been independently instrumented.
 - Next: recorded run with approval unchecked must show `pending_approval` and no EDR execution; then explicit approval must still show `simulated` (disconnected EDR), with persisted execution history. P0 Playbooks browser gate remains open pending these checks.
+
+
+### 2026-10-10 — Playbooks recorded run without EDR approval
+- User screenshot of Malware Alert Triage with `Known Malicious IOC Match (64)` and EDR approval **unchecked**, after **Record Run**: 64 related events collected, 1 known-bad IOC match, investigation `4f0eb76c...` created, 3 containment tasks added, and EDR isolation visibly **Pending Approval** with `Approval required before this action runs.`
+- This is browser evidence for enforcement of the unapproved action, not an independent audit of external systems. Next test: check EDR approval and Record Run; disconnected EDR should still show **Simulated**, not executed. Verify execution-history persistence and detail. P0 Playbooks gate stays open until these checks.
