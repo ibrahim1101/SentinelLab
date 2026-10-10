@@ -122,3 +122,48 @@ def test_docker_registry_retry_helper_is_bounded_and_configurable():
     assert 'for attempt in 1 2 3 4 5' in script
     assert 'docker pull "$image"' in script
     assert 'exit 1' in script
+
+
+def test_reconciliation_runtime_membership_present_and_absent():
+    """Execute the real reconciliation body with fake DB, without booting the server."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    source = _production_reconciliation_source()
+    # Extract the actual function body; avoid importing the full API app and its
+    # startup integrations into this focused, dependency-light regression.
+    definition = "async def reconcile_production_access(request_id, user):" + source.split("):", 1)[1]
+    definition = definition.split("\n\n", 1)[0] if False else definition
+    namespace = {
+        "datetime": datetime, "timedelta": timedelta, "timezone": timezone,
+        "PROD_ORG": "org-production",
+        "now_iso": lambda: "2026-10-10T00:00:00+00:00",
+        "HTTPException": type("HTTPException", (Exception,), {
+            "__init__": lambda self, status_code, detail: (
+                setattr(self, "status_code", status_code),
+                Exception.__init__(self, detail)
+            )[-1]
+        }),
+    }
+    exec(compile(definition, "<reconciliation-under-test>", "exec"), namespace)
+    fn = namespace["reconcile_production_access"]
+    for has_membership in (True, False):
+        request = {"id": "req", "target_id": "target",
+                   "approved_at": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()}
+        update = AsyncMock(return_value=SimpleNamespace(modified_count=1))
+        namespace["db"] = SimpleNamespace(
+            production_access_requests=SimpleNamespace(
+                find_one=AsyncMock(return_value=request), update_one=update),
+            users=SimpleNamespace(find_one=AsyncMock(return_value={
+                "id": "target", "org_ids": ["org-production"] if has_membership else ["org-training"]
+            })),
+        )
+        namespace["audit"] = AsyncMock()
+        result = asyncio.run(fn("req", {"default_org": "org-training"}))
+        expected = "approved" if has_membership else "failed"
+        assert result["status"] == expected
+        assert update.await_args.args[0] == {"id": "req", "status": "applying"}
+        assert update.await_args.args[1]["$set"]["status"] == expected
+        assert namespace["db"].users.find_one.await_count == 1
