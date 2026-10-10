@@ -292,3 +292,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - [Run 38038794945](https://github.com/ibrahim1101/SentinelLab/actions/runs/38038794945) static-security failed with **17 passed, 2 failed**. The event-loop fix eliminated the prior closed-loop failures, but both tenant-scoping tests failed because patching a Motor collection object's method did not reliably intercept subsequent `db.collection` accesses.
 - Commit [56f5d39](https://github.com/ibrahim1101/SentinelLab/commit/56f5d39fda93d3c5d301c6640549fdc4c59adcef) patches `playbooks.db` with a stable `SimpleNamespace` fake, including explicit `AsyncMock` collection methods, so database mutation assertions can observe the calls.
 - CI validation of this change is pending. Continue checking test results; do not claim green until confirmed. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Playbook CI green; production reconciliation safety guards
+- [Run 38038905653](https://github.com/ibrahim1101/SentinelLab/actions/runs/38038905653) completed successfully: **19 passed, 8 warnings** in static-security; docker-smoke succeeded. Five playbook behavioral regressions now run in established Phase 1 CI.
+- Commit [2ad793b](https://github.com/ibrahim1101/SentinelLab/commit/2ad793b58f55dba51770e4f64e72c3265461a3ad) adds three source-level production-access reconciliation regression guards: reconciliation cannot write memberships, must require stale `applying` requests, and must derive terminal status from actual membership with compare-and-set protection.
+- New reconciliation guards are **not yet CI-verified**; they are source-level checks, not simulated interruption integration tests. Next: verify CI, add behavior tests for present/absent membership, fresh guard and malformed timestamps, and harden intermittent Docker Hub pull rate limits. PR #1 stays unmerged.
