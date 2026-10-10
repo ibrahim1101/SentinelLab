@@ -304,3 +304,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - [Run 38039377419](https://github.com/ibrahim1101/SentinelLab/actions/runs/38039377419) passed both jobs, static-security **22 passed, 8 warnings** (including three new source-level reconciliation guards).
 - Later [run 38039386230](https://github.com/ibrahim1101/SentinelLab/actions/runs/38039386230) passed static-security but failed docker-smoke because Docker Hub returned `toomanyrequests: Rate exceeded` while pulling MongoDB. The failed jobs were re-run through GitHub Actions; rerun result pending.
 - Durable fix still needed: identify active Phase 1 workflow filename and implement image pull retry / authenticated or alternate registry strategy without weakening tests. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Repeat Docker Hub rate limiting
+- [Run 38040276134](https://github.com/ibrahim1101/SentinelLab/actions/runs/38040276134) failed docker-smoke (`toomanyrequests: Rate exceeded`), while static-security succeeded. The prior failed run 38039386230 passed on rerun.
+- Requested rerun of failed jobs for run 38040276134; outcome pending. This is only temporary recovery, **not a permanent registry mitigation**.
+- Active workflow path has not been identified; do not claim retry/backoff or registry mirror is implemented. Next: locate workflow in GitHub Actions UI, add bounded pull retries or authenticated/alternate image registry, verify CI. PR #1 remains unmerged.
