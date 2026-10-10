@@ -85,3 +85,9 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - **P1:** 15-module browser QA; publish/verify guide; improve PDF with validated controls/screenshots; Docker onboarding.
 - **P2/P3:** richer IOC enrichment, integration adapters and production hardening, then advanced SOC features.
 - **Process:** keep `docs/ENGINEERING_JOURNEY.md` current with commits, failures, test evidence and limitations; never merge PR #1 without explicit authorization.
+
+
+### 2026-10-10 — Active development: playbook simulation UI clarity
+- Commit [86dfb06](https://github.com/ibrahim1101/SentinelLab/commit/86dfb0660f3080185946ac2578435bdb2ff1c88c) on `fix/phase1-security-regressions` changed the run button to **Record Run**, clarified disconnected EDR/firewall/email/IdP simulation, renamed persisted history labels, and added status-specific notifications for failed, pending-approval, skipped and simulated runs.
+- GitHub accepted the commit. Browser/UI automated verification and post-commit CI are **not yet verified**; no external containment was performed.
+- Next: locate active workflow file, include playbook regression tests in CI, run test suite, address tenant-scoped investigation writes and production-access applying-state reconciliation tests. PR #1 must remain unmerged.
