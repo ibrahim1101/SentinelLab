@@ -30,6 +30,16 @@ export default function Settings() {
   const [members, setMembers] = useState([]);
   const [approvalQueue, setApprovalQueue] = useState([]);
   const [savingMember, setSavingMember] = useState("");
+  const [confirmation, setConfirmation] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const askConfirm = (title, description, action, destructive = false) => setConfirmation({ title, description, action, destructive });
+  const executeConfirmed = async () => {
+    if (!confirmation || confirmBusy) return;
+    setConfirmBusy(true);
+    try { await confirmation.action(); setConfirmation(null); }
+    catch (err) { toast.error(err.response?.data?.detail || "Action failed"); }
+    finally { setConfirmBusy(false); }
+  };
 
   useEffect(() => {
     client.get("/settings").then(({ data }) => setS(data.settings));
@@ -41,11 +51,23 @@ export default function Settings() {
   }, []);
 
   const save = async (patch) => { const { data } = await client.put("/settings", patch); setS(data); toast.success("Settings saved"); };
-  const resetDemo = async () => { if (!window.confirm("Reset Training Lab synthetic data?")) return; await client.post("/demo/reset"); toast.success("Demo data regenerated"); };
-  const setUserRole = async (id, role) => { await client.put(`/admin/users/${id}/role`, { role }); toast.success("Role updated"); setUsers(users.map((u) => u.id === id ? { ...u, role } : u)); };
+  const resetDemo = () => askConfirm("Reset Training Lab data?", "This regenerates synthetic demo data. Existing Training Lab demo records may be replaced.", async () => { await client.post("/demo/reset"); toast.success("Demo data regenerated"); }, true);
+  const setUserRole = (id, role) => {
+    const target = users.find((u) => u.id === id);
+    if (!target || target.role === role) return;
+    askConfirm("Confirm role change", `${target.email}: ${roles[target.role] || target.role} → ${roles[role] || role}. This changes account permissions.`, async () => {
+      await client.put(`/admin/users/${id}/role`, { role });
+      setUsers((prev) => prev.map((u) => u.id === id ? { ...u, role } : u));
+      toast.success("Role updated");
+    }, true);
+  };
 
   const createAnalyst = async (e) => {
     e.preventDefault();
+    askConfirm("Create analyst account?", `${newUser.name} (${newUser.email}) will receive analyst permissions in Training Lab only.`, () => submitAnalyst());
+  };
+
+  const submitAnalyst = async () => {
     setCreatingUser(true);
     try {
       const { data } = await client.post("/admin/users", newUser);
@@ -62,7 +84,10 @@ export default function Settings() {
   const changeMembership = async (target, enableProduction) => {
     const org_ids = enableProduction ? [...new Set([...(target.org_ids || []), "org-production"])] : (target.org_ids || []).filter((id) => id !== "org-production");
     if (!org_ids.length) org_ids.push("org-training");
-    if (!window.confirm(`${enableProduction ? "Grant" : "Revoke"} production workspace access for ${target.email}?`)) return;
+    askConfirm(enableProduction ? "Request production access?" : "Revoke production access?", `${target.email}: ${enableProduction ? "A separate super administrator must approve before access is granted." : "Production access will be removed immediately."}`, () => submitMembership(target, enableProduction, org_ids), true);
+  };
+
+  const submitMembership = async (target, enableProduction, org_ids) => {
     setSavingMember(target.id);
     try {
       const { data } = enableProduction
@@ -79,7 +104,10 @@ export default function Settings() {
   };
 
   const approveRequest = async (entry) => {
-    if (!window.confirm("Approve production access for this user? This is a privileged operation.")) return;
+    askConfirm("Approve production access?", `This grants production access to ${users.find((u) => u.id === entry.target_id)?.email || entry.target_id}. Verify the request and independent approval before continuing.`, () => submitApproval(entry), true);
+  };
+
+  const submitApproval = async (entry) => {
     setSavingMember(entry.target_id);
     try {
       await client.post(`/admin/production-access-requests/${entry.id}/approve`);
@@ -91,7 +119,10 @@ export default function Settings() {
   };
 
   const reconcileRequest = async (entry) => {
-    if (!window.confirm("Reconcile this interrupted approval against actual membership? This will not grant access.")) return;
+    askConfirm("Reconcile interrupted approval?", "Compare the interrupted approval with actual membership. This operation does not grant access.", () => submitReconciliation(entry), true);
+  };
+
+  const submitReconciliation = async (entry) => {
     setSavingMember(entry.target_id);
     try {
       const { data } = await client.post(`/admin/production-access-requests/${entry.id}/reconcile`);
@@ -219,6 +250,13 @@ export default function Settings() {
           )}
         </div>
       </div>
+      {confirmation && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget && !confirmBusy) setConfirmation(null); }}>
+        <div role="alertdialog" aria-modal="true" aria-labelledby="security-confirm-title" aria-describedby="security-confirm-description" className="card w-full max-w-md p-5 space-y-4 shadow-2xl border" style={{ background: "var(--bg-2, #171b22)" }}>
+          <div className="flex items-center gap-2"><Shield size={18} style={{ color: confirmation.destructive ? "#f59e0b" : "var(--cyan)" }} /><h2 id="security-confirm-title" className="font-semibold text-base">{confirmation.title}</h2></div>
+          <p id="security-confirm-description" className="text-[13px] leading-relaxed" style={{ color: "var(--text-2)" }}>{confirmation.description}</p>
+          <div className="flex justify-end gap-2"><button type="button" className="btn btn-sm" disabled={confirmBusy} onClick={() => setConfirmation(null)}>Cancel</button><button type="button" className="btn btn-primary btn-sm" disabled={confirmBusy} onClick={executeConfirmed}>{confirmBusy ? "Processing…" : "Confirm action"}</button></div>
+        </div>
+      </div>}
     </div>
   );
 }
