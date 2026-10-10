@@ -214,3 +214,8 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 ### 2026-10-10 — Dedicated Playbooks CI MongoDB test isolation
 - [Run 38050793821](https://github.com/ibrahim1101/SentinelLab/actions/runs/38050793821) failed **1 failed, 4 passed** after pytest plugins were installed. The unapproved-action test patched a collection method on a live Motor client; execution instead attempted to write to `localhost:27017` and timed out with `ServerSelectionTimeoutError`.
 - Commit [9a86d15](https://github.com/ibrahim1101/SentinelLab/commit/9a86d15f0c8b3df3089b8fa56dca0f0be58b4b33) replaces the entire `playbooks.db` object with a fake containing `AsyncMock` for execution persistence, preventing unintended real database access. Dedicated workflow CI result pending. No production playbook behavior changed.
+
+
+### 2026-10-10 — Dedicated Playbooks CI recovered; broadened external-action regressions
+- [Playbooks run 38053947679](https://github.com/ibrahim1101/SentinelLab/actions/runs/38053947679) green: **5 passed**. [Phase 1 run 38053947643](https://github.com/ibrahim1101/SentinelLab/actions/runs/38053947643) green: **30 passed, 8 warnings**, Docker smoke success.
+- Commit [2691885](https://github.com/ibrahim1101/SentinelLab/commit/2691885cce5976c2ace89b145ea8d646b056a55d) adds mocked behavior tests covering all four disconnected external actions (`notify`, `isolate_host`, `block_indicator`, `disable_account`): approved actions are simulated/audit-only and persisted as such; unapproved actions remain pending. CI pending; browser approved EDR simulation and execution history still need user verification.
