@@ -230,6 +230,24 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         self.assertIn("disabled", caught.exception.detail.lower())
 
 
+    async def test_existing_username_source_throttle_is_generic(self):
+        user = {"id": "u1", "username": "analyst",
+                "email": "analyst@example.invalid", "password_hash": "hashed",
+                "enabled": True, "role": "analyst"}
+        db = SimpleNamespace(
+            users=SimpleNamespace(find_one=AsyncMock(return_value=user)),
+            login_attempts=SimpleNamespace(find_one=AsyncMock(return_value={
+                "count": 5, "locked_until": "2099-01-01T00:00:00+00:00"
+            })),
+        )
+        with patch.object(server, "db", db):
+            with self.assertRaises(HTTPException) as caught:
+                await server.login(server.LoginReq(email="analyst", password="wrong"),
+                                   request(), Response())
+        self.assertEqual(caught.exception.status_code, 401)
+        self.assertEqual(caught.exception.detail, "Invalid credentials")
+
+
 
 if __name__ == "__main__":
     unittest.main()
