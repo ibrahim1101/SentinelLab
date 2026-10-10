@@ -8,6 +8,16 @@ permissions:
 jobs:
   auth-tests:
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,3 +30,11 @@ jobs:
           DB_NAME: sentinellab_test
           JWT_SECRET: ci-only-test-secret-not-for-production
           ADMIN_PASSWORD: ci-only-test-password
+
+      - name: MongoDB concurrent lockout integration test
+        run: python -m unittest discover -s backend/tests -p 'test_mongo_login_integration.py' -v
+        env:
+          MONGO_URL: mongodb://127.0.0.1:27017
+          DB_NAME: sentinellab_ci_auth
+          JWT_SECRET: ci-integration-secret
+          SENTINELLAB_TEST_DISPOSABLE_MONGO: 'yes'
