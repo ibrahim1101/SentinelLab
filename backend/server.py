@@ -155,6 +155,9 @@ async def login(body: LoginReq, request: Request, response: Response):
     if user and user.get("login_locked_until"):
         until = datetime.fromisoformat(user["login_locked_until"])
         if now < until:
+            # Reveal lock status only after verifying the actual password.
+            if not verify_password(body.password, user["password_hash"]):
+                raise HTTPException(401, "Invalid credentials")
             raise HTTPException(423, "Account temporarily locked due to repeated failed sign-ins. Contact your administrator for recovery.")
         await db.users.update_one({"id": user["id"]}, {"$unset": {"login_locked_until": "", "login_failed_count": ""}})
         user.pop("login_locked_until", None)
