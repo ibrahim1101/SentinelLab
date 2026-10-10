@@ -406,3 +406,10 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 ### 2026-10-10 — Dedicated Playbooks CI recovered; broadened external-action regressions
 - [Playbooks run 38053947679](https://github.com/ibrahim1101/SentinelLab/actions/runs/38053947679) green: **5 passed**. [Phase 1 run 38053947643](https://github.com/ibrahim1101/SentinelLab/actions/runs/38053947643) green: **30 passed, 8 warnings**, Docker smoke success.
 - Commit [2691885](https://github.com/ibrahim1101/SentinelLab/commit/2691885cce5976c2ace89b145ea8d646b056a55d) adds mocked behavior tests covering all four disconnected external actions (`notify`, `isolate_host`, `block_indicator`, `disable_account`): approved actions are simulated/audit-only and persisted as such; unapproved actions remain pending. CI pending; browser approved EDR simulation and execution history still need user verification.
+
+
+### 2026-10-10 — Browser evidence: approved EDR action remains simulated
+- User-supplied local Playbooks screenshot of **Malware Alert Triage**, target **Known Malicious IOC Match — IOC match (64) (critical)**, EDR approval checkbox selected and **Record Run** result displayed.
+- UI reported 64 related events, 1 known-bad IOC, investigation created (prefix `53dcd a7f` displayed without space: `53dcda7f`), 3 containment tasks added, and EDR `Isolate affected host` status **Simulated** with `APPROVED external action 'isolate_host' recorded in audit trail (no live system connected).` This is browser UI evidence, not an independently verified assertion of zero external side effects.
+- Prior screenshot had EDR **Pending Approval** without approval. Dedicated Playbooks CI run 38054238824 green (7 passed); Phase 1 run 38054242988 green (30 passed, 8 warnings; Docker smoke passed).
+- **Next required browser evidence:** close run modal, verify `Execution History (recorded runs)` shows persisted recorded executions; open a row and confirm saved step status and correct org context. Do not close Playbooks P0 browser gate until this is verified.
