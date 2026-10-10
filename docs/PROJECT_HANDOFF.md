@@ -115,3 +115,10 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - [Phase 1 run 38037758618](https://github.com/ibrahim1101/SentinelLab/actions/runs/38037758618): static-security passed; docker-smoke failed before application assertions due to MongoDB image registry `toomanyrequests: Rate exceeded`. [Run 38037748002](https://github.com/ibrahim1101/SentinelLab/actions/runs/38037748002) passed both jobs. No Docker retry change has been deployed; intermittent registry failure remains open.
 - Commit [35e8823](https://github.com/ibrahim1101/SentinelLab/commit/35e882361c6d5e5b3a4e295061aeaeeac8350f14) adds an AST-based playbook tenant-write guard to the **existing** static-security test file, which the Phase 1 workflow already runs. This is source-level regression coverage, not a substitute for mocked playbook execution tests.
 - Dedicated playbook workflow file exists but its successful execution remains unconfirmed. Next: inspect its Actions registration/run and verify new static guard; implement reliable image-pull retries in actual CI workflow after identifying its path. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Playbook regression collection through established CI
+- Commit [7f61dfb](https://github.com/ibrahim1101/SentinelLab/commit/7f61dfbf52ad0936c3024f2b3f6e3f7acf9e9780) imports all five playbook behavioral tests into `backend/tests/test_security_regressions.py`, which the established Phase 1 workflow explicitly runs. This is an interim collection bridge while the dedicated workflow execution remains unconfirmed.
+- **Validation pending:** no successful run for commit 7f61dfb confirmed at time of entry; do not count five tests as passing until logs prove collection and execution. The previous static-security suite passed 14 tests.
+- Docker smoke remains intermittently blocked by upstream MongoDB registry `toomanyrequests` errors. No reliable image-pull retry/fallback has yet been installed in the existing workflow; actual workflow filename must be identified before editing.
+- PR #1 remains unmerged.
