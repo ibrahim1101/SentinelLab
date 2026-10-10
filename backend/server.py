@@ -144,7 +144,7 @@ async def login(body: LoginReq, request: Request, response: Response):
     user = await db.users.find_one({"email": identifier} if "@" in identifier else {"username": identifier})
     # Keep a separate IP/identifier throttle for unknown accounts and credential stuffing.
     attempt = await db.login_attempts.find_one({"identifier": ident})
-    if attempt and attempt.get("locked_until"):
+    if attempt and attempt.get("locked_until") and attempt.get("count", 0) >= 5:
         until = datetime.fromisoformat(attempt["locked_until"])
         if now < until:
             # An unknown identifier must never be described as a locked account.
@@ -167,7 +167,7 @@ async def login(body: LoginReq, request: Request, response: Response):
         await db.login_attempts.update_one(
             {"identifier": ident},
             {"$set": {"identifier": ident, "count": count,
-                      "locked_until": (now + timedelta(minutes=15)).isoformat()}},
+                      "locked_until": (now + timedelta(minutes=15)).isoformat() if count >= 5 else None}},
             upsert=True)
         if user and user.get("enabled", True):
             # Atomic increment prevents concurrent failures from losing counts.
