@@ -261,3 +261,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - [Run 38036778445](https://github.com/ibrahim1101/SentinelLab/actions/runs/38036778445): static-security **success**, docker-smoke **failure** while pulling MongoDB image (`toomanyrequests: Rate exceeded`); smoke failure is registry infrastructure, not evidence of failed app assertions.
 - Commit [739441c](https://github.com/ibrahim1101/SentinelLab/commit/739441c0e91b53a6008164918d34d81ef4a55494) adds two mocked async database-call regression tests for org-scoped alert linking and investigation assignment/task writes. Not yet observed executing in CI; explicit workflow test list still omits playbook tests.
 - Pending: locate/update actual CI workflow, run new tests, add production-access reconciliation integration coverage, and verify Portfolio guide public URL. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Dedicated playbook CI workflow added
+- Commit [94e5d1c](https://github.com/ibrahim1101/SentinelLab/commit/94e5d1cab39f092f49b01ece47ebde6ed9b1be1d) created `.github/workflows/playbook-regressions.yml` on `fix/phase1-security-regressions`, installing isolated dependencies and explicitly running `python -m pytest -q backend/tests/test_playbook_regressions.py`.
+- Previous Phase 1 [run 38036818916](https://github.com/ibrahim1101/SentinelLab/actions/runs/38036818916) passed both jobs; its static test command still ran 13 other tests, not playbook regressions.
+- Dedicated workflow execution result **not yet confirmed**. Next: verify new workflow appears and passes, fix any import/dependency/assertion errors, then extend production-access reconciliation tests. PR #1 stays unmerged.
