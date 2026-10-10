@@ -64,3 +64,15 @@ def test_playbook_mutations_include_tenant_scope():
         checked.append(collection.attr)
     assert checked.count("alerts") >= 1
     assert checked.count("investigations") >= 2
+
+
+# Include the behavioral playbook regressions in the existing Phase 1 security
+# pytest invocation until the dedicated workflow is independently verified.
+# Pytest collects imported test_* functions from this module.
+from test_playbook_regressions import (
+    test_manual_malware_enrichment_skips_without_alert,
+    test_approved_edr_action_is_simulated_not_containment,
+    test_unapproved_action_requires_approval,
+    test_playbook_alert_link_is_tenant_scoped,
+    test_playbook_investigation_mutations_are_tenant_scoped,
+)
