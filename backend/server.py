@@ -765,6 +765,35 @@ async def update_settings(body: SettingsReq, request: Request, user=Depends(requ
     return clean(await db.settings.find_one({"org_id": org}, {"_id": 0}))
 
 
+class AdminCreateUserReq(BaseModel):
+    email: EmailStr
+    name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=12, max_length=128)
+
+
+@api.post("/admin/users", status_code=201)
+async def admin_create_user(body: AdminCreateUserReq, user=Depends(require_role("admin"))):
+    """Provision an analyst with Training Lab access only."""
+    email = body.email.strip().lower()
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(422, "Name is required")
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(409, "Email already registered")
+    entry = {"id": new_id(), "email": email, "name": name,
+             "password_hash": hash_password(body.password), "role": "analyst",
+             "org_ids": [TRAIN_ORG], "default_org": TRAIN_ORG,
+             "theme": "obsidian_dark", "created_at": now_iso()}
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await db.users.insert_one(dict(entry))
+    except DuplicateKeyError as exc:
+        raise HTTPException(409, "Email already registered") from exc
+    await audit(user.get("default_org"), user, "create_user", "user", entry["id"],
+                {"email": email, "role": "analyst"})
+    return {"user": {k: v for k, v in entry.items() if k != "password_hash"}}
+
+
 @api.get("/admin/users")
 async def admin_users(request: Request, user=Depends(require_role("admin"))):
     rows = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
