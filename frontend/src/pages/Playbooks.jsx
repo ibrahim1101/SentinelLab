@@ -41,8 +41,8 @@ export default function Playbooks() {
       </div>
 
       <div className="card overflow-hidden" data-testid="exec-history">
-        <div className="px-4 py-2.5 border-b font-head font-semibold text-[14px]">Execution History (persisted runs)</div>
-        {!execs.length ? <Empty msg="No live executions yet — dry-runs are not persisted" /> : (
+        <div className="px-4 py-2.5 border-b font-head font-semibold text-[14px]">Execution History (recorded runs)</div>
+        {!execs.length ? <Empty msg="No recorded runs yet — dry-runs are not saved" /> : (
           <table className="dense w-full">
             <thead><tr><th>Playbook</th><th>Alert</th><th>Mode</th><th>Status</th><th>By</th><th>When</th><th></th></tr></thead>
             <tbody>
