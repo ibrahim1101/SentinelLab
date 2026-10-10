@@ -72,6 +72,55 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.status_code, 423)
         verify.assert_not_called()
 
+    async def test_fifth_failure_locks_once_and_creates_incident(self):
+        user = {"id": "u1", "email": "analyst@example.invalid", "username": "analyst",
+                "enabled": True, "password_hash": "hashed"}
+        users = SimpleNamespace(
+            find_one=AsyncMock(return_value=user),
+            find_one_and_update=AsyncMock(return_value={"login_failed_count": 5}),
+            update_one=AsyncMock(return_value=SimpleNamespace(modified_count=1)),
+        )
+        db = SimpleNamespace(
+            users=users,
+            login_attempts=SimpleNamespace(find_one=AsyncMock(return_value=None),
+                                           update_one=AsyncMock()),
+            security_notifications=SimpleNamespace(insert_one=AsyncMock()),
+        )
+        with patch.object(server, "db", db), patch.object(server, "verify_password", return_value=False):
+            with self.assertRaises(HTTPException) as caught:
+                await server.login(server.LoginReq(email="analyst", password="wrong"), request(), Response())
+        self.assertEqual(caught.exception.status_code, 423)
+        db.security_notifications.insert_one.assert_awaited_once()
+
+    async def test_unlock_resolves_incident_and_clears_attempts(self):
+        db = SimpleNamespace(
+            users=SimpleNamespace(find_one=AsyncMock(return_value={
+                "id": "u1", "email": "analyst@example.invalid", "username": "analyst"
+            }), update_one=AsyncMock()),
+            login_attempts=SimpleNamespace(delete_many=AsyncMock()),
+            security_notifications=SimpleNamespace(update_many=AsyncMock()),
+        )
+        with patch.object(server, "db", db), patch.object(server, "audit", new_callable=AsyncMock) as audit:
+            result = await server.admin_unlock_login("u1", actor={"id": "admin", "default_org": "org-training"})
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(db.login_attempts.delete_many.await_count, 2)
+        db.security_notifications.update_many.assert_awaited_once()
+        audit.assert_awaited_once()
+
+    async def test_password_recovery_revokes_existing_sessions(self):
+        db = SimpleNamespace(users=SimpleNamespace(
+            find_one=AsyncMock(return_value={"id": "u1"}),
+            update_one=AsyncMock(),
+        ))
+        with patch.object(server, "db", db), patch.object(server, "hash_password", return_value="new-hash"), patch.object(server, "audit", new_callable=AsyncMock):
+            result = await server.admin_reset_password(
+                "u1", server.AdminPasswordReq(password="new-test-password-123"),
+                actor={"id": "admin", "default_org": "org-training"})
+        self.assertEqual(result, {"ok": True})
+        args = db.users.update_one.await_args.args
+        self.assertEqual(args[1]["$inc"]["session_version"], 1)
+
+
 
 if __name__ == "__main__":
     unittest.main()
