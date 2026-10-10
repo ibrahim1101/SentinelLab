@@ -78,6 +78,38 @@ class MongoLoginLockoutIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("login_failed_count", user)
 
 
+    async def test_admin_unlock_resolves_incident_and_source_throttle(self):
+        await self.db.users.update_one(
+            {"id": self.user_id},
+            {"$set": {"login_failed_count": 5,
+                      "login_locked_until": "2099-01-01T00:00:00+00:00"}},
+        )
+        await self.db.login_attempts.insert_one({
+            "identifier": "127.0.0.1:" + self.username,
+            "count": 5, "locked_until": "2099-01-01T00:00:00+00:00",
+        })
+        await self.db.security_notifications.insert_one({
+            "id": str(uuid4()), "type": "account_login_locked",
+            "user_id": self.user_id, "status": "open",
+        })
+        actor = {"id": "ci-super-admin", "role": "super_admin", "default_org": None}
+        with patch.object(server, "db", self.db), \
+             patch.object(server, "audit", new_callable=AsyncMock):
+            result = await server.admin_unlock_login(self.user_id, actor=actor)
+        self.assertEqual(result, {"ok": True})
+        user = await self.db.users.find_one({"id": self.user_id})
+        self.assertNotIn("login_locked_until", user)
+        self.assertNotIn("login_failed_count", user)
+        self.assertEqual(await self.db.login_attempts.count_documents({
+            "identifier": "127.0.0.1:" + self.username
+        }), 0)
+        incident = await self.db.security_notifications.find_one({
+            "user_id": self.user_id, "type": "account_login_locked"
+        })
+        self.assertEqual(incident["status"], "resolved")
+        self.assertEqual(incident["resolved_by"], actor["id"])
+
+
 
 if __name__ == "__main__":
     unittest.main()
