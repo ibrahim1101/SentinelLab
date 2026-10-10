@@ -49,6 +49,8 @@ jobs:
           JWT_SECRET: ci-only-32-character-secret-value
           ADMIN_PASSWORD: ci-only-strong-admin-password
         run: docker compose config --quiet
+      - name: Pull MongoDB image with bounded retries
+        run: bash scripts/pull-mongo-with-retry.sh
       - name: Build and start API
         env:
           JWT_SECRET: ci-only-32-character-secret-value
