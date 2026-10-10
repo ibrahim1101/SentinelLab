@@ -147,7 +147,10 @@ async def login(body: LoginReq, request: Request, response: Response):
     if attempt and attempt.get("locked_until"):
         until = datetime.fromisoformat(attempt["locked_until"])
         if now < until:
-            raise HTTPException(429, "Too many login attempts. Try again later.")
+            # An unknown identifier must never be described as a locked account.
+            if not user:
+                raise HTTPException(401, "Invalid credentials")
+            raise HTTPException(429, "Too many login attempts from this source. Try again later.")
         await db.login_attempts.delete_one({"identifier": ident})
         attempt = None
 
@@ -194,8 +197,7 @@ async def login(body: LoginReq, request: Request, response: Response):
                     })
                 raise HTTPException(423, "Account temporarily locked after repeated failed sign-ins. Contact your administrator.")
             raise HTTPException(401, f"Invalid credentials. {5 - failures} attempts remaining before account lock.")
-        if count >= 5:
-            raise HTTPException(429, "Too many login attempts. Try again later.")
+        # Do not expose a lockout state or account existence for unknown identifiers.
         raise HTTPException(401, "Invalid credentials")
 
     await db.login_attempts.delete_one({"identifier": ident})
