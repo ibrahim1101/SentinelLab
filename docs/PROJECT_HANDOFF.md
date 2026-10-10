@@ -176,3 +176,9 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - [Run 38045681744](https://github.com/ibrahim1101/SentinelLab/actions/runs/38045681744) succeeded: **27 passed, 8 warnings**, docker-smoke success.
 - Added `scripts/check_compose_security.py` (commit `8f95642`) to check mandatory JWT/admin secrets, demo accounts disabled by default, loopback API/web bindings, Mongo persistence, readiness dependency and no published MongoDB port. Added runtime regression against unsafe edits in commit `710a64f`.
 - This is a static baseline, **not** an external penetration test or TLS/firewall verification. New CI pending. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Fail-closed public beta checklist checker
+- [Run 38047331311](https://github.com/ibrahim1101/SentinelLab/actions/runs/38047331311) succeeded: **28 passed, 8 warnings**, Docker smoke success.
+- Added `scripts/check_release_gates.py` (commit `8102c55`): lists pending P0 requirements from this release checklist and exits nonzero (NO-GO) until completed. Missing/empty P0 sections also fail closed. Regression test commit `f0de1de`; CI pending.
+- Run `python scripts/check_release_gates.py` before release. This checks checklist state, **not independent truth of evidence**. Existing P0 gates still open; PR #1 unmerged.
