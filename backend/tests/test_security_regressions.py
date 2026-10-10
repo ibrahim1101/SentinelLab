@@ -76,3 +76,39 @@ from test_playbook_regressions import (
     test_playbook_alert_link_is_tenant_scoped,
     test_playbook_investigation_mutations_are_tenant_scoped,
 )
+
+
+def _production_reconciliation_source():
+    source = (ROOT / "server.py").read_text()
+    return source.split('async def reconcile_production_access(', 1)[1].split('\n@api.', 1)[0]
+
+
+def test_production_reconciliation_is_read_only_for_membership():
+    """Recovery may finalize request state, but must never grant membership."""
+    source = _production_reconciliation_source()
+    tree = ast.parse("async def reconcile_production_access(" + source)
+    writes = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in {"update_one", "update_many", "replace_one", "insert_one", "find_one_and_update"}:
+                writes.append(ast.unparse(node.func.value))
+    assert writes == ["db.production_access_requests"], (
+        "Reconciliation must not write user memberships or other collections"
+    )
+
+
+def test_production_reconciliation_requires_stale_applying_state():
+    source = _production_reconciliation_source()
+    assert '{"id": request_id, "status": "applying"}' in source
+    assert 'timedelta(minutes=5)' in source
+    assert 'HTTPException(409, "Approval may still be in progress' in source
+    assert 'HTTPException(404, "Applying request not found")' in source
+
+
+def test_production_reconciliation_checks_membership_and_cas():
+    source = _production_reconciliation_source()
+    assert 'PROD_ORG in target.get("org_ids", [])' in source
+    assert 'final_status = "approved" if granted else "failed"' in source
+    assert '"failure_reason": None if granted else "membership_not_present"' in source
+    assert 'result.modified_count != 1' in source
+    assert '"status": "applying"' in source
