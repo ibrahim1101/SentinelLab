@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.sentinellab.desktop",
   "build": {
-    "beforeDevCommand": "cd ../frontend && set PORT=3100&&set BROWSER=none&&npm start",
+    "beforeDevCommand": "cd ../frontend && set PORT=3100&&set BROWSER=none&&set REACT_APP_BACKEND_URL=http://127.0.0.1:18765&&npm start",
     "devUrl": "http://localhost:3100",
     "beforeBuildCommand": "cd ../frontend && npm run build",
     "frontendDist": "../../frontend/build"
