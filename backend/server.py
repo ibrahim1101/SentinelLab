@@ -196,7 +196,7 @@ async def login(body: LoginReq, request: Request, response: Response):
                         "status": "open",
                     })
                 raise HTTPException(423, "Account temporarily locked after repeated failed sign-ins. Contact your administrator.")
-            raise HTTPException(401, f"Invalid credentials. {5 - failures} attempts remaining before account lock.")
+            raise HTTPException(401, "Invalid credentials")
         # Do not expose a lockout state or account existence for unknown identifiers.
         raise HTTPException(401, "Invalid credentials")
 
