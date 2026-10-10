@@ -11,5 +11,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install pytest motor pymongo PyJWT bcrypt fastapi python-dotenv python-multipart email-validator pydantic
+      - run: python -m pip install pytest pytest-xdist pytest-asyncio motor pymongo PyJWT bcrypt fastapi python-dotenv python-multipart email-validator pydantic
       - run: python -m pytest -q backend/tests/test_playbook_regressions.py
