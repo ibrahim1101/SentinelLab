@@ -45,3 +45,37 @@ def test_unapproved_action_requires_approval():
         result = run(pb, dry_run=False)
     assert result["status"] == "needs_approval"
     assert result["steps"][0]["status"] == "pending_approval"
+
+
+def test_playbook_alert_link_is_tenant_scoped():
+    """Linking a case must never update a matching alert in another workspace."""
+    pb = {"id": "case-test", "name": "Case test", "severity": "high", "steps": [
+        {"id": "case", "name": "Open case", "action": "create_investigation", "approval": False}
+    ]}
+    alert = {"id": "shared-alert-id", "title": "Suspicious login", "severity": "high"}
+    with patch.object(playbooks.db.investigations, "insert_one", new_callable=AsyncMock), \
+         patch.object(playbooks.db.alerts, "update_one", new_callable=AsyncMock) as update_alert, \
+         patch.object(playbooks.db.automation_executions, "insert_one", new_callable=AsyncMock):
+        result = run(pb, alert=alert, dry_run=False)
+    assert result["status"] == "completed"
+    assert update_alert.await_args.args[0] == {
+        "id": "shared-alert-id", "org_id": "org-training"
+    }
+
+
+def test_playbook_investigation_mutations_are_tenant_scoped():
+    pb = {"id": "case-tasks-test", "name": "Case tasks", "severity": "high", "steps": [
+        {"id": "case", "name": "Open case", "action": "create_investigation", "approval": False},
+        {"id": "assign", "name": "Assign analyst", "action": "assign_analyst", "approval": False},
+        {"id": "tasks", "name": "Add tasks", "action": "add_tasks", "approval": False,
+         "tasks": ["Review evidence"]},
+    ]}
+    with patch.object(playbooks.db.investigations, "insert_one", new_callable=AsyncMock), \
+         patch.object(playbooks.db.investigations, "update_one", new_callable=AsyncMock) as update_inv, \
+         patch.object(playbooks.db.automation_executions, "insert_one", new_callable=AsyncMock):
+        result = run(pb, dry_run=False)
+    assert result["status"] == "completed"
+    assert update_inv.await_count == 2
+    for call in update_inv.await_args_list:
+        assert call.args[0]["org_id"] == "org-training"
+        assert call.args[0]["id"] == result["investigation_id"]
