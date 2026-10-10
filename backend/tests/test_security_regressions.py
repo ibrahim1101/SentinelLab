@@ -167,3 +167,57 @@ def test_reconciliation_runtime_membership_present_and_absent():
         assert update.await_args.args[0] == {"id": "req", "status": "applying"}
         assert update.await_args.args[1]["$set"]["status"] == expected
         assert namespace["db"].users.find_one.await_count == 1
+
+
+def test_reconciliation_runtime_fresh_malformed_and_concurrent():
+    """Recovery refuses fresh approvals, tolerates malformed timestamps, and CAS guards races."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    source = _production_reconciliation_source()
+    definition = "async def reconcile_production_access(request_id, user):" + source.split("):", 1)[1]
+
+    class FakeHTTPException(Exception):
+        def __init__(self, status_code, detail):
+            super().__init__(detail)
+            self.status_code = status_code
+
+    ns = {"datetime": datetime, "timedelta": timedelta, "timezone": timezone,
+          "PROD_ORG": "org-production", "now_iso": lambda: "now",
+          "HTTPException": FakeHTTPException}
+    exec(compile(definition, "<reconciliation-under-test>", "exec"), ns)
+    fn = ns["reconcile_production_access"]
+
+    for timestamp, expected_status, modified in [
+        (datetime.now(timezone.utc).isoformat(), 409, 1),
+        ("not-a-timestamp", None, 1),
+        (None, None, 1),
+        ((datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat(), 409, 0),
+    ]:
+        update = AsyncMock(return_value=SimpleNamespace(modified_count=modified))
+        users = SimpleNamespace(find_one=AsyncMock(return_value={"org_ids": ["org-training"]}))
+        ns["db"] = SimpleNamespace(
+            production_access_requests=SimpleNamespace(
+                find_one=AsyncMock(return_value={
+                    "id": "req", "target_id": "target", "approved_at": timestamp
+                }), update_one=update),
+            users=users,
+        )
+        ns["audit"] = AsyncMock()
+        try:
+            result = asyncio.run(fn("req", {"default_org": "org-training"}))
+        except FakeHTTPException as exc:
+            assert exc.status_code == expected_status
+            if modified == 0:
+                assert update.await_count == 1
+                assert ns["audit"].await_count == 0
+            else:
+                assert update.await_count == 0
+                assert users.find_one.await_count == 0
+        else:
+            assert expected_status is None
+            assert result["status"] == "failed"
+            assert update.await_count == 1
+            assert update.await_args.args[1]["$set"]["failure_reason"] == "membership_not_present"
