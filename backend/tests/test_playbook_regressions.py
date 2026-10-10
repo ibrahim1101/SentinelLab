@@ -91,3 +91,41 @@ def test_playbook_investigation_mutations_are_tenant_scoped():
     for call in update_inv.await_args_list:
         assert call.args[0]["org_id"] == "org-training"
         assert call.args[0]["id"] == result["investigation_id"]
+
+
+def test_approved_external_actions_are_audit_only_and_persisted():
+    """Every disconnected external action remains simulated even when approved."""
+    actions = ("notify", "isolate_host", "block_indicator", "disable_account")
+    pb = {"id": "external-simulation", "name": "External simulation", "severity": "high",
+          "steps": [{"id": action, "name": action, "action": action, "approval": True}
+                    for action in actions]}
+    saved = AsyncMock()
+    fake_db = SimpleNamespace(automation_executions=SimpleNamespace(insert_one=saved))
+    with patch.object(playbooks, "db", fake_db):
+        result = run(pb, dry_run=False, approvals=actions)
+    assert result["status"] == "completed"
+    assert [step["status"] for step in result["steps"]] == ["simulated"] * len(actions)
+    assert all("no live system connected" in step["detail"] for step in result["steps"])
+    saved.assert_awaited_once()
+    persisted = saved.await_args.args[0]
+    assert persisted["org_id"] == "org-training"
+    assert persisted["dry_run"] is False
+    assert [step["status"] for step in persisted["steps"]] == ["simulated"] * len(actions)
+
+
+def test_unapproved_external_actions_never_execute_and_are_recorded_pending():
+    """Every external action must remain pending without explicit approval."""
+    actions = ("notify", "isolate_host", "block_indicator", "disable_account")
+    pb = {"id": "external-pending", "name": "External pending", "severity": "high",
+          "steps": [{"id": action, "name": action, "action": action, "approval": True}
+                    for action in actions]}
+    saved = AsyncMock()
+    with patch.object(playbooks, "db", SimpleNamespace(
+        automation_executions=SimpleNamespace(insert_one=saved)
+    )):
+        result = run(pb, dry_run=False)
+    assert result["status"] == "needs_approval"
+    assert all(step["status"] == "pending_approval" for step in result["steps"])
+    saved.assert_awaited_once()
+    assert all(step["status"] == "pending_approval"
+               for step in saved.await_args.args[0]["steps"])
