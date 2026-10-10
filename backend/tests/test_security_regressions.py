@@ -221,3 +221,20 @@ def test_reconciliation_runtime_fresh_malformed_and_concurrent():
             assert result["status"] == "failed"
             assert update.await_count == 1
             assert update.await_args.args[1]["$set"]["failure_reason"] == "membership_not_present"
+
+
+def test_release_smoke_checker_is_read_only_and_checks_auth():
+    """Keep the public beta smoke checker safe to run against live installs."""
+    source = (ROOT.parent / "scripts" / "smoke_release.py").read_text()
+    tree = ast.parse(source)
+    assert '"/api/health"' in source
+    assert '"/api/ready"' in source
+    assert '"/api/auth/me"' in source
+    assert '"/api/dashboard/overview"' in source
+    assert 'status in (401, 403)' in source
+    assert not any(
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"urlencode", "Request"} and
+        any(keyword.arg == "method" for keyword in node.keywords)
+        for node in ast.walk(tree)
+    )
