@@ -304,3 +304,10 @@ def test_release_gate_checker_blocks_pending_p0_and_missing_section():
     assert module.evaluate("# empty\n")[0] == ["P0 section missing"]
     assert module.evaluate("## P0 — mandatory before public beta\n\n## P1\n")[0] == ["No P0 checklist items found"]
     assert module.evaluate("## P0 — mandatory before public beta\n- [x] Verified\n\n## P1\n") == ([], ["Verified"])
+
+
+def test_docker_smoke_invokes_bounded_mongo_pull_retry():
+    workflow = (ROOT.parent / ".github" / "workflows" / "security-phase1.yml").read_text()
+    assert "bash scripts/pull-mongo-with-retry.sh" in workflow
+    assert workflow.index("bash scripts/pull-mongo-with-retry.sh") < workflow.index("docker compose up -d --build --wait")
+    assert "MONGO_IMAGE: public.ecr.aws/docker/library/mongo:7" in workflow
