@@ -340,3 +340,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - [CI run 38043724553](https://github.com/ibrahim1101/SentinelLab/actions/runs/38043724553) verified **25 passed, 8 warnings**, docker-smoke success.
 - Commit [df39de5](https://github.com/ibrahim1101/SentinelLab/commit/df39de52fdc0c7d2ffaf6f115f199ce02f3b9e6c) created `docs/BETA_RELEASE_GATES.md` with P0 release blockers, P1 distribution tasks, simulation disclosures, and explicit go/no-go requirements. **No public release has been tagged or published.**
 - Immediate next: resolve Docker CI retry integration, browser QA, end-to-end SOC and clean-host deployment evidence, backup/restore, guide download verification. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Post-deployment release smoke tool
+- Added `scripts/smoke_release.py` (commit `4e83bd1`): read-only health, readiness, and unauthenticated `/api/auth/me` + `/api/dashboard/overview` denial checks. Run `python scripts/smoke_release.py --base-url http://127.0.0.1:8000` against a **running** stack.
+- Added source regression guard in commit `8cd474c`; CI verification pending. This is not yet evidence of a clean-host installation or a live smoke run.
+- P0 deployment/browser/end-to-end/backup gates remain unchecked; PR #1 stays unmerged.
