@@ -5,7 +5,7 @@ import { apiErr } from "@/lib/api";
 
 export default function Login() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("admin@sentinellab.io");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
@@ -41,10 +41,10 @@ export default function Login() {
             <div className="text-[12px]" style={{ color: "var(--text-3)" }}>Sign in to your analyst workspace</div>
           </div>
           {err && <div className="mb-3 text-[12px] px-3 py-2 rounded" style={{ background: "rgba(248,113,113,.12)", color: "#F87171", border: "1px solid rgba(248,113,113,.3)" }} data-testid="login-error">{err}</div>}
-          <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Email</label>
+          <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Email or username</label>
           <div className="relative mt-1 mb-3">
             <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-3)" }} />
-            <input className="inp" style={{ paddingLeft: "2.5rem" }} autoComplete="username" type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email" />
+            <input className="inp" style={{ paddingLeft: "2.5rem" }} autoComplete="username" type="text" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email" placeholder="Email or username" />
           </div>
           <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Password</label>
           <div className="relative mt-1 mb-4">
