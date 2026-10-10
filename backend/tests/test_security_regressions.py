@@ -238,3 +238,41 @@ def test_release_smoke_checker_is_read_only_and_checks_auth():
         any(keyword.arg == "method" for keyword in node.keywords)
         for node in ast.walk(tree)
     )
+
+
+def test_release_smoke_checker_runtime_responses():
+    """Exercise the real release checker without a running API or network calls."""
+    import importlib.util
+    from unittest.mock import patch
+
+    path = ROOT.parent / "scripts" / "smoke_release.py"
+    spec = importlib.util.spec_from_file_location("sentinellab_smoke_release", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    good = {
+        "/api/health": (200, b'{"status":"ok"}'),
+        "/api/ready": (200, b'{"ready":true}'),
+        "/api/auth/me": (401, b'{"detail":"unauthorized"}'),
+        "/api/dashboard/overview": (403, b'{"detail":"forbidden"}'),
+    }
+    with patch.object(module, "probe", side_effect=lambda base, path, timeout: good[path]):
+        assert module.run("http://localhost:8000", 1) is True
+
+    scenarios = [
+        {"/api/ready": (503, b'{"ready":false}')},
+        {"/api/ready": (200, b'{"ready":false}')},
+        {"/api/health": (200, b'not-json')},
+        {"/api/auth/me": (200, b'{"id":"leaked"}')},
+        {"/api/dashboard/overview": (200, b'{"events":10}')},
+    ]
+    for changes in scenarios:
+        responses = {**good, **changes}
+        with patch.object(module, "probe", side_effect=lambda base, path, timeout: responses[path]):
+            assert module.run("http://localhost:8000", 1) is False
+
+    def offline(base, path, timeout):
+        raise OSError("connection refused")
+
+    with patch.object(module, "probe", side_effect=offline):
+        assert module.run("http://localhost:8000", 1) is False
