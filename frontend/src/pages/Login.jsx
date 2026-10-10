@@ -15,7 +15,11 @@ export default function Login() {
     e.preventDefault();
     setErr(""); setBusy(true);
     try { await login(email, password); }
-    catch (ex) { setErr(apiErr(ex)); }
+    catch (ex) {
+      setErr(!ex.response
+        ? "Cannot reach SentinelLab API. Confirm the backend is running and retry."
+        : apiErr(ex));
+    }
     finally { setBusy(false); }
   };
 
