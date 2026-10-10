@@ -11,8 +11,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import playbooks
 
 
+# Reuse one loop: Motor binds its client to the first active event loop.
+_TEST_LOOP = asyncio.new_event_loop()
+
+
 def run(pb, *, alert=None, dry_run=True, approvals=()):
-    return asyncio.run(playbooks.execute(
+    return _TEST_LOOP.run_until_complete(playbooks.execute(
         pb, "org-training", alert, {"email": "analyst@example.com"},
         dry_run=dry_run, approvals=approvals,
     ))
