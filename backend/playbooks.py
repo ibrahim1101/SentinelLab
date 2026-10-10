@@ -141,7 +141,7 @@ async def execute(playbook, org_id, alert, user, dry_run=True, approvals=None):
                     await db.investigations.insert_one(dict(inv))
                     created_investigation_id = inv["id"]
                     if alert:
-                        await db.alerts.update_one({"id": alert["id"]},
+                        await db.alerts.update_one({"id": alert["id"], "org_id": org_id},
                                                    {"$set": {"investigation_id": inv["id"], "status": "investigating"}})
                     entry["detail"] = f"Created investigation {inv['id'][:8]}."
                     entry["investigation_id"] = created_investigation_id
@@ -149,14 +149,14 @@ async def execute(playbook, org_id, alert, user, dry_run=True, approvals=None):
             elif action == "assign_analyst":
                 entry["status"] = "ok"
                 if not dry_run and created_investigation_id:
-                    await db.investigations.update_one({"id": created_investigation_id},
+                    await db.investigations.update_one({"id": created_investigation_id, "org_id": org_id},
                                                        {"$set": {"lead": user["email"]}})
                 entry["detail"] = f"Assigned to {user['email']}."
             elif action == "add_tasks":
                 tasks = step.get("tasks", [])
                 if not dry_run and created_investigation_id:
                     for t in tasks:
-                        await db.investigations.update_one({"id": created_investigation_id},
+                        await db.investigations.update_one({"id": created_investigation_id, "org_id": org_id},
                             {"$push": {"tasks": {"id": new_id(), "text": t, "done": False, "ts": now_iso()}}})
                 entry["status"] = "ok"
                 entry["detail"] = f"{'Would add' if dry_run else 'Added'} {len(tasks)} task(s)."
