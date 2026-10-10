@@ -43,8 +43,10 @@ class RegisterReq(BaseModel):
     name: str
 
 class LoginReq(BaseModel):
-    email: EmailStr
+    email: str = Field(min_length=1, max_length=254)
     password: str
+
+USERNAME_RE = re.compile(r"^[a-z][a-z0-9_.-]{2,31}$")
 
 class IngestReq(BaseModel):
     source_id: str
@@ -135,15 +137,15 @@ async def register(body: RegisterReq, response: Response):
 
 @api.post("/auth/login")
 async def login(body: LoginReq, request: Request, response: Response):
-    email = body.email.lower()
+    identifier = body.email.strip().lower()
     ip = request.client.host if request.client else "?"
-    ident = f"{ip}:{email}"
+    ident = f"{ip}:{identifier}"
     att = await db.login_attempts.find_one({"identifier": ident})
     if att and att.get("count", 0) >= 5:
         locked_until = datetime.fromisoformat(att["locked_until"])
         if datetime.now(timezone.utc) < locked_until:
             raise HTTPException(429, "Account temporarily locked. Try again later.")
-    user = await db.users.find_one({"email": email})
+    user = await db.users.find_one({"email": identifier} if "@" in identifier else {"username": identifier})
     if not user or not verify_password(body.password, user["password_hash"]):
         count = (att.get("count", 0) if att else 0) + 1
         await db.login_attempts.update_one(
@@ -153,7 +155,7 @@ async def login(body: LoginReq, request: Request, response: Response):
             upsert=True)
         raise HTTPException(401, "Invalid credentials")
     await db.login_attempts.delete_one({"identifier": ident})
-    token = create_access_token(user["id"], email, user["role"])
+    token = create_access_token(user["id"], user["email"], user["role"])
     _set_cookie(response, token)
     await audit(user.get("default_org"), user, "login", "session")
     user.pop("password_hash", None)
@@ -766,6 +768,7 @@ async def update_settings(body: SettingsReq, request: Request, user=Depends(requ
 
 
 class AdminCreateUserReq(BaseModel):
+    username: Optional[str] = None
     email: EmailStr
     name: str = Field(min_length=1, max_length=120)
     password: str = Field(min_length=12, max_length=128)
@@ -780,7 +783,12 @@ async def admin_create_user(body: AdminCreateUserReq, user=Depends(require_role(
         raise HTTPException(422, "Name is required")
     if await db.users.find_one({"email": email}):
         raise HTTPException(409, "Email already registered")
-    entry = {"id": new_id(), "email": email, "name": name,
+    username = (body.username or email.split("@")[0]).strip().lower()
+    if not USERNAME_RE.fullmatch(username):
+        raise HTTPException(422, "Username must be 3–32 characters, start with a letter, and use letters, numbers, dots, underscores or hyphens")
+    if await db.users.find_one({"username": username}):
+        raise HTTPException(409, "Username already registered")
+    entry = {"id": new_id(), "email": email, "username": username, "name": name,
              "password_hash": hash_password(body.password), "role": "analyst",
              "org_ids": [TRAIN_ORG], "default_org": TRAIN_ORG,
              "theme": "obsidian_dark", "created_at": now_iso()}
@@ -788,7 +796,7 @@ async def admin_create_user(body: AdminCreateUserReq, user=Depends(require_role(
     try:
         await db.users.insert_one(dict(entry))
     except DuplicateKeyError as exc:
-        raise HTTPException(409, "Email already registered") from exc
+        raise HTTPException(409, "Email or username already registered") from exc
     await audit(user.get("default_org"), user, "create_user", "user", entry["id"],
                 {"email": email, "role": "analyst"})
     return {"user": {k: v for k, v in entry.items() if k != "password_hash"}}
@@ -1438,6 +1446,7 @@ async def ready():
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
+    await db.users.create_index("username", unique=True, sparse=True)
     await db.users.create_index("id", unique=True)
     await db.events.create_index([("org_id", 1), ("timestamp", -1)])
     await db.events.create_index([("org_id", 1), ("category", 1)])
@@ -1450,16 +1459,21 @@ async def startup():
             {"$setOnInsert": {"id": oid, "name": name, "is_demo": demo, "created_at": now_iso()}}, upsert=True)
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@sentinellab.io").lower()
+    admin_username = os.environ.get("ADMIN_USERNAME", "socadmin").strip().lower()
+    if not USERNAME_RE.fullmatch(admin_username):
+        raise RuntimeError("ADMIN_USERNAME must be a valid 3–32 character username")
     admin_pw = os.environ.get("ADMIN_PASSWORD")
     if not admin_pw or len(admin_pw) < 12:
         raise RuntimeError("ADMIN_PASSWORD must be configured with at least 12 characters")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
-        await db.users.insert_one({"id": new_id(), "email": admin_email, "name": "SOC Administrator",
+        await db.users.insert_one({"id": new_id(), "email": admin_email, "username": admin_username, "name": "SOC Administrator",
                                    "password_hash": hash_password(admin_pw), "role": "super_admin",
                                    "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": TRAIN_ORG,
                                    "theme": "obsidian_dark", "created_at": now_iso()})
-    elif not verify_password(admin_pw, existing["password_hash"]):
+    elif not existing.get("username") and not await db.users.find_one({"username": admin_username}):
+        await db.users.update_one({"id": existing["id"]}, {"$set": {"username": admin_username}})
+    if existing and not verify_password(admin_pw, existing["password_hash"]):
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_pw)}})
     if os.environ.get("ENABLE_DEMO_ACCOUNTS") == "true" and not await db.users.find_one({"email": "analyst@sentinellab.io"}):
         await db.users.insert_one({"id": new_id(), "email": "analyst@sentinellab.io", "name": "SOC Analyst",
