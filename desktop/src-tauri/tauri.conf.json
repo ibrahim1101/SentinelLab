@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.sentinellab.desktop",
   "build": {
-    "beforeDevCommand": "cd ../frontend && npm start",
-    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": "cd ../frontend && set PORT=3100&&set BROWSER=none&&npm start",
+    "devUrl": "http://localhost:3100",
     "beforeBuildCommand": "cd ../frontend && npm run build",
     "frontendDist": "../../frontend/build"
   },
