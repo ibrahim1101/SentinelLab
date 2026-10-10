@@ -191,6 +191,45 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state["incidents"], 1)
 
 
+    async def test_expired_account_lock_resets_failed_counter(self):
+        user = {"id": "u1", "email": "analyst@example.invalid", "username": "analyst",
+                "enabled": True, "password_hash": "hashed", "login_failed_count": 5,
+                "login_locked_until": "2000-01-01T00:00:00+00:00"}
+        db = SimpleNamespace(
+            users=SimpleNamespace(
+                find_one=AsyncMock(return_value=user),
+                update_one=AsyncMock(return_value=SimpleNamespace(matched_count=1)),
+            ),
+            login_attempts=SimpleNamespace(
+                find_one=AsyncMock(return_value=None), delete_one=AsyncMock(),
+            ),
+        )
+        with patch.object(server, "db", db), patch.object(server, "verify_password", return_value=True), \
+             patch.object(server, "create_access_token", return_value="test-token"), \
+             patch.object(server, "audit", new_callable=AsyncMock):
+            result = await server.login(server.LoginReq(email="analyst", password="correct"),
+                                        request(), Response())
+        self.assertEqual(result["access_token"], "test-token")
+        self.assertEqual(db.users.update_one.await_count, 2)
+        first_update = db.users.update_one.await_args_list[0].args[1]
+        self.assertIn("login_failed_count", first_update["$unset"])
+
+    async def test_disabled_account_correct_password_is_rejected(self):
+        user = {"id": "u1", "email": "analyst@example.invalid", "username": "analyst",
+                "enabled": False, "password_hash": "hashed"}
+        db = SimpleNamespace(
+            users=SimpleNamespace(find_one=AsyncMock(return_value=user)),
+            login_attempts=SimpleNamespace(find_one=AsyncMock(return_value=None),
+                                           delete_one=AsyncMock()),
+        )
+        with patch.object(server, "db", db), patch.object(server, "verify_password", return_value=True):
+            with self.assertRaises(HTTPException) as caught:
+                await server.login(server.LoginReq(email="analyst", password="correct"),
+                                   request(), Response())
+        self.assertEqual(caught.exception.status_code, 403)
+        self.assertIn("disabled", caught.exception.detail.lower())
+
+
 
 if __name__ == "__main__":
     unittest.main()
