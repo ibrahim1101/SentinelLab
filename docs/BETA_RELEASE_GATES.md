@@ -64,8 +64,8 @@ The owner explicitly requires SentinelLab to ship as a **standalone desktop appl
 **Release decision:** The existing 9 P0 gates cover security/functional readiness of the current stack only. **9/9 does not authorize a public desktop release** until the additional packaging and per-platform gates below are satisfied. Keep status NO-GO until both sets are complete. Do not check a gate based solely on a CI green build or a mock.
 
 ### Desktop packaging and compatibility gates — mandatory for standalone public release
-- [ ] Choose and document desktop shell (evaluate Tauri), backend packaging, secure loopback IPC, process lifecycle and crash recovery; produce a working proof of concept.
-- [ ] Decide and implement a supported embedded/local persistence architecture or a transparently managed database without requiring Docker or manual MongoDB installation; validate data migration and integrity.
+- [ ] Choose and document desktop shell (evaluate Tauri), backend packaging, secure loopback IPC, process lifecycle and crash recovery; produce a working proof of concept on Windows, then validate Linux and macOS.
+- [ ] Support a separately installed MongoDB Community Server (local authenticated connection) and an optional configured remote MongoDB server; verify connectivity, credential handling, failure states and data integrity on each supported OS. Bundling MongoDB is deferred and NOT a release requirement.
 - [ ] Package backend and frontend with no visible console and no external Python/Node runtime prerequisite; provide secure first-run setup, secrets handling, local-only binding and update strategy.
 - [ ] Produce and test Windows installer on a clean Windows machine, including install, launch, uninstall, restart, backup and upgrade.
 - [ ] Produce and test Linux distribution packages (at least one documented supported distribution), including dependencies, desktop integration, permissions and upgrade.
@@ -74,3 +74,10 @@ The owner explicitly requires SentinelLab to ship as a **standalone desktop appl
 - [ ] Publish platform-specific installation docs, supported OS/CPU matrix, hashes/signatures, known limitations and release notes; review licensing and redistribution of all bundled components.
 
 Do not advertise untested platforms as supported. CI builds alone are not evidence of clean-host compatibility.
+
+
+### 2026-10-10 — Approved sequencing: platform support before MongoDB integration
+- Product owner explicitly chose **user-installed MongoDB Community Server** as an acceptable prerequisite for the standalone SentinelLab desktop application. No embedded/bundled MongoDB or database migration is required for the initial desktop release.
+- **Order:** Windows Tauri/React/FastAPI sidecar proof of concept → Linux compatibility → macOS compatibility → guided MongoDB configuration (local authenticated / optional remote) → clean-host packaging and release validation.
+- Keep existing MongoDB driver and persistence code during the platform work. Desktop must manage its own backend startup/shutdown; users should not need Docker, Python or Node.js installed. Clearly document the separate MongoDB prerequisite.
+- Release remains NO-GO until core P0 and revised desktop gates are evidenced; PR #1 remains unmerged.
