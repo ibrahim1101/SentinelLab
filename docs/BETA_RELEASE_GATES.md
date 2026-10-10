@@ -37,3 +37,9 @@ Status: **candidate planning, NOT approved for public release**. Working branch:
 4. After approval, create v0.9.0 release notes/tag; leave PR #1 unmerged unless separately authorized.
 
 Last evidence checked: 2026-10-10, workflow 38043724553.
+
+
+### 2026-10-10 — Post-deployment release smoke tool
+- Added `scripts/smoke_release.py` (commit `4e83bd1`): read-only health, readiness, and unauthenticated `/api/auth/me` + `/api/dashboard/overview` denial checks. Run `python scripts/smoke_release.py --base-url http://127.0.0.1:8000` against a **running** stack.
+- Added source regression guard in commit `8cd474c`; CI verification pending. This is not yet evidence of a clean-host installation or a live smoke run.
+- P0 deployment/browser/end-to-end/backup gates remain unchecked; PR #1 stays unmerged.
