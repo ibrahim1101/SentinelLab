@@ -152,3 +152,9 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - [Run 38043331144](https://github.com/ibrahim1101/SentinelLab/actions/runs/38043331144) passed both jobs: **24 passed, 8 warnings** in static-security, docker-smoke success.
 - Commit [a3727cf](https://github.com/ibrahim1101/SentinelLab/commit/a3727cf567b85dc3788bed1415cc0140681129da) extends runtime reconciliation tests for fresh approvals (409 without DB mutation), malformed or missing approval timestamps (reconcile using actual membership), and compare-and-set concurrent state change (409, no audit).
 - New edge-case test CI pending. Remaining: integrate bounded Docker image pull retries into active workflow, browser verify simulated-action UI. PR #1 stays unmerged.
+
+
+### 2026-10-10 — v0.9.0 Public Beta release preparation
+- [CI run 38043724553](https://github.com/ibrahim1101/SentinelLab/actions/runs/38043724553) verified **25 passed, 8 warnings**, docker-smoke success.
+- Commit [df39de5](https://github.com/ibrahim1101/SentinelLab/commit/df39de52fdc0c7d2ffaf6f115f199ce02f3b9e6c) created `docs/BETA_RELEASE_GATES.md` with P0 release blockers, P1 distribution tasks, simulation disclosures, and explicit go/no-go requirements. **No public release has been tagged or published.**
+- Immediate next: resolve Docker CI retry integration, browser QA, end-to-end SOC and clean-host deployment evidence, backup/restore, guide download verification. PR #1 remains unmerged.
