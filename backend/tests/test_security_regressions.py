@@ -276,3 +276,17 @@ def test_release_smoke_checker_runtime_responses():
 
     with patch.object(module, "probe", side_effect=offline):
         assert module.run("http://localhost:8000", 1) is False
+
+
+def test_compose_security_baseline_checker_runtime():
+    """Default deployment passes; insecure changes are rejected."""
+    import importlib.util
+    path = ROOT.parent / "scripts" / "check_compose_security.py"
+    spec = importlib.util.spec_from_file_location("sentinellab_compose_check", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    compose = (ROOT.parent / "compose.yaml").read_text()
+    assert module.check(compose) == []
+    assert module.check(compose.replace("127.0.0.1:8000:8000", "0.0.0.0:8000:8000"))
+    assert module.check(compose.replace("ENABLE_DEMO_ACCOUNTS:-false", "ENABLE_DEMO_ACCOUNTS:-true"))
+    assert module.check(compose + "\n    ports:\n      - '27017:27017'\n")
