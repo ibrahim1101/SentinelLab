@@ -436,3 +436,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - Owner chose to prioritize Windows → Linux → macOS standalone support, preserving the existing FastAPI/MongoDB implementation. MongoDB Community Server is a separately installed, explicitly documented prerequisite (local authenticated or optional remote); embedding MongoDB is deferred, not a first-release blocker.
 - Next engineering spike: Windows Tauri + React frontend + bundled Python backend sidecar, secure local API and automatic lifecycle. Extend to Linux/macOS and then implement MongoDB connection setup/validation before installer release.
 - Updated desktop gates and sequencing in `docs/BETA_RELEASE_GATES.md` (commit `598cdef`). Current desktop work not yet implemented/tested; public release remains NO-GO and PR #1 stays unmerged.
+
+
+### 2026-10-10 — Desktop Alpha engineering spike started
+- Added `desktop/backend_launcher.py` (commit `8e88258`) with FastAPI/Uvicorn desktop entry point, loopback-only binding and validated configurable port (default 18765). Added `desktop/README.md` (commit `3a000da`) documenting separate MongoDB prerequisite and desktop architecture risks.
+- Confirmed frontend uses React + CRACO/CRA, not Vite. Tauri shell, sidecar binary, secure cookie/origin handling, OS installers and cross-platform testing are still outstanding. Launcher requires existing Python environment; no installer exists yet. No CI/runtime verification claimed.
+- Next: implement Tauri shell proof of concept and packaged backend lifecycle; keep PR #1 unmerged and public release NO-GO.
