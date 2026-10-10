@@ -322,3 +322,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - [Run 38041028649](https://github.com/ibrahim1101/SentinelLab/actions/runs/38041028649) succeeded for both static-security and docker-smoke. Logs show Docker still invokes `docker compose up -d --build --wait` directly, without the retry helper.
 - Commit [9fb92bd](https://github.com/ibrahim1101/SentinelLab/commit/9fb92bdb6493b8906f367408df6d2455f49939ea) adds a source-level CI guard verifying `scripts/pull-mongo-with-retry.sh` remains bounded and configurable. This is not proof that CI invokes the helper.
 - Next: locate active workflow filename, integrate helper into docker-smoke, verify run, then add executable reconciliation recovery tests. PR #1 unmerged.
+
+
+### 2026-10-10 — Production reconciliation runtime regression coverage
+- [Run 38042562958](https://github.com/ibrahim1101/SentinelLab/actions/runs/38042562958) succeeded: **23 passed, 8 warnings**, docker-smoke success.
+- Commit [d1badff](https://github.com/ibrahim1101/SentinelLab/commit/d1badffcce1bf68907d8fe31e5ff042f25b4ea99) adds a runtime unit test that executes the actual reconciliation function body with mocked database dependencies, checking membership-present and membership-absent terminal outcomes, scoped compare-and-set selector, and no direct user mutation. CI result pending; test deliberately avoids importing the full server.
+- Remaining: verify new test CI, add fresh/malformed timestamp and concurrent-update cases, wire image-pull retry into active workflow. PR #1 unmerged.
