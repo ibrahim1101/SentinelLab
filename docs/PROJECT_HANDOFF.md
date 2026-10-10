@@ -146,3 +146,9 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - [Run 38040276134](https://github.com/ibrahim1101/SentinelLab/actions/runs/38040276134) failed docker-smoke (`toomanyrequests: Rate exceeded`), while static-security succeeded. The prior failed run 38039386230 passed on rerun.
 - Requested rerun of failed jobs for run 38040276134; outcome pending. This is only temporary recovery, **not a permanent registry mitigation**.
 - Active workflow path has not been identified; do not claim retry/backoff or registry mirror is implemented. Next: locate workflow in GitHub Actions UI, add bounded pull retries or authenticated/alternate image registry, verify CI. PR #1 remains unmerged.
+
+
+### 2026-10-10 — Runtime reconciliation edge-case coverage
+- [Run 38043331144](https://github.com/ibrahim1101/SentinelLab/actions/runs/38043331144) passed both jobs: **24 passed, 8 warnings** in static-security, docker-smoke success.
+- Commit [a3727cf](https://github.com/ibrahim1101/SentinelLab/commit/a3727cf567b85dc3788bed1415cc0140681129da) extends runtime reconciliation tests for fresh approvals (409 without DB mutation), malformed or missing approval timestamps (reconcile using actual membership), and compare-and-set concurrent state change (409, no audit).
+- New edge-case test CI pending. Remaining: integrate bounded Docker image pull retries into active workflow, browser verify simulated-action UI. PR #1 stays unmerged.
