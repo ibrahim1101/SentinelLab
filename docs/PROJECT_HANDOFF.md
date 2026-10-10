@@ -122,3 +122,9 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - **Validation pending:** no successful run for commit 7f61dfb confirmed at time of entry; do not count five tests as passing until logs prove collection and execution. The previous static-security suite passed 14 tests.
 - Docker smoke remains intermittently blocked by upstream MongoDB registry `toomanyrequests` errors. No reliable image-pull retry/fallback has yet been installed in the existing workflow; actual workflow filename must be identified before editing.
 - PR #1 remains unmerged.
+
+
+### 2026-10-10 — Playbook tenant regression mock correction
+- [Run 38038794945](https://github.com/ibrahim1101/SentinelLab/actions/runs/38038794945) static-security failed with **17 passed, 2 failed**. The event-loop fix eliminated the prior closed-loop failures, but both tenant-scoping tests failed because patching a Motor collection object's method did not reliably intercept subsequent `db.collection` accesses.
+- Commit [56f5d39](https://github.com/ibrahim1101/SentinelLab/commit/56f5d39fda93d3c5d301c6640549fdc4c59adcef) patches `playbooks.db` with a stable `SimpleNamespace` fake, including explicit `AsyncMock` collection methods, so database mutation assertions can observe the calls.
+- CI validation of this change is pending. Continue checking test results; do not claim green until confirmed. PR #1 remains unmerged.
