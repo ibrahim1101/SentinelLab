@@ -170,3 +170,9 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - [Run 38045119571](https://github.com/ibrahim1101/SentinelLab/actions/runs/38045119571) green: **26 passed, 8 warnings**, docker-smoke success.
 - Commit [0675759](https://github.com/ibrahim1101/SentinelLab/commit/067575977b1e1957919bdddf644f9c460f13ef9f) adds dependency-free behavioral regression tests executing `scripts/smoke_release.py` with mocked HTTP results. Scenarios: healthy/readiness success, readiness failure, malformed health JSON, auth bypass on either protected endpoint, and network outage. CI pending; no live-host run claimed.
 - PR #1 unmerged; P0 browser, clean install, real backup/restore, and Docker retry workflow integration remain open.
+
+
+### 2026-10-10 — Docker Compose beta security baseline
+- [Run 38045681744](https://github.com/ibrahim1101/SentinelLab/actions/runs/38045681744) succeeded: **27 passed, 8 warnings**, docker-smoke success.
+- Added `scripts/check_compose_security.py` (commit `8f95642`) to check mandatory JWT/admin secrets, demo accounts disabled by default, loopback API/web bindings, Mongo persistence, readiness dependency and no published MongoDB port. Added runtime regression against unsafe edits in commit `710a64f`.
+- This is a static baseline, **not** an external penetration test or TLS/firewall verification. New CI pending. PR #1 remains unmerged.
