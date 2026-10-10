@@ -23,6 +23,8 @@ export default function Settings() {
   const [users, setUsers] = useState([]);
   const [newUser, setNewUser] = useState({ name: "", email: "", username: "", password: "" });
   const [creatingUser, setCreatingUser] = useState(false);
+  const [editingAccount, setEditingAccount] = useState(null);
+  const [accountInput, setAccountInput] = useState("");
   const [audit, setAudit] = useState([]);
   const [health, setHealth] = useState(null);
   const isAdmin = ["admin", "super_admin"].includes(user?.role);
@@ -133,6 +135,29 @@ export default function Settings() {
     finally { setSavingMember(""); }
   };
 
+  const submitAccountEdit = (e) => {
+    e.preventDefault();
+    if (!editingAccount) return;
+    const { id, email, mode } = editingAccount;
+    const endpoint = mode === "username" ? "username" : "password";
+    const payload = { [endpoint]: accountInput };
+    askConfirm(mode === "username" ? "Change username?" : "Reset account password?", `Update ${email}? ${mode === "password" ? "Existing sessions will be revoked." : "Email login remains available."}`, async () => {
+      try {
+        const { data } = await client.put(`/admin/users/${id}/${endpoint}`, payload);
+        if (mode === "username") setUsers((prev) => prev.map((u) => u.id === id ? { ...u, username: data.username } : u));
+        toast.success(mode === "username" ? "Username updated" : "Password reset; previous sessions revoked");
+        setEditingAccount(null); setAccountInput("");
+      } catch (err) { toast.error(err.response?.data?.detail || "Account update failed"); }
+    }, true);
+  };
+  const toggleAccount = (u) => askConfirm(u.enabled === false ? "Enable account?" : "Disable account?", `${u.email}: ${u.enabled === false ? "restore sign-in" : "block sign-in and revoke existing sessions"}?`, async () => {
+    try {
+      const { data } = await client.put(`/admin/users/${u.id}/status`, { enabled: u.enabled === false });
+      setUsers((prev) => prev.map((v) => v.id === u.id ? { ...v, enabled: data.enabled } : v));
+      toast.success(data.enabled ? "Account enabled" : "Account disabled");
+    } catch (err) { toast.error(err.response?.data?.detail || "Account status update failed"); }
+  }, true);
+
   if (!s) return null;
 
   return (
@@ -185,10 +210,11 @@ export default function Settings() {
                     <button type="submit" className="btn btn-primary" disabled={creatingUser}>{creatingUser ? "Creating…" : "Create Analyst"}</button>
                   </form>
                   <div className="text-[11px] uppercase mt-5 mb-2" style={{ color: "var(--text-3)" }}>User & Role Management</div>
-                  <table className="dense w-full"><thead><tr><th>User</th><th>Email</th><th>Role</th></tr></thead><tbody>
+                  <table className="dense w-full"><thead><tr><th>User</th><th>Email</th><th>Role</th>{isSuperAdmin && <th>Account</th>}</tr></thead><tbody>
                     {users.map((u) => (<tr key={u.id} className="border-t"><td style={{ color: "var(--text)" }}>{u.name}</td><td className="font-mono" style={{ color: "var(--text-2)" }}>{u.email}</td>
-                      <td><select className="inp max-w-[180px]" value={u.role} onChange={(e) => setUserRole(u.id, e.target.value)} data-testid={`role-${u.id}`}>{Object.entries(roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td></tr>))}
+                      <td><select className="inp max-w-[180px]" value={u.role} onChange={(e) => setUserRole(u.id, e.target.value)} data-testid={`role-${u.id}`}>{Object.entries(roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>{isSuperAdmin && <td><div className="flex flex-wrap gap-1 items-center"><span className="text-[11px] font-mono">{u.username || "No username"}</span><button className="btn btn-sm" type="button" onClick={() => { setEditingAccount({ id: u.id, email: u.email, mode: "username" }); setAccountInput(u.username || ""); }}>Username</button>{u.id !== user.id && <><button className="btn btn-sm" type="button" onClick={() => { setEditingAccount({ id: u.id, email: u.email, mode: "password" }); setAccountInput(""); }}>Reset password</button>{u.role !== "super_admin" && <button className="btn btn-sm" type="button" onClick={() => toggleAccount(u)}>{u.enabled === false ? "Enable" : "Disable"}</button>}</>}</div></td>}</tr>))}
                   </tbody></table>
+                  {isSuperAdmin && editingAccount && <form onSubmit={submitAccountEdit} className="border rounded p-3 my-3 space-y-2"><div className="text-sm font-semibold">{editingAccount.mode === "username" ? "Assign username" : "Reset password"} · {editingAccount.email}</div><input className="inp" autoFocus required type={editingAccount.mode === "password" ? "password" : "text"} autoComplete="off" minLength={editingAccount.mode === "password" ? 12 : 3} maxLength={editingAccount.mode === "password" ? 128 : 32} value={accountInput} onChange={(e) => setAccountInput(e.target.value)} placeholder={editingAccount.mode === "password" ? "New temporary password (12+ characters)" : "Username"} /><div className="flex gap-2"><button className="btn btn-primary" type="submit">Continue</button><button className="btn" type="button" onClick={() => { setEditingAccount(null); setAccountInput(""); }}>Cancel</button></div></form>}
                   {isSuperAdmin && <div className="mt-5 space-y-3" data-testid="membership-review">
                     <div className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Production workspace membership review</div>
                     <p className="text-[12px]" style={{ color: "var(--text-2)" }}>Currently approved production members: {members.length}. Review older accounts before deployment. Changes are audited and require confirmation.</p>
