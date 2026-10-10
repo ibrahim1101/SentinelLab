@@ -346,3 +346,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - Added `scripts/smoke_release.py` (commit `4e83bd1`): read-only health, readiness, and unauthenticated `/api/auth/me` + `/api/dashboard/overview` denial checks. Run `python scripts/smoke_release.py --base-url http://127.0.0.1:8000` against a **running** stack.
 - Added source regression guard in commit `8cd474c`; CI verification pending. This is not yet evidence of a clean-host installation or a live smoke run.
 - P0 deployment/browser/end-to-end/backup gates remain unchecked; PR #1 stays unmerged.
+
+
+### 2026-10-10 — Release smoke checker behavioral regression
+- [Run 38045119571](https://github.com/ibrahim1101/SentinelLab/actions/runs/38045119571) green: **26 passed, 8 warnings**, docker-smoke success.
+- Commit [0675759](https://github.com/ibrahim1101/SentinelLab/commit/067575977b1e1957919bdddf644f9c460f13ef9f) adds dependency-free behavioral regression tests executing `scripts/smoke_release.py` with mocked HTTP results. Scenarios: healthy/readiness success, readiness failure, malformed health JSON, auth bypass on either protected endpoint, and network outage. CI pending; no live-host run claimed.
+- PR #1 unmerged; P0 browser, clean install, real backup/restore, and Docker retry workflow integration remain open.
