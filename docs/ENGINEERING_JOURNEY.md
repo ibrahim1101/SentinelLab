@@ -430,3 +430,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - Target is a real install-and-launch SentinelLab desktop application on **Windows, Linux and macOS**, not Docker-only distribution. No manual Docker, Python, Node or MongoDB installation for desktop end users.
 - Existing 9 P0 gates remain required but are insufficient alone for desktop public release. Added eight separate mandatory desktop packaging/compatibility gates in `docs/BETA_RELEASE_GATES.md` (commit `53fdb04`); release remains NO-GO until both sets pass.
 - Proposed first technical spike: evaluate Tauri desktop shell with bundled FastAPI backend, then resolve local persistence (MongoDB packaging/licensing/operations vs supported migration), secure localhost binding, process lifecycle, clean-host platform packaging and testing. Architecture is not yet selected or implemented. Preserve PR #1 unmerged.
+
+
+### 2026-10-10 — Desktop-first platform sequencing approved
+- Owner chose to prioritize Windows → Linux → macOS standalone support, preserving the existing FastAPI/MongoDB implementation. MongoDB Community Server is a separately installed, explicitly documented prerequisite (local authenticated or optional remote); embedding MongoDB is deferred, not a first-release blocker.
+- Next engineering spike: Windows Tauri + React frontend + bundled Python backend sidecar, secure local API and automatic lifecycle. Extend to Linux/macOS and then implement MongoDB connection setup/validation before installer release.
+- Updated desktop gates and sequencing in `docs/BETA_RELEASE_GATES.md` (commit `598cdef`). Current desktop work not yet implemented/tested; public release remains NO-GO and PR #1 stays unmerged.
