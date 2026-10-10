@@ -91,3 +91,9 @@ Branch `fix/phase1-security-regressions` hardens AI supporting-event workspace f
 - Commit [86dfb06](https://github.com/ibrahim1101/SentinelLab/commit/86dfb0660f3080185946ac2578435bdb2ff1c88c) on `fix/phase1-security-regressions` changed the run button to **Record Run**, clarified disconnected EDR/firewall/email/IdP simulation, renamed persisted history labels, and added status-specific notifications for failed, pending-approval, skipped and simulated runs.
 - GitHub accepted the commit. Browser/UI automated verification and post-commit CI are **not yet verified**; no external containment was performed.
 - Next: locate active workflow file, include playbook regression tests in CI, run test suite, address tenant-scoped investigation writes and production-access applying-state reconciliation tests. PR #1 must remain unmerged.
+
+
+### 2026-10-10 — CI recheck and playbook test discovery repair
+- [Workflow run 38035266786](https://github.com/ibrahim1101/SentinelLab/actions/runs/38035266786): static-security and docker-smoke both **passed**. Static job log confirms **13 passed, 8 warnings**, but command only named security, detection and alert-tenant suites; playbook tests were **not** executed.
+- Commit [88456cc](https://github.com/ibrahim1101/SentinelLab/commit/88456cc508ab82681d3a8aa8070e5e8367ef0fb6) adds explicit backend import path and isolated Mongo environment defaults to `backend/tests/test_playbook_regressions.py` to support standalone pytest collection. **Not yet tested in CI.**
+- The active workflow file path was not located through attempted `.github/workflows/` filenames; do not claim playbook tests run until the actual workflow is updated and logs prove it. Continue with workflow discovery, tenant-scoping security fix and reconciliation tests. PR #1 stays unmerged.
