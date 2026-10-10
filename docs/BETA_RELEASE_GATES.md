@@ -7,7 +7,7 @@ Status: **candidate planning, NOT approved for public release**. Working branch:
 - [x] Existing security suite including playbook and production-access reconciliation regressions: **25 passed, 8 warnings** in [CI run 38043724553](https://github.com/ibrahim1101/SentinelLab/actions/runs/38043724553).
 - [x] Docker smoke passed in that run.
 - [x] Bounded MongoDB image-pull retry integrated into active Phase 1 workflow (`.github/workflows/security-phase1.yml`), verified in [CI run 38048195479](https://github.com/ibrahim1101/SentinelLab/actions/runs/38048195479): 30 passed, 8 warnings, docker-smoke green; logs confirm retry helper invoked before Compose.
-- [ ] Browser-verify Playbooks labels, approval gates, and `simulated` status for disconnected external actions; record screenshots or reproducible steps.
+- [x] Browser-verify Playbooks labels, approval gates, and `simulated` status for disconnected external actions: user-provided browser screenshots on 2026-10-10 verified unapproved `Pending Approval`, approved `Simulated` with no live EDR connected, persisted execution detail, and corrected local history timestamps. CI: Playbooks [38054238824](https://github.com/ibrahim1101/SentinelLab/actions/runs/38054238824) 7 passed; Phase 1 [38054242988](https://github.com/ibrahim1101/SentinelLab/actions/runs/38054242988) 30 passed, 8 warnings and Docker smoke green. Browser evidence is manual and does not replace live integration/security testing.
 - [ ] Run and record end-to-end ingest → detect → alert → investigation → playbook → report smoke, including tenant boundaries.
 - [ ] Verify installation from a clean host using documented environment variables, safe secrets, and non-public default bind addresses.
 - [ ] Security review: secrets, JWT/cookie settings, demo accounts disabled by default, least-privilege workspace access, dependency findings, and authentication throttling.
@@ -26,7 +26,7 @@ Status: **candidate planning, NOT approved for public release**. Working branch:
 
 - Disconnected EDR/notification actions are **simulated/audit-only**, not real endpoint containment.
 - The current stack is React/FastAPI/MongoDB; future integrations are not automatically production-ready.
-- Docker Hub rate limiting has intermittently failed smoke CI; the retry helper is not yet wired into the active workflow.
+- Docker Hub rate limiting has intermittently failed smoke CI; bounded Mongo image-pull retry is now wired into the active workflow and verified on the normal successful path (not under an induced rate limit).
 - Source-level reconciliation guards and mocked runtime tests do not replace real interruption/recovery testing.
 
 ## Go/no-go process
