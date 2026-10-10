@@ -21,6 +21,8 @@ export default function Settings() {
   const [tab, setTab] = useState("general");
   const [s, setS] = useState(null);
   const [users, setUsers] = useState([]);
+  const [newUser, setNewUser] = useState({ name: "", email: "", password: "" });
+  const [creatingUser, setCreatingUser] = useState(false);
   const [audit, setAudit] = useState([]);
   const [health, setHealth] = useState(null);
   const isAdmin = ["admin", "super_admin"].includes(user?.role);
@@ -41,6 +43,21 @@ export default function Settings() {
   const save = async (patch) => { const { data } = await client.put("/settings", patch); setS(data); toast.success("Settings saved"); };
   const resetDemo = async () => { if (!window.confirm("Reset Training Lab synthetic data?")) return; await client.post("/demo/reset"); toast.success("Demo data regenerated"); };
   const setUserRole = async (id, role) => { await client.put(`/admin/users/${id}/role`, { role }); toast.success("Role updated"); setUsers(users.map((u) => u.id === id ? { ...u, role } : u)); };
+
+  const createAnalyst = async (e) => {
+    e.preventDefault();
+    setCreatingUser(true);
+    try {
+      const { data } = await client.post("/admin/users", newUser);
+      setUsers((prev) => [...prev, data.user]);
+      setNewUser({ name: "", email: "", password: "" });
+      toast.success("Analyst created with Training Lab access");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not create analyst");
+    } finally {
+      setCreatingUser(false);
+    }
+  };
 
   const changeMembership = async (target, enableProduction) => {
     const org_ids = enableProduction ? [...new Set([...(target.org_ids || []), "org-production"])] : (target.org_ids || []).filter((id) => id !== "org-production");
@@ -126,6 +143,15 @@ export default function Settings() {
               <Row k="Organization Isolation" v="All resources workspace-scoped" />
               {isAdmin && (
                 <>
+                  <form className="space-y-2 border rounded-md p-3 mt-4" onSubmit={createAnalyst} data-testid="create-analyst-form">
+                    <div className="text-[12px] font-semibold">Create analyst · Training Lab only</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <input className="inp" aria-label="Analyst name" placeholder="Full name" required maxLength={120} value={newUser.name} onChange={(e) => setNewUser((v) => ({ ...v, name: e.target.value }))} />
+                      <input className="inp" aria-label="Analyst email" placeholder="Email address" type="email" required value={newUser.email} onChange={(e) => setNewUser((v) => ({ ...v, email: e.target.value }))} />
+                    </div>
+                    <input className="inp" aria-label="Initial analyst password" placeholder="Initial password (12+ characters)" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newUser.password} onChange={(e) => setNewUser((v) => ({ ...v, password: e.target.value }))} />
+                    <button type="submit" className="btn btn-primary" disabled={creatingUser}>{creatingUser ? "Creating…" : "Create Analyst"}</button>
+                  </form>
                   <div className="text-[11px] uppercase mt-5 mb-2" style={{ color: "var(--text-3)" }}>User & Role Management</div>
                   <table className="dense w-full"><thead><tr><th>User</th><th>Email</th><th>Role</th></tr></thead><tbody>
                     {users.map((u) => (<tr key={u.id} className="border-t"><td style={{ color: "var(--text)" }}>{u.name}</td><td className="font-mono" style={{ color: "var(--text-2)" }}>{u.email}</td>
