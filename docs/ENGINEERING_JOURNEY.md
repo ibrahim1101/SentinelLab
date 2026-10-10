@@ -442,3 +442,9 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - Added `desktop/backend_launcher.py` (commit `8e88258`) with FastAPI/Uvicorn desktop entry point, loopback-only binding and validated configurable port (default 18765). Added `desktop/README.md` (commit `3a000da`) documenting separate MongoDB prerequisite and desktop architecture risks.
 - Confirmed frontend uses React + CRACO/CRA, not Vite. Tauri shell, sidecar binary, secure cookie/origin handling, OS installers and cross-platform testing are still outstanding. Launcher requires existing Python environment; no installer exists yet. No CI/runtime verification claimed.
 - Next: implement Tauri shell proof of concept and packaged backend lifecycle; keep PR #1 unmerged and public release NO-GO.
+
+
+### 2026-10-10 — Tauri 2 desktop shell scaffold
+- Created `desktop/package.json`, `desktop/src-tauri/{Cargo.toml,build.rs,tauri.conf.json,src/lib.rs,src/main.rs,capabilities/default.json}` on `fix/phase1-security-regressions`. Native window points to React dev server at localhost:3000 and CRA production build. Bundling disabled intentionally.
+- Updated `desktop/README.md` with Windows development run instructions and caveats. This is unverified scaffolding, NOT a working installer. No backend sidecar process management, secure desktop cookie/origin solution, tested CI build, hardened CSP, or OS packages yet.
+- Next: verify `npm run tauri:dev` on Windows; implement controlled backend lifecycle, authenticated API transport and packaging; Linux/macOS validation after Windows. PR #1 remains unmerged; release NO-GO.
