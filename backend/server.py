@@ -15,6 +15,7 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Respons
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
+from pymongo.errors import DuplicateKeyError
 
 from core import (db, new_id, now_iso, hash_password, verify_password, create_access_token,
                   get_current_user, require_role, active_org, audit, clean,
@@ -165,26 +166,47 @@ async def login(body: LoginReq, request: Request, response: Response):
 
     if not user or not verify_password(body.password, user["password_hash"]):
         # Atomic per-document increment prevents lost concurrent failures.
-        await db.login_attempts.find_one_and_update(
-            {"identifier": ident},
-            [
-                {"$set": {
-                    "identifier": ident,
-                    "count": {"$add": [{"$ifNull": ["$count", 0]}, 1]},
-                }},
-                {"$set": {
-                    "locked_until": {
-                        "$cond": [
+        # Concurrent first-time upserts can race on the unique identifier index.
+        # Retry as an update only; never insert a second throttle document.
+        try:
+                await db.login_attempts.find_one_and_update(
+                {"identifier": ident},
+                [
+                    {"$set": {
+                        "identifier": ident,
+                        "count": {"$add": [{"$ifNull": ["$count", 0]}, 1]},
+                    }},
+                    {"$set": {
+                        "locked_until": {
+                            "$cond": [
+                                {"$gte": ["$count", 5]},
+                                (now + timedelta(minutes=15)).isoformat(),
+                                None,
+                            ],
+                        },
+                    }},
+                ],
+                upsert=True,
+                return_document=True,
+            )
+        except DuplicateKeyError:
+            await db.login_attempts.find_one_and_update(
+                {"identifier": ident},
+                [
+                    {"$set": {
+                        "count": {"$add": [{"$ifNull": ["$count", 0]}, 1]},
+                    }},
+                    {"$set": {
+                        "locked_until": {"$cond": [
                             {"$gte": ["$count", 5]},
                             (now + timedelta(minutes=15)).isoformat(),
                             None,
-                        ],
-                    },
-                }},
-            ],
-            upsert=True,
-            return_document=True,
-        )
+                        ]},
+                    }},
+                ],
+                upsert=False,
+                return_document=True,
+            )
         if user and user.get("enabled", True):
             # Atomic increment prevents concurrent failures from losing counts.
             updated = await db.users.find_one_and_update(
