@@ -17,7 +17,7 @@ export default function Login() {
     try { await login(email, password); }
     catch (ex) {
       setErr(!ex.response
-        ? "Cannot reach SentinelLab API. Confirm the backend is running and retry."
+        ? "SentinelLab cannot connect to its local backend. MongoDB Community Server must be installed and running on localhost:27017. Check the MongoDB service, then restart SentinelLab."
         : apiErr(ex));
     }
     finally { setBusy(false); }
@@ -59,7 +59,7 @@ export default function Login() {
 
         </form>
         <p className="text-center text-[11px] mt-4" style={{ color: "var(--text-3)" }}>
-          Self-hosted SOC platform for detection, investigation & research.
+          Requires MongoDB Community Server running locally on port 27017.
         </p>
       </div>
     </div>
