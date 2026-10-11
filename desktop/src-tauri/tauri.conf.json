@@ -27,6 +27,9 @@
     "active": true,
     "targets": [
       "nsis"
+    ],
+    "externalBin": [
+      "binaries/sentinellab-api"
     ]
   }
 }
