@@ -49,6 +49,12 @@ jobs:
           '@ | python -
           cd desktop
           npx tauri icon sentinellab-icon.png
+      - name: Build bundled FastAPI executable
+        shell: pwsh
+        run: |
+          python -m pip install -r backend/requirements.runtime.txt pyinstaller
+          python -m PyInstaller --noconfirm --clean --onefile --name sentinellab-api --distpath desktop/src-tauri/binaries --collect-submodules uvicorn --collect-submodules motor --collect-submodules pymongo --paths backend backend/desktop_entry.py
+          if (!(Test-Path desktop/src-tauri/binaries/sentinellab-api.exe)) { throw "Backend executable missing" }
       - name: Build Windows NSIS installer
         working-directory: desktop
         run: npm run tauri:build
