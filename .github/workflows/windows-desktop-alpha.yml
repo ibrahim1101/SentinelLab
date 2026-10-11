@@ -1,0 +1,41 @@
+name: Windows Desktop Alpha Installer
+on:
+  workflow_dispatch:
+  push:
+    branches: ["fix/phase1-security-regressions"]
+    paths:
+      - "desktop/**"
+      - "frontend/**"
+      - ".github/workflows/windows-desktop-alpha.yml"
+permissions:
+  contents: read
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Install Tauri CLI
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+      - name: Build Windows NSIS installer
+        working-directory: desktop
+        run: npm run tauri:build
+        env:
+          CI: 'false'
+      - name: Upload unsigned installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SentinelLab-Windows-Alpha-unsigned
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
