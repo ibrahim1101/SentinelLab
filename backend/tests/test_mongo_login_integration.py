@@ -81,6 +81,26 @@ class MongoLoginLockoutIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(record["locked_until"])
         await self.db.login_attempts.delete_many({"identifier": ident})
 
+    async def test_legacy_nonunique_index_migrates_without_losing_records(self):
+        """Upgrade a disposable legacy index while preserving throttle evidence."""
+        collection = self.db["throttle_upgrade_" + uuid4().hex[:16]]
+        identifier = "127.0.0.1:legacy_" + uuid4().hex[:16]
+        try:
+            await collection.create_index("identifier")
+            await collection.insert_one({"identifier": identifier, "count": 4})
+            await server.ensure_unique_login_throttle_index(collection)
+            indexes = await collection.index_information()
+            self.assertTrue(indexes["identifier_1"]["unique"])
+            record = await collection.find_one({"identifier": identifier})
+            self.assertEqual(record["count"], 4)
+            from pymongo.errors import DuplicateKeyError
+            with self.assertRaises(DuplicateKeyError):
+                await collection.insert_one({"identifier": identifier, "count": 1})
+            await server.ensure_unique_login_throttle_index(collection)
+            self.assertEqual(await collection.count_documents({"identifier": identifier}), 1)
+        finally:
+            await collection.drop()
+
     async def test_duplicate_migration_refuses_without_mutating_records(self):
         """Migration must preserve duplicate evidence and the legacy index."""
         collection = self.db["throttle_migration_" + uuid4().hex[:16]]
