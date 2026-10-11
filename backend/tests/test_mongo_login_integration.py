@@ -79,6 +79,24 @@ class MongoLoginLockoutIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(record["locked_until"])
         await self.db.login_attempts.delete_many({"identifier": ident})
 
+    async def test_duplicate_migration_refuses_without_mutating_records(self):
+        """Migration must preserve duplicate evidence and the legacy index."""
+        collection = self.db["throttle_migration_" + uuid4().hex[:16]]
+        ident = "127.0.0.1:duplicate_" + uuid4().hex[:16]
+        try:
+            await collection.create_index("identifier")
+            await collection.insert_many([
+                {"identifier": ident, "count": 2},
+                {"identifier": ident, "count": 3},
+            ])
+            with self.assertRaisesRegex(RuntimeError, "Duplicate login throttle identifiers"):
+                await server.ensure_unique_login_throttle_index(collection)
+            rows = await collection.find({"identifier": ident}).to_list(10)
+            self.assertEqual(sorted(row["count"] for row in rows), [2, 3])
+            self.assertFalse((await collection.index_information())["identifier_1"].get("unique", False))
+        finally:
+            await collection.drop()
+
     async def test_unique_identifier_index_rejects_duplicate_throttle_records(self):
         """Enforce first-insert uniqueness in disposable MongoDB."""
         ident = "127.0.0.1:unique_" + uuid4().hex[:16]
