@@ -1601,7 +1601,22 @@ async def startup():
     await db.alerts.create_index([("org_id", 1), ("status", 1)])
     # Preserve existing throttle records: do not force a unique-index migration
     # until duplicate identifiers have been inspected and safely reconciled.
-    # A non-unique identifier index permits duplicate first-upsert records.\n    # Fail startup rather than silently weakening throttling or deleting evidence.\n    await db.login_attempts.create_index("identifier")\n    duplicates = await db.login_attempts.aggregate([\n        {"$group": {"_id": "$identifier", "count": {"$sum": 1}}},\n        {"$match": {"count": {"$gt": 1}}},\n        {"$limit": 1},\n    ]).to_list(1)\n    if duplicates:\n        raise RuntimeError("Duplicate login throttle identifiers detected; manual reconciliation required before enforcing uniqueness")
+    # Fail closed if existing throttle records cannot support a unique index.
+    # Do not delete, merge, or reset authentication evidence automatically.
+    duplicates = await db.login_attempts.aggregate([
+        {"$group": {"_id": "$identifier", "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$limit": 1},
+    ]).to_list(1)
+    if duplicates:
+        raise RuntimeError("Duplicate login throttle identifiers detected; manual reconciliation required before enforcing uniqueness")
+    # Replace the legacy non-unique index only after the duplicate check.
+    # MongoDB will reject any concurrent duplicate insert during this migration.
+    indexes = await db.login_attempts.index_information()
+    legacy = indexes.get("identifier_1")
+    if legacy and not legacy.get("unique", False):
+        await db.login_attempts.drop_index("identifier_1")
+    await db.login_attempts.create_index("identifier", unique=True)
 
     for oid, name, demo in [(PROD_ORG, "SentinelLab Production", False),
                             (TRAIN_ORG, "Training Lab (Synthetic)", True)]:
