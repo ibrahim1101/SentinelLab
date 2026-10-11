@@ -1613,6 +1613,26 @@ async def ready():
 
 
 # ============================= STARTUP =============================
+
+
+async def ensure_unique_login_throttle_index(collection):
+    # Fail closed if existing throttle records cannot support a unique index.
+    # Do not delete, merge, or reset authentication evidence automatically.
+    duplicates = await collection.aggregate([
+        {"$group": {"_id": "$identifier", "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$limit": 1},
+    ]).to_list(1)
+    if duplicates:
+        raise RuntimeError("Duplicate login throttle identifiers detected; manual reconciliation required before enforcing uniqueness")
+    # Replace the legacy non-unique index only after the duplicate check.
+    # MongoDB will reject any concurrent duplicate insert during this migration.
+    indexes = await collection.index_information()
+    legacy = indexes.get("identifier_1")
+    if legacy and not legacy.get("unique", False):
+        await collection.drop_index("identifier_1")
+    await collection.create_index("identifier", unique=True)
+
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
@@ -1623,22 +1643,7 @@ async def startup():
     await db.alerts.create_index([("org_id", 1), ("status", 1)])
     # Preserve existing throttle records: do not force a unique-index migration
     # until duplicate identifiers have been inspected and safely reconciled.
-    # Fail closed if existing throttle records cannot support a unique index.
-    # Do not delete, merge, or reset authentication evidence automatically.
-    duplicates = await db.login_attempts.aggregate([
-        {"$group": {"_id": "$identifier", "count": {"$sum": 1}}},
-        {"$match": {"count": {"$gt": 1}}},
-        {"$limit": 1},
-    ]).to_list(1)
-    if duplicates:
-        raise RuntimeError("Duplicate login throttle identifiers detected; manual reconciliation required before enforcing uniqueness")
-    # Replace the legacy non-unique index only after the duplicate check.
-    # MongoDB will reject any concurrent duplicate insert during this migration.
-    indexes = await db.login_attempts.index_information()
-    legacy = indexes.get("identifier_1")
-    if legacy and not legacy.get("unique", False):
-        await db.login_attempts.drop_index("identifier_1")
-    await db.login_attempts.create_index("identifier", unique=True)
+    await ensure_unique_login_throttle_index(db.login_attempts)
 
     for oid, name, demo in [(PROD_ORG, "SentinelLab Production", False),
                             (TRAIN_ORG, "Training Lab (Synthetic)", True)]:
