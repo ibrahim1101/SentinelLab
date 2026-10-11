@@ -1601,7 +1601,7 @@ async def startup():
     await db.alerts.create_index([("org_id", 1), ("status", 1)])
     # Preserve existing throttle records: do not force a unique-index migration
     # until duplicate identifiers have been inspected and safely reconciled.
-    await db.login_attempts.create_index("identifier")
+    # A non-unique identifier index permits duplicate first-upsert records.\n    # Fail startup rather than silently weakening throttling or deleting evidence.\n    await db.login_attempts.create_index("identifier")\n    duplicates = await db.login_attempts.aggregate([\n        {"$group": {"_id": "$identifier", "count": {"$sum": 1}}},\n        {"$match": {"count": {"$gt": 1}}},\n        {"$limit": 1},\n    ]).to_list(1)\n    if duplicates:\n        raise RuntimeError("Duplicate login throttle identifiers detected; manual reconciliation required before enforcing uniqueness")
 
     for oid, name, demo in [(PROD_ORG, "SentinelLab Production", False),
                             (TRAIN_ORG, "Training Lab (Synthetic)", True)]:
