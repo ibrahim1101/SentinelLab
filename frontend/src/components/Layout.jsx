@@ -61,7 +61,7 @@ export default function Layout({ children }) {
       {/* sidebar */}
       <aside className="w-60 shrink-0 surface border-r flex flex-col fixed h-screen z-30" data-testid="sidebar">
         <div className="h-14 flex items-center gap-2.5 px-4 border-b">
-          <img src="/sentinellab-shield.png" alt="" aria-hidden="true" className="w-8 h-8 object-contain shrink-0" />
+          <img src="/Neon%20Global%20Shield%20Emblem.png" alt="" aria-hidden="true" className="w-8 h-8 object-contain shrink-0" />
           <div>
             <div className="font-head font-bold text-[15px] leading-none" style={{ color: "var(--text)" }}>SentinelLab</div>
             <div className="text-[10px] mt-0.5" style={{ color: "var(--text-3)" }}>Security Operations Center</div>
