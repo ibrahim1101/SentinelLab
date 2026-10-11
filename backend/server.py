@@ -1599,6 +1599,8 @@ async def startup():
     await db.events.create_index([("org_id", 1), ("timestamp", -1)])
     await db.events.create_index([("org_id", 1), ("category", 1)])
     await db.alerts.create_index([("org_id", 1), ("status", 1)])
+    # Preserve existing throttle records: do not force a unique-index migration
+    # until duplicate identifiers have been inspected and safely reconciled.
     await db.login_attempts.create_index("identifier")
 
     for oid, name, demo in [(PROD_ORG, "SentinelLab Production", False),
