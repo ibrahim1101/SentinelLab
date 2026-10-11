@@ -81,6 +81,20 @@ class MongoLoginLockoutIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(record["locked_until"])
         await self.db.login_attempts.delete_many({"identifier": ident})
 
+    async def test_parallel_startup_index_checks_are_idempotent(self):
+        """Multiple app instances may initialize the same already-unique index."""
+        collection = self.db["throttle_parallel_" + uuid4().hex[:16]]
+        try:
+            await collection.create_index("identifier", unique=True)
+            await asyncio.gather(*(
+                server.ensure_unique_login_throttle_index(collection)
+                for _ in range(6)
+            ))
+            indexes = await collection.index_information()
+            self.assertTrue(indexes["identifier_1"]["unique"])
+        finally:
+            await collection.drop()
+
     async def test_legacy_nonunique_index_migrates_without_losing_records(self):
         """Upgrade a disposable legacy index while preserving throttle evidence."""
         collection = self.db["throttle_upgrade_" + uuid4().hex[:16]]
