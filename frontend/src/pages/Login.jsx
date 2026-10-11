@@ -28,9 +28,7 @@ export default function Login() {
       <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "radial-gradient(var(--text) 1px, transparent 1px)", backgroundSize: "26px 26px" }} />
       <div className="relative w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
-          <div className="grid place-items-center w-14 h-14 rounded-lg mb-3" style={{ background: "color-mix(in srgb, var(--cyan) 15%, transparent)", border: "1px solid var(--cyan)" }}>
-            <Shield size={28} style={{ color: "var(--cyan)" }} />
-          </div>
+          <img src="/sentinellab-shield.png" alt="SentinelLab shield" className="w-24 h-24 object-contain mb-3" />
           <h1 className="font-head text-2xl font-bold" style={{ color: "var(--text)" }}>SentinelLab</h1>
           <p className="text-[12px]" style={{ color: "var(--text-3)" }}>Security Operations Center</p>
         </div>
