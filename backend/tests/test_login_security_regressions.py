@@ -55,6 +55,29 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.status_code, 401)
         self.assertEqual(caught.exception.detail, "Invalid credentials")
 
+    async def test_duplicate_first_upsert_retries_without_another_insert(self):
+        from pymongo.errors import DuplicateKeyError
+
+        attempts = SimpleNamespace(
+            find_one=AsyncMock(return_value=None),
+            find_one_and_update=AsyncMock(side_effect=[
+                DuplicateKeyError("simulated concurrent first insert"),
+                {"identifier": "127.0.0.1:missing-user", "count": 2},
+            ]),
+        )
+        db = SimpleNamespace(
+            users=SimpleNamespace(find_one=AsyncMock(return_value=None)),
+            login_attempts=attempts,
+        )
+        with patch.object(server, "db", db):
+            with self.assertRaises(HTTPException) as caught:
+                await server.login(server.LoginReq(email="missing-user", password="wrong"),
+                                   request(), Response())
+        self.assertEqual(caught.exception.status_code, 401)
+        self.assertEqual(attempts.find_one_and_update.await_count, 2)
+        self.assertTrue(attempts.find_one_and_update.await_args_list[0].kwargs["upsert"])
+        self.assertFalse(attempts.find_one_and_update.await_args_list[1].kwargs["upsert"])
+
     async def test_locked_account_requires_correct_password_for_lock_message(self):
         user = {
             "id": "test-user", "email": "test@example.invalid", "username": "testuser",
