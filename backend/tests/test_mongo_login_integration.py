@@ -79,6 +79,27 @@ class MongoLoginLockoutIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(record["locked_until"])
         await self.db.login_attempts.delete_many({"identifier": ident})
 
+    async def test_concurrent_first_insert_requires_unique_identifier_index(self):
+        """Document the first-insert race without touching persistent throttle data."""
+        username = "first_insert_" + uuid4().hex[:16]
+        ident = "127.0.0.1:" + username
+        req = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"))
+        try:
+            with patch.object(server, "db", self.db):
+                async def fail():
+                    try:
+                        await server.login(server.LoginReq(email=username, password="bad"), req, Response())
+                    except HTTPException as exc:
+                        return exc.status_code
+                    return 200
+                statuses = await asyncio.gather(*(fail() for _ in range(12)), return_exceptions=True)
+            self.assertEqual(statuses, [401] * 12)
+            rows = await self.db.login_attempts.find({"identifier": ident}).to_list(20)
+            self.assertEqual(len(rows), 1, "Concurrent upserts must not create duplicate throttle records")
+            self.assertEqual(rows[0]["count"], 12)
+        finally:
+            await self.db.login_attempts.delete_many({"identifier": ident})
+
     async def test_expired_lock_allows_valid_login_and_resets_counter(self):
         await self.db.users.update_one(
             {"id": self.user_id},
