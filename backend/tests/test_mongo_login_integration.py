@@ -26,6 +26,8 @@ class MongoLoginLockoutIntegration(unittest.IsolatedAsyncioTestCase):
         self.client = AsyncIOMotorClient(os.environ["MONGO_URL"], serverSelectionTimeoutMS=5000)
         await self.client.admin.command("ping")
         self.db = self.client["sentinellab_ci_auth"]
+        # Match production startup: every concurrent-upsert test needs the unique index.
+        await server.ensure_unique_login_throttle_index(self.db.login_attempts)
         self.username = "integration_" + uuid4().hex[:16]
         self.user_id = str(uuid4())
         await self.db.users.insert_one({
