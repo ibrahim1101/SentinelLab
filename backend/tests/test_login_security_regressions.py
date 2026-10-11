@@ -30,7 +30,7 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
                     "count": 5, "locked_until": "2099-01-01T00:00:00+00:00"
                 }),
                 delete_one=AsyncMock(),
-                update_one=AsyncMock(),
+                find_one_and_update=AsyncMock(),
             ),
         )
         with patch.object(server, "db", db):
@@ -45,7 +45,7 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
             users=SimpleNamespace(find_one=AsyncMock(return_value=None)),
             login_attempts=SimpleNamespace(
                 find_one=AsyncMock(return_value=None),
-                update_one=AsyncMock(),
+                find_one_and_update=AsyncMock(),
             ),
         )
         with patch.object(server, "db", db):
@@ -83,7 +83,7 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         db = SimpleNamespace(
             users=users,
             login_attempts=SimpleNamespace(find_one=AsyncMock(return_value=None),
-                                           update_one=AsyncMock()),
+                                           find_one_and_update=AsyncMock()),
             security_notifications=SimpleNamespace(insert_one=AsyncMock()),
         )
         with patch.object(server, "db", db), patch.object(server, "verify_password", return_value=False):
@@ -96,7 +96,7 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         db = SimpleNamespace(
             users=SimpleNamespace(find_one=AsyncMock(return_value={
                 "id": "u1", "email": "analyst@example.invalid", "username": "analyst"
-            }), update_one=AsyncMock()),
+            }), find_one_and_update=AsyncMock()),
             login_attempts=SimpleNamespace(delete_many=AsyncMock()),
             security_notifications=SimpleNamespace(update_many=AsyncMock()),
         )
@@ -131,7 +131,7 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
             ),
             login_attempts=SimpleNamespace(
                 find_one=AsyncMock(return_value={"count": 1, "locked_until": "2099-01-01T00:00:00+00:00"}),
-                update_one=AsyncMock(),
+                find_one_and_update=AsyncMock(),
                 delete_one=AsyncMock(),
             ),
         )
@@ -140,8 +140,9 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
                 await server.login(server.LoginReq(email="analyst", password="wrong"), request(), Response())
         self.assertEqual(caught.exception.status_code, 401)
         self.assertEqual(caught.exception.detail, "Invalid credentials")
-        db.login_attempts.update_one.assert_awaited_once()
-        self.assertIsNone(db.login_attempts.update_one.await_args.args[1]["$set"]["locked_until"])
+        db.login_attempts.find_one_and_update.assert_awaited_once()
+        pipeline = db.login_attempts.find_one_and_update.await_args.args[1]
+        self.assertIsNone(pipeline[1]["$set"]["locked_until"]["$cond"][2])
 
 
     async def test_five_concurrent_failures_create_one_lock_incident(self):
@@ -172,7 +173,7 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
                                   find_one_and_update=AsyncMock(side_effect=increment),
                                   update_one=AsyncMock(side_effect=claim)),
             login_attempts=SimpleNamespace(find_one=AsyncMock(return_value=None),
-                                           update_one=AsyncMock()),
+                                           find_one_and_update=AsyncMock()),
             security_notifications=SimpleNamespace(insert_one=AsyncMock(side_effect=incident)),
         )
         with patch.object(server, "db", db), patch.object(server, "verify_password", return_value=False):
