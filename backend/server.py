@@ -169,7 +169,7 @@ async def login(body: LoginReq, request: Request, response: Response):
         # Concurrent first-time upserts can race on the unique identifier index.
         # Retry as an update only; never insert a second throttle document.
         try:
-                await db.login_attempts.find_one_and_update(
+            await db.login_attempts.find_one_and_update(
                 {"identifier": ident},
                 [
                     {"$set": {
