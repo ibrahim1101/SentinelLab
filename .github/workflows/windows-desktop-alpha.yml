@@ -54,6 +54,7 @@ jobs:
         run: npm run tauri:build
         env:
           CI: 'false'
+          REACT_APP_BACKEND_URL: 'http://127.0.0.1:18765'
       - name: Upload unsigned installer
         uses: actions/upload-artifact@v4
         with:
