@@ -2,6 +2,10 @@
 
 SentinelLab is an experimental SOC/SIEM application with a FastAPI backend, React frontend, MongoDB persistence, and a Tauri desktop project. **Pre-release software:** do not deploy as a production security monitoring system without further validation.
 
+## Windows desktop prerequisite (planned standalone release)
+
+**MongoDB Community Server is required separately.** Install MongoDB Community Server for Windows using the [official MongoDB installation guide](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-windows/). Configure it as a Windows service and ensure it is running on `127.0.0.1:27017`. The Windows app is intended to bundle and start the FastAPI backend automatically, but this integration is **not yet verified**. Do not assume the current installer is standalone. Keep MongoDB bound to localhost for local-only testing and never expose an unauthenticated database to a network.
+
 ## Quick start (Docker)
 
 Prerequisites: Docker Desktop with Docker Compose.
