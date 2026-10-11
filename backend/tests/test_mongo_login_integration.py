@@ -79,6 +79,19 @@ class MongoLoginLockoutIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(record["locked_until"])
         await self.db.login_attempts.delete_many({"identifier": ident})
 
+    async def test_unique_identifier_index_rejects_duplicate_throttle_records(self):
+        """Enforce first-insert uniqueness in disposable MongoDB."""
+        ident = "127.0.0.1:unique_" + uuid4().hex[:16]
+        await self.db.login_attempts.create_index("identifier", unique=True)
+        try:
+            await self.db.login_attempts.insert_one({"identifier": ident, "count": 1})
+            from pymongo.errors import DuplicateKeyError
+            with self.assertRaises(DuplicateKeyError):
+                await self.db.login_attempts.insert_one({"identifier": ident, "count": 2})
+            self.assertEqual(await self.db.login_attempts.count_documents({"identifier": ident}), 1)
+        finally:
+            await self.db.login_attempts.delete_many({"identifier": ident})
+
     async def test_concurrent_first_insert_requires_unique_identifier_index(self):
         """Document the first-insert race without touching persistent throttle data."""
         username = "first_insert_" + uuid4().hex[:16]
