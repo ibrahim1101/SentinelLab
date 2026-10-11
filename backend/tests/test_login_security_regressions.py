@@ -96,7 +96,7 @@ class LoginSecurityRegressions(unittest.IsolatedAsyncioTestCase):
         db = SimpleNamespace(
             users=SimpleNamespace(find_one=AsyncMock(return_value={
                 "id": "u1", "email": "analyst@example.invalid", "username": "analyst"
-            }), find_one_and_update=AsyncMock()),
+            }), update_one=AsyncMock()),
             login_attempts=SimpleNamespace(delete_many=AsyncMock(), update_one=AsyncMock()),
             security_notifications=SimpleNamespace(update_many=AsyncMock()),
         )
