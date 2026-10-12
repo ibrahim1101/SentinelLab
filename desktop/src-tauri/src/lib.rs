@@ -24,9 +24,29 @@ pub fn run() {
         .manage(BackendProcess(Mutex::new(None)))
         .manage(CloseState(AtomicBool::new(false)))
         .setup(|app| {
-            let command = app.shell().sidecar("sentinellab-api")?;
-            let (_rx, child) = command.spawn()?;
-            *app.state::<BackendProcess>().0.lock().expect("backend mutex poisoned") = Some(child);
+            // Do not block the Windows UI thread while starting the Python sidecar.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let command = match handle.shell().sidecar("sentinellab-api") {
+                    Ok(command) => command,
+                    Err(error) => {
+                        eprintln!("Cannot prepare SentinelLab backend: {error}");
+                        return;
+                    }
+                };
+                match command.spawn() {
+                    Ok((_rx, child)) => {
+                        let mut process = handle.state::<BackendProcess>().0.lock()
+                            .expect("backend mutex poisoned");
+                        if handle.state::<CloseState>().0.load(Ordering::SeqCst) {
+                            let _ = child.kill();
+                        } else {
+                            *process = Some(child);
+                        }
+                    }
+                    Err(error) => eprintln!("Cannot launch SentinelLab backend: {error}"),
+                }
+            });
             Ok(())
         })
         .on_window_event(|window, event| {
