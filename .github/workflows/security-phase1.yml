@@ -7,31 +7,44 @@ on:
 jobs:
   static-security:
     runs-on: ubuntu-latest
-    services:
-      mongo:
-        image: public.ecr.aws/docker/library/mongo:7
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
     env:
       MONGO_URL: mongodb://127.0.0.1:27017
       DB_NAME: sentinellab_phase1_ci
       JWT_SECRET: ci-only-test-secret
+      MONGO_IMAGE: mongo:7
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Start MongoDB for regression tests
+        run: |
+          docker pull mongo:7
+          docker run -d --name sentinellab-regression-mongo \
+            -p 127.0.0.1:27017:27017 \
+            --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'" \
+            --health-interval 5s --health-timeout 5s --health-retries 20 \
+            "${MONGO_IMAGE:-mongo:7}"
+          for i in $(seq 1 45); do
+            if [ "$(docker inspect -f '{{.State.Health.Status}}' sentinellab-regression-mongo)" = healthy ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs sentinellab-regression-mongo
+          exit 1
       - name: Compile Python modules
         run: python -m compileall -q backend
       - name: Install lightweight test dependencies
         run: python -m pip install pytest pytest-xdist pytest-asyncio python-dateutil motor pymongo PyJWT bcrypt fastapi python-dotenv python-multipart email-validator pydantic
       - name: Run isolated regression tests
         run: python -m pytest -q backend/tests/test_security_regressions.py backend/tests/test_detection_behavior.py backend/tests/test_detection_mongo_integration.py backend/tests/test_alert_tenant_integration.py
+      - name: Show MongoDB logs on failure
+        if: failure()
+        run: docker logs --tail=100 sentinellab-regression-mongo || true
+      - name: Stop regression MongoDB
+        if: always()
+        run: docker rm -f sentinellab-regression-mongo || true
 
   docker-smoke:
     runs-on: ubuntu-latest
