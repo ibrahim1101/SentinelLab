@@ -1,0 +1,74 @@
+name: Release License Clearance Audit
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  license-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b9b7958e720d93db6191614c07d2c01e7945643d
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Audit npm dependency licenses
+        run: |
+          set -euo pipefail
+          mkdir -p license-audit
+          (cd frontend && npm ci --ignore-scripts --no-audit --no-fund)
+          (cd desktop && npm ci --ignore-scripts --no-audit --no-fund)
+          npx --yes license-checker@25.0.1 --start frontend --production --json > license-audit/frontend-production.json
+          npx --yes license-checker@25.0.1 --start frontend --json > license-audit/frontend-all.json
+          npx --yes license-checker@25.0.1 --start desktop --json > license-audit/desktop-all.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('frontend-production','frontend-all','desktop-all'):
+              items=json.loads(Path('license-audit/'+name+'.json').read_text())
+              bad={k:v.get('licenses') for k,v in items.items() if not v.get('licenses') or 'UNKNOWN' in str(v.get('licenses')).upper() or 'UNLICENSED' in str(v.get('licenses')).upper()}
+              Path('license-audit/'+name+'-exceptions.json').write_text(json.dumps(bad,indent=2))
+              print(name, len(items), 'exceptions',len(bad))
+          PY
+      - name: Audit Python resolved dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.runtime.txt pip-licenses
+          pip-licenses --format=json --with-urls --with-license-file --output-file=license-audit/python-runtime.json
+          python -m pip freeze > license-audit/python-resolved.txt
+      - name: Audit Rust dependency licenses
+        run: |
+          cargo install cargo-license --locked
+          cd desktop/src-tauri
+          cargo license --json > ../../license-audit/rust-licenses.json
+          cargo metadata --locked --format-version 1 > ../../license-audit/rust-metadata.json
+      - name: Check production bundle for Emergent references
+        run: |
+          cd frontend
+          CI=false npm run build
+          cd ..
+          if grep -R -i -l -E '@emergentbase|assets[.]emergent[.]sh|emergentOverlay' frontend/build > license-audit/emergent-bundle-matches.txt; then
+            echo 'WARNING: Emergent references found in frontend production build'
+            cat license-audit/emergent-bundle-matches.txt
+          else
+            echo 'No Emergent package identifiers found in frontend production build' > license-audit/emergent-bundle-matches.txt
+          fi
+      - name: Summarize notice and source delivery
+        if: always()
+        run: |
+          {
+            echo "Source commit: b9b7958e720d93db6191614c07d2c01e7945643d"
+            echo "GPL source URL: https://github.com/ibrahim1101/SentinelLab/tree/b9b7958e720d93db6191614c07d2c01e7945643d"
+            echo "Check installer package notices separately; this job does not inspect shipped binaries."
+            echo "This workflow produces evidence; it does not automatically grant legal sign-off."
+          } > license-audit/README.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SentinelLab-release-license-audit
+          path: license-audit/
