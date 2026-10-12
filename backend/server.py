@@ -1,3 +1,4 @@
+import re
 from dotenv import load_dotenv
 from pathlib import Path
 load_dotenv(Path(__file__).parent / ".env")
@@ -7,6 +8,7 @@ import io
 import csv
 import json
 import logging
+import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 
@@ -14,6 +16,7 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request, Respons
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
+from pymongo.errors import DuplicateKeyError
 
 from core import (db, new_id, now_iso, hash_password, verify_password, create_access_token,
                   get_current_user, require_role, active_org, audit, clean,
@@ -23,6 +26,7 @@ from detection import run_detection, evaluate_rule
 import seed as seedmod
 import ai_assistant
 import playbooks as pbmod
+import webhooks as wh
 from mitre_data import TACTICS, TECHNIQUES, ATTACK_VERSION
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -41,9 +45,17 @@ class RegisterReq(BaseModel):
     password: str = Field(min_length=6)
     name: str
 
-class LoginReq(BaseModel):
+class DesktopSetupReq(BaseModel):
     email: EmailStr
+    username: str = Field(min_length=3, max_length=32)
+    password: str = Field(min_length=12, max_length=256)
+
+class LoginReq(BaseModel):
+    email: str = Field(min_length=1, max_length=254)
     password: str
+    login_mode: Optional[str] = Field(default=None, pattern="^(admin|non_admin)$")
+
+USERNAME_RE = re.compile(r"^[a-z][a-z0-9_.-]{2,31}$")
 
 class IngestReq(BaseModel):
     source_id: str
@@ -108,6 +120,125 @@ class SettingsReq(BaseModel):
     demo_mode: Optional[bool] = None
 
 
+class WebhookCreateReq(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    provider: str = Field(pattern="^(generic|slack|discord|teams)$")
+    url: str = Field(min_length=12, max_length=2048)
+    events: List[str] = Field(min_length=1, max_length=7)
+    enabled: bool = True
+
+class WebhookUpdateReq(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    url: Optional[str] = Field(default=None, min_length=12, max_length=2048)
+    events: Optional[List[str]] = None
+    enabled: Optional[bool] = None
+
+@api.get("/admin/webhooks")
+async def list_webhooks(request: Request, user=Depends(require_role("admin"))):
+    org = active_org(user, request)
+    rows = await db.webhooks.find({"org_id": org}, {"_id": 0}).to_list(100)
+    return {"webhooks": [wh.public_doc(row) for row in rows], "event_types": sorted(wh.EVENTS)}
+
+@api.post("/admin/webhooks", status_code=201)
+async def create_webhook(body: WebhookCreateReq, request: Request, user=Depends(require_role("admin"))):
+    org = active_org(user, request)
+    if not set(body.events).issubset(wh.EVENTS):
+        raise HTTPException(422, "Unknown webhook event type")
+    if await db.webhooks.count_documents({"org_id": org}) >= 50:
+        raise HTTPException(409, "Maximum of 50 webhooks per workspace")
+    try:
+        await asyncio.to_thread(wh.safe_target, body.url, body.provider)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    doc = {"id": new_id(), "org_id": org, "name": body.name.strip(),
+           "provider": body.provider, "url_encrypted": wh.encrypt_url(body.url),
+           "events": list(set(body.events)), "enabled": body.enabled, "created_at": now_iso(),
+           "last_status": "never_sent", "last_sent": None}
+    await db.webhooks.insert_one(doc)
+    await audit(org, user, "create", "webhook", doc["id"], {"provider": body.provider, "events": doc["events"]})
+    return {"webhook": wh.public_doc(doc)}
+
+@api.patch("/admin/webhooks/{hook_id}")
+async def update_webhook(hook_id: str, body: WebhookUpdateReq, request: Request, user=Depends(require_role("admin"))):
+    org = active_org(user, request)
+    doc = await db.webhooks.find_one({"id": hook_id, "org_id": org})
+    if not doc:
+        raise HTTPException(404, "Webhook not found")
+    changes = body.model_dump(exclude_none=True)
+    if "events" in changes and (not changes["events"] or not set(changes["events"]).issubset(wh.EVENTS)):
+        raise HTTPException(422, "Invalid event subscriptions")
+    if "url" in changes:
+        try:
+            await asyncio.to_thread(wh.safe_target, changes["url"], doc["provider"])
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        changes["url_encrypted"] = wh.encrypt_url(changes.pop("url"))
+    await db.webhooks.update_one({"id": hook_id, "org_id": org}, {"$set": changes})
+    await audit(org, user, "update", "webhook", hook_id, {"fields": list(changes)})
+    return {"webhook": wh.public_doc(await db.webhooks.find_one({"id": hook_id, "org_id": org}))}
+
+@api.delete("/admin/webhooks/{hook_id}")
+async def delete_webhook(hook_id: str, request: Request, user=Depends(require_role("admin"))):
+    org = active_org(user, request)
+    result = await db.webhooks.delete_one({"id": hook_id, "org_id": org})
+    if not result.deleted_count:
+        raise HTTPException(404, "Webhook not found")
+    await audit(org, user, "delete", "webhook", hook_id)
+    return {"ok": True}
+
+@api.post("/admin/webhooks/{hook_id}/test")
+async def test_webhook(hook_id: str, request: Request, user=Depends(require_role("admin"))):
+    org = active_org(user, request)
+    doc = await db.webhooks.find_one({"id": hook_id, "org_id": org})
+    if not doc:
+        raise HTTPException(404, "Webhook not found")
+    event = {"id": new_id(), "org_id": org, "type": "test",
+             "title": "Webhook test", "detail": "SentinelLab can send notifications to this destination.",
+             "timestamp": now_iso()}
+    status = await wh.send_one(doc, event)
+    return {"status": status}
+
+# Desktop initialization is available only to the bundled loopback server.
+@api.get("/desktop/setup-status")
+async def desktop_setup_status(request: Request):
+    if os.environ.get("SENTINELLAB_DESKTOP") != "1" or request.client.host not in ("127.0.0.1", "::1"):
+        raise HTTPException(404, "Not found")
+    return {"setup_required": not bool(await db.users.find_one({"role": "super_admin"}))}
+
+
+@api.post("/desktop/setup")
+async def desktop_setup(body: DesktopSetupReq, request: Request):
+    origin = request.headers.get("origin", "")
+    if origin not in ("http://tauri.localhost", "tauri://localhost"):
+        raise HTTPException(403, "Desktop application origin required")
+    if os.environ.get("SENTINELLAB_DESKTOP") != "1" or request.client.host not in ("127.0.0.1", "::1"):
+        raise HTTPException(404, "Not found")
+    username = body.username.strip().lower()
+    if not USERNAME_RE.fullmatch(username):
+        raise HTTPException(422, "Invalid administrator username")
+    # An atomic unique sentinel prevents two concurrent bootstrap requests from
+    # creating separate super administrators.
+    try:
+        await db.bootstrap_state.insert_one({"_id": "desktop-admin", "created_at": now_iso()})
+    except DuplicateKeyError:
+        if await db.users.find_one({"role": "super_admin"}):
+            raise HTTPException(409, "Administrator already configured")
+        raise HTTPException(409, "Administrator setup is reserved; recovery is required")
+    if await db.users.find_one({"role": "super_admin"}):
+        await db.bootstrap_state.delete_one({"_id": "desktop-admin"})
+        raise HTTPException(409, "Administrator already configured")
+    record = {"id": new_id(), "email": str(body.email).lower(), "username": username,
+              "name": "SOC Administrator", "password_hash": hash_password(body.password),
+              "role": "super_admin", "org_ids": [PROD_ORG, TRAIN_ORG],
+              "default_org": TRAIN_ORG, "theme": "obsidian_dark", "created_at": now_iso()}
+    try:
+        await db.users.insert_one(record)
+    except Exception:
+        await db.bootstrap_state.delete_one({"_id": "desktop-admin"})
+        raise
+    return {"configured": True}
+
+
 # ============================= AUTH =============================
 def _set_cookie(response: Response, token: str):
     response.set_cookie("access_token", token, httponly=True, secure=True,
@@ -116,13 +247,14 @@ def _set_cookie(response: Response, token: str):
 
 @api.post("/auth/register")
 async def register(body: RegisterReq, response: Response):
+    raise HTTPException(status_code=403, detail="Registration requires administrator approval")
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Email already registered")
     uid = new_id()
     user = {"id": uid, "email": email, "name": body.name,
             "password_hash": hash_password(body.password), "role": "analyst",
-            "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": PROD_ORG,
+            "org_ids": [TRAIN_ORG], "default_org": TRAIN_ORG,
             "theme": "obsidian_dark", "created_at": now_iso()}
     await db.users.insert_one(dict(user))
     token = create_access_token(uid, email, "analyst")
@@ -133,25 +265,125 @@ async def register(body: RegisterReq, response: Response):
 
 @api.post("/auth/login")
 async def login(body: LoginReq, request: Request, response: Response):
-    email = body.email.lower()
+    identifier = body.email.strip().lower()
     ip = request.client.host if request.client else "?"
-    ident = f"{ip}:{email}"
-    att = await db.login_attempts.find_one({"identifier": ident})
-    if att and att.get("count", 0) >= 5:
-        locked_until = datetime.fromisoformat(att["locked_until"])
-        if datetime.now(timezone.utc) < locked_until:
-            raise HTTPException(429, "Account temporarily locked. Try again later.")
-    user = await db.users.find_one({"email": email})
+    now = datetime.now(timezone.utc)
+    ident = f"{ip}:{identifier}"
+    user = await db.users.find_one({"email": identifier} if "@" in identifier else {"username": identifier})
+    # Keep a separate IP/identifier throttle for unknown accounts and credential stuffing.
+    attempt = await db.login_attempts.find_one({"identifier": ident})
+    if attempt and attempt.get("locked_until") and attempt.get("count", 0) >= 5:
+        until = datetime.fromisoformat(attempt["locked_until"])
+        if now < until:
+            # Do not reveal whether the throttled identifier belongs to a user.
+            raise HTTPException(401, "Invalid credentials")
+        await db.login_attempts.delete_one({"identifier": ident})
+        attempt = None
+
+    if user and user.get("login_locked_until"):
+        until = datetime.fromisoformat(user["login_locked_until"])
+        if now < until:
+            # Reveal lock status only after verifying the actual password.
+            if not verify_password(body.password, user["password_hash"]):
+                raise HTTPException(401, "Invalid credentials")
+            raise HTTPException(423, "Account temporarily locked due to repeated failed sign-ins. Contact your administrator for recovery.")
+        await db.users.update_one({"id": user["id"]}, {"$unset": {"login_locked_until": "", "login_failed_count": ""}})
+        user.pop("login_locked_until", None)
+        user.pop("login_failed_count", None)
+
     if not user or not verify_password(body.password, user["password_hash"]):
-        count = (att.get("count", 0) if att else 0) + 1
-        await db.login_attempts.update_one(
-            {"identifier": ident},
-            {"$set": {"identifier": ident, "count": count,
-                      "locked_until": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()}},
-            upsert=True)
+        # Atomic per-document increment prevents lost concurrent failures.
+        # Concurrent first-time upserts can race on the unique identifier index.
+        # Retry as an update only; never insert a second throttle document.
+        try:
+            await db.login_attempts.find_one_and_update(
+                {"identifier": ident},
+                [
+                    {"$set": {
+                        "identifier": ident,
+                        "count": {"$add": [{"$ifNull": ["$count", 0]}, 1]},
+                    }},
+                    {"$set": {
+                        "locked_until": {
+                            "$cond": [
+                                {"$gte": ["$count", 5]},
+                                (now + timedelta(minutes=15)).isoformat(),
+                                None,
+                            ],
+                        },
+                    }},
+                ],
+                upsert=True,
+                return_document=True,
+            )
+        except DuplicateKeyError:
+            await db.login_attempts.find_one_and_update(
+                {"identifier": ident},
+                [
+                    {"$set": {
+                        "count": {"$add": [{"$ifNull": ["$count", 0]}, 1]},
+                    }},
+                    {"$set": {
+                        "locked_until": {"$cond": [
+                            {"$gte": ["$count", 5]},
+                            (now + timedelta(minutes=15)).isoformat(),
+                            None,
+                        ]},
+                    }},
+                ],
+                upsert=False,
+                return_document=True,
+            )
+        if user and user.get("enabled", True):
+            # Atomic increment prevents concurrent failures from losing counts.
+            updated = await db.users.find_one_and_update(
+                {"id": user["id"], "enabled": {"$ne": False},
+                 "login_locked_until": {"$exists": False}},
+                {"$inc": {"login_failed_count": 1}},
+                return_document=True,
+            )
+            if updated is None:
+                raise HTTPException(423, "Account temporarily locked. Contact your administrator.")
+            failures = updated.get("login_failed_count", 0)
+            if failures >= 5:
+                until = (now + timedelta(minutes=15)).isoformat()
+                # Only one concurrent request can create the lock incident.
+                claimed = await db.users.update_one(
+                    {"id": user["id"], "login_locked_until": {"$exists": False},
+                     "login_failed_count": {"$gte": 5}},
+                    {"$set": {"login_locked_until": until}},
+                )
+                if claimed.modified_count:
+                    await db.security_notifications.insert_one({
+                        "id": new_id(), "type": "account_login_locked", "user_id": user["id"],
+                        "email": user["email"], "source_ip": ip, "failed_count": failures,
+                        "created_at": now.isoformat(), "locked_until": until,
+                        "status": "open",
+                    })
+                raise HTTPException(423, "Account temporarily locked after repeated failed sign-ins. Contact your administrator.")
+            raise HTTPException(401, "Invalid credentials")
+        # Do not expose a lockout state or account existence for unknown identifiers.
         raise HTTPException(401, "Invalid credentials")
+
     await db.login_attempts.delete_one({"identifier": ident})
-    token = create_access_token(user["id"], email, user["role"])
+    if user.get("enabled", True) is False:
+        raise HTTPException(status_code=403, detail="This account has been disabled. Contact your SentinelLab administrator.")
+    # A concurrent fifth failure must not be bypassed by a successful password check.
+    cleared = await db.users.update_one(
+        {"id": user["id"], "login_locked_until": {"$exists": False}},
+        {"$unset": {"login_failed_count": ""}},
+    )
+    if not cleared.matched_count:
+        raise HTTPException(423, "Account temporarily locked. Contact your administrator.")
+    # Mode separation is enforced server-side after validating the password.
+    # A role/mode mismatch is not a failed password attempt and issues no session.
+    is_administrator = user.get("role") in ("admin", "super_admin")
+    if body.login_mode == "admin" and not is_administrator:
+        raise HTTPException(403, "This account cannot sign in through Administrator Login. Use Non-Admin Login.")
+    if body.login_mode == "non_admin" and is_administrator:
+        raise HTTPException(403, "Administrator accounts must use Administrator Login.")
+
+    token = create_access_token(user["id"], user["email"], user["role"], user.get("session_version", 0))
     _set_cookie(response, token)
     await audit(user.get("default_org"), user, "login", "session")
     user.pop("password_hash", None)
@@ -247,6 +479,8 @@ async def overview(request: Request, time_range: str = "24h", user=Depends(get_c
 async def _notify(org, ntype, text, ref=None):
     await db.notifications.insert_one({"id": new_id(), "org_id": org, "type": ntype, "text": text,
                                        "ref": ref, "read": False, "created_at": now_iso()})
+    category = "critical_alert" if ntype == "critical_alert" else "alert" if "alert" in ntype else "system"
+    asyncio.create_task(wh.emit(org, category, ntype.replace("_", " ").title(), text))
 
 
 @api.post("/ingest")
@@ -298,12 +532,12 @@ async def list_events(request: Request, q: Optional[str] = None, severity: Optio
     if username: filt["username"] = username
     if ip: filt["$or"] = [{"src_ip": ip}, {"dest_ip": ip}]
     if q:
-        filt["$or"] = [{"host": {"$regex": q, "$options": "i"}},
-                       {"username": {"$regex": q, "$options": "i"}},
-                       {"src_ip": {"$regex": q, "$options": "i"}},
-                       {"dest_ip": {"$regex": q, "$options": "i"}},
-                       {"process_name": {"$regex": q, "$options": "i"}},
-                       {"event_type": {"$regex": q, "$options": "i"}}]
+        filt["$or"] = [{"host": {"$regex": re.escape(q[:128]), "$options": "i"}},
+                       {"username": {"$regex": re.escape(q[:128]), "$options": "i"}},
+                       {"src_ip": {"$regex": re.escape(q[:128]), "$options": "i"}},
+                       {"dest_ip": {"$regex": re.escape(q[:128]), "$options": "i"}},
+                       {"process_name": {"$regex": re.escape(q[:128]), "$options": "i"}},
+                       {"event_type": {"$regex": re.escape(q[:128]), "$options": "i"}}]
     total = await db.events.count_documents(filt)
     skip = (page - 1) * page_size
     rows = await db.events.find(filt, {"_id": 0, "raw": 0}).sort(sort, order).skip(skip).limit(page_size).to_list(page_size)
@@ -419,7 +653,7 @@ async def list_alerts(request: Request, status: Optional[str] = None, severity: 
     filt = {"org_id": org}
     if status: filt["status"] = status
     if severity: filt["severity"] = severity
-    if q: filt["title"] = {"$regex": q, "$options": "i"}
+    if q: filt["title"] = {"$regex": re.escape(q[:128]), "$options": "i"}
     total = await db.alerts.count_documents(filt)
     rows = await db.alerts.find(filt, {"_id": 0}).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
     return {"total": total, "alerts": rows, "page": page, "page_size": page_size}
@@ -431,8 +665,8 @@ async def alert_detail(alert_id: str, request: Request, user=Depends(get_current
     a = await db.alerts.find_one({"id": alert_id, "org_id": org}, {"_id": 0})
     if not a:
         raise HTTPException(404, "Alert not found")
-    events = await db.events.find({"id": {"$in": a.get("related_events", [])}}, {"_id": 0, "raw": 0}).limit(50).to_list(50)
-    rule = await db.detection_rules.find_one({"id": a.get("rule_id")}, {"_id": 0})
+    events = await db.events.find({"id": {"$in": a.get("related_events", [])}, "org_id": org}, {"_id": 0, "raw": 0}).limit(50).to_list(50)
+    rule = await db.detection_rules.find_one({"id": a.get("rule_id"), "org_id": org}, {"_id": 0})
     return {"alert": a, "events": events, "rule": rule}
 
 
@@ -469,9 +703,9 @@ async def bulk_alerts(request: Request, body: dict, user=Depends(require_role("a
     org = active_org(user, request)
     ids = body.get("ids", [])
     status = body.get("status")
-    await db.alerts.update_many({"id": {"$in": ids}, "org_id": org},
-                                {"$set": {"status": status, "updated_at": now_iso()}})
-    return {"updated": len(ids)}
+    result = await db.alerts.update_many({"id": {"$in": ids}, "org_id": org},
+                                         {"$set": {"status": status, "updated_at": now_iso()}})
+    return {"updated": result.modified_count}
 
 
 # ============================= THREAT HUNTING =============================
@@ -502,7 +736,7 @@ def _apply_conditions(filt, conds):
         if field not in allowed:
             continue
         if op == "contains":
-            filt[field] = {"$regex": str(value), "$options": "i"}
+            filt[field] = {"$regex": re.escape(str(value)[:128]), "$options": "i"}
         elif op in op_map:
             if op in ("gt", "lt"):
                 try: value = float(value)
@@ -615,7 +849,7 @@ async def investigation_detail(inv_id: str, request: Request, user=Depends(get_c
     inv = await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0})
     if not inv:
         raise HTTPException(404, "Investigation not found")
-    alerts = await db.alerts.find({"id": {"$in": inv.get("related_alerts", [])}}, {"_id": 0}).to_list(100)
+    alerts = await db.alerts.find({"id": {"$in": inv.get("related_alerts", [])}, "org_id": org}, {"_id": 0}).to_list(100)
     return {"investigation": inv, "alerts": alerts}
 
 
@@ -729,7 +963,7 @@ async def read_notifications(request: Request, user=Depends(get_current_user)):
 @api.get("/search")
 async def global_search(request: Request, q: str, user=Depends(get_current_user)):
     org = active_org(user, request)
-    rx = {"$regex": q, "$options": "i"}
+    rx = {"$regex": re.escape(q[:128]), "$options": "i"}
     events = await db.events.find({"org_id": org, "$or": [{"host": rx}, {"src_ip": rx}, {"username": rx}]},
                                   {"_id": 0, "raw": 0}).limit(5).to_list(5)
     alerts = await db.alerts.find({"org_id": org, "title": rx}, {"_id": 0}).limit(5).to_list(5)
@@ -750,7 +984,7 @@ async def get_settings(request: Request, user=Depends(get_current_user)):
              "default_time_range": "24h", "retention_days": 90, "demo_mode": False}
         await db.settings.insert_one(dict(s))
         s.pop("_id", None)
-    s["ai_configured"] = ai_assistant.is_configured()
+    s["ai_configured"] = await ai_assistant.configured_for(org)
     return {"settings": s}
 
 
@@ -761,6 +995,118 @@ async def update_settings(body: SettingsReq, request: Request, user=Depends(requ
     await db.settings.update_one({"org_id": org}, {"$set": upd}, upsert=True)
     await audit(org, user, "update", "settings", details=upd)
     return clean(await db.settings.find_one({"org_id": org}, {"_id": 0}))
+
+
+class AdminCreateUserReq(BaseModel):
+    username: Optional[str] = None
+    email: EmailStr
+    name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=12, max_length=128)
+
+
+@api.post("/admin/users", status_code=201)
+async def admin_create_user(body: AdminCreateUserReq, user=Depends(require_role("admin"))):
+    """Provision an analyst with Training Lab access only."""
+    email = body.email.strip().lower()
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(422, "Name is required")
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(409, "Email already registered")
+    username = (body.username or email.split("@")[0]).strip().lower()
+    if not USERNAME_RE.fullmatch(username):
+        raise HTTPException(422, "Username must be 3–32 characters, start with a letter, and use letters, numbers, dots, underscores or hyphens")
+    if await db.users.find_one({"username": username}):
+        raise HTTPException(409, "Username already registered")
+    entry = {"id": new_id(), "email": email, "username": username, "name": name,
+             "password_hash": hash_password(body.password), "role": "analyst",
+             "org_ids": [TRAIN_ORG], "default_org": TRAIN_ORG,
+             "theme": "obsidian_dark", "created_at": now_iso()}
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await db.users.insert_one(dict(entry))
+    except DuplicateKeyError as exc:
+        raise HTTPException(409, "Email or username already registered") from exc
+    await audit(user.get("default_org"), user, "create_user", "user", entry["id"],
+                {"email": email, "role": "analyst"})
+    return {"user": {k: v for k, v in entry.items() if k != "password_hash"}}
+
+
+class AdminUsernameReq(BaseModel):
+    username: str = Field(min_length=3, max_length=32)
+
+class AdminPasswordReq(BaseModel):
+    password: str = Field(min_length=12, max_length=128)
+
+@api.put("/admin/users/{user_id}/username")
+async def admin_set_username(user_id: str, body: AdminUsernameReq, actor=Depends(require_role("super_admin"))):
+    username = body.username.strip().lower()
+    if not USERNAME_RE.fullmatch(username):
+        raise HTTPException(422, "Invalid username format")
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if await db.users.find_one({"username": username, "id": {"$ne": user_id}}):
+        raise HTTPException(409, "Username already in use")
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await db.users.update_one({"id": user_id}, {"$set": {"username": username}})
+    except DuplicateKeyError as exc:
+        raise HTTPException(409, "Username already in use") from exc
+    await audit(actor.get("default_org"), actor, "set_username", "user", user_id)
+    return {"ok": True, "username": username}
+
+@api.put("/admin/users/{user_id}/password")
+async def admin_reset_password(user_id: str, body: AdminPasswordReq, actor=Depends(require_role("super_admin"))):
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target["id"] == actor["id"]:
+        raise HTTPException(400, "Use your own password-change flow")
+    await db.users.update_one({"id": user_id}, {"$set": {"password_hash": hash_password(body.password)}, "$inc": {"session_version": 1}})
+    await audit(actor.get("default_org"), actor, "reset_password", "user", user_id)
+    return {"ok": True}
+
+@api.put("/admin/users/{user_id}/status")
+async def admin_set_status(user_id: str, body: dict, actor=Depends(require_role("super_admin"))):
+    enabled = body.get("enabled")
+    if not isinstance(enabled, bool):
+        raise HTTPException(422, "enabled must be boolean")
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target["id"] == actor["id"]:
+        raise HTTPException(400, "Cannot disable your own account")
+    if target.get("role") == "super_admin":
+        raise HTTPException(403, "Cannot disable a super administrator")
+    await db.users.update_one({"id": user_id}, {"$set": {"enabled": enabled}, "$inc": {"session_version": 1}})
+    await audit(actor.get("default_org"), actor, "enable_user" if enabled else "disable_user", "user", user_id)
+    return {"ok": True, "enabled": enabled}
+
+@api.get("/admin/login-security-events")
+async def admin_login_security_events(actor=Depends(require_role("super_admin"))):
+    rows = await db.security_notifications.find(
+        {"type": "account_login_locked"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return {"events": rows, "open_count": sum(e.get("status") == "open" for e in rows)}
+
+
+@api.post("/admin/users/{user_id}/unlock-login")
+async def admin_unlock_login(user_id: str, actor=Depends(require_role("super_admin"))):
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    await db.users.update_one({"id": user_id}, {"$unset": {"login_locked_until": "", "login_failed_count": ""}})
+    # Clear throttles for this user's known identifiers, not other users.
+    identifiers = [target.get("email", ""), target.get("username", "")]
+    for identifier in filter(None, identifiers):
+        await db.login_attempts.delete_many({"identifier": {"$regex": ":" + re.escape(identifier) + "$"}})
+    await db.security_notifications.update_many(
+        {"type": "account_login_locked", "user_id": user_id, "status": "open"},
+        {"$set": {"status": "resolved", "resolved_at": now_iso(), "resolved_by": actor["id"]}}
+    )
+    await audit(actor.get("default_org"), actor, "unlock_login", "user", user_id)
+    return {"ok": True}
 
 
 @api.get("/admin/users")
@@ -774,9 +1120,142 @@ async def set_role(user_id: str, body: dict, request: Request, user=Depends(requ
     role = body.get("role")
     if role not in ROLE_LEVELS:
         raise HTTPException(400, "Invalid role")
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if (role == "super_admin" or target.get("role") == "super_admin") and user.get("role") != "super_admin":
+        raise HTTPException(403, "Only super administrators can manage super-admin roles")
+    if target["id"] == user["id"] and role != target.get("role"):
+        raise HTTPException(400, "Cannot change your own administrator role")
     await db.users.update_one({"id": user_id}, {"$set": {"role": role}})
     await audit(user.get("default_org"), user, "set_role", "user", user_id, {"role": role})
     return {"ok": True}
+
+
+@api.get("/admin/membership-review")
+async def membership_review(user=Depends(require_role("super_admin"))):
+    """Read-only review of legacy production memberships; no automatic revocation."""
+    rows = await db.users.find({"org_ids": PROD_ORG}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    return {"production_members": rows, "count": len(rows), "requires_manual_review": True}
+
+
+@api.put("/admin/users/{user_id}/workspaces")
+async def set_user_workspaces(user_id: str, body: dict, user=Depends(require_role("super_admin"))):
+    """Explicit super-admin approval or revocation of built-in workspace access."""
+    org_ids = body.get("org_ids")
+    if not isinstance(org_ids, list) or not org_ids or len(org_ids) != len(set(str(v) for v in org_ids)) or any(not isinstance(v, str) or v not in (PROD_ORG, TRAIN_ORG) for v in org_ids):
+        raise HTTPException(400, "Specify a nonempty, unique list of known workspace IDs")
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target["id"] == user["id"] and PROD_ORG not in org_ids:
+        raise HTTPException(400, "Cannot remove your own production access")
+    if target.get("role") == "super_admin" and PROD_ORG not in org_ids:
+        raise HTTPException(400, "Cannot remove production access from a super administrator")
+    if set(org_ids) == set(target.get("org_ids", [])):
+        return {"ok": True, "org_ids": target.get("org_ids", []), "default_org": target.get("default_org"), "unchanged": True}
+    if PROD_ORG in org_ids and PROD_ORG not in target.get("org_ids", []):
+        raise HTTPException(409, "Production grants require a separate super-admin approval request")
+    default_org = target.get("default_org") if target.get("default_org") in org_ids else org_ids[0]
+    result = await db.users.update_one({"id": user_id}, {"$set": {"org_ids": org_ids, "default_org": default_org}})
+    await audit(user.get("default_org"), user, "set_workspaces", "user", user_id,
+                {"old_org_ids": target.get("org_ids", []), "new_org_ids": org_ids})
+    return {"ok": result.matched_count == 1, "org_ids": org_ids, "default_org": default_org}
+
+
+@api.post("/admin/users/{user_id}/production-access-requests")
+async def request_production_access(user_id: str, user=Depends(require_role("super_admin"))):
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if PROD_ORG in target.get("org_ids", []):
+        raise HTTPException(409, "User already has production access")
+    if target["id"] == user["id"]:
+        raise HTTPException(400, "Cannot request production access for yourself")
+    existing = await db.production_access_requests.find_one({"target_id": user_id, "status": "pending"})
+    if existing:
+        raise HTTPException(409, "A production access request is already pending")
+    entry = {"id": new_id(), "target_id": user_id, "requester_id": user["id"],
+             "status": "pending", "created_at": now_iso()}
+    await db.production_access_requests.insert_one(dict(entry))
+    await audit(user.get("default_org"), user, "request_production_access", "user", user_id, {"request_id": entry["id"]})
+    return clean(entry)
+
+
+@api.get("/admin/production-access-requests")
+async def list_production_access_requests(user=Depends(require_role("super_admin"))):
+    rows = await db.production_access_requests.find({}, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+    for entry in rows:
+        if entry.get("status") != "applying":
+            continue
+        raw = entry.get("approved_at")
+        try:
+            timestamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
+            entry["needs_reconciliation"] = timestamp <= cutoff
+        except (ValueError, TypeError, AttributeError):
+            entry["needs_reconciliation"] = True
+    return {"requests": rows, "stale_after_minutes": 5}
+
+
+@api.post("/admin/production-access-requests/{request_id}/approve")
+async def approve_production_access(request_id: str, user=Depends(require_role("super_admin"))):
+    entry = await db.production_access_requests.find_one({"id": request_id, "status": "pending"})
+    if not entry:
+        raise HTTPException(404, "Pending request not found")
+    if entry["requester_id"] == user["id"]:
+        raise HTTPException(403, "A different super administrator must approve this request")
+    target = await db.users.find_one({"id": entry["target_id"]})
+    if not target:
+        raise HTTPException(404, "Target user not found")
+    if PROD_ORG in target.get("org_ids", []):
+        raise HTTPException(409, "Target already has production access")
+    claim = await db.production_access_requests.update_one(
+        {"id": request_id, "status": "pending"},
+        {"$set": {"status": "applying", "approver_id": user["id"], "approved_at": now_iso()}})
+    if claim.modified_count != 1:
+        raise HTTPException(409, "Request already processed")
+    result = await db.users.update_one({"id": target["id"], "org_ids": {"$ne": PROD_ORG}},
+                                       {"$addToSet": {"org_ids": PROD_ORG}})
+    if result.modified_count != 1:
+        await db.production_access_requests.update_one({"id": request_id, "status": "applying"},
+            {"$set": {"status": "failed", "failure_reason": "membership_update_not_applied", "failed_at": now_iso()}})
+        raise HTTPException(409, "Production grant could not be applied; review account state")
+    await db.production_access_requests.update_one({"id": request_id, "status": "applying"},
+        {"$set": {"status": "approved", "completed_at": now_iso()}})
+    await audit(user.get("default_org"), user, "approve_production_access", "user", target["id"],
+                {"request_id": request_id, "requester_id": entry["requester_id"]})
+    return {"ok": True, "target_id": target["id"], "request_id": request_id}
+
+
+@api.post("/admin/production-access-requests/{request_id}/reconcile")
+async def reconcile_production_access(request_id: str, user=Depends(require_role("super_admin"))):
+    """Resolve a request left in applying after a process interruption; never grant access here."""
+    entry = await db.production_access_requests.find_one({"id": request_id, "status": "applying"})
+    if not entry:
+        raise HTTPException(404, "Applying request not found")
+    raw = entry.get("approved_at")
+    try:
+        approved_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if approved_at.tzinfo is None:
+            approved_at = approved_at.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError, AttributeError):
+        approved_at = None
+    if approved_at is not None and approved_at > datetime.now(timezone.utc) - timedelta(minutes=5):
+        raise HTTPException(409, "Approval may still be in progress; wait five minutes before reconciling")
+    target = await db.users.find_one({"id": entry["target_id"]})
+    granted = bool(target and PROD_ORG in target.get("org_ids", []))
+    final_status = "approved" if granted else "failed"
+    result = await db.production_access_requests.update_one({"id": request_id, "status": "applying"},
+        {"$set": {"status": final_status, "reconciled_at": now_iso(),
+                  "failure_reason": None if granted else "membership_not_present"}})
+    if result.modified_count != 1:
+        raise HTTPException(409, "Request state changed; reload before reconciling")
+    await audit(user.get("default_org"), user, "reconcile_production_access", "user", entry["target_id"],
+                {"request_id": request_id, "final_status": final_status})
+    return {"ok": True, "status": final_status, "request_id": request_id}
 
 
 @api.get("/admin/audit")
@@ -787,14 +1266,14 @@ async def admin_audit(request: Request, user=Depends(require_role("soc_manager")
 
 
 @api.get("/admin/health")
-async def admin_health(user=Depends(get_current_user)):
+async def admin_health(request: Request, user=Depends(get_current_user)):
     try:
         await db.command("ping")
         dbok = True
     except Exception:
         dbok = False
     return {"database": "ok" if dbok else "down", "search_backend": "mongo-adapter",
-            "ai_assistant": "configured" if ai_assistant.is_configured() else "disabled"}
+            "ai_assistant": "configured" if await ai_assistant.configured_for(active_org(user, request)) else "disabled"}
 
 
 # ============================= USER PREFS =============================
@@ -814,6 +1293,53 @@ async def set_workspace(body: dict, user=Depends(get_current_user)):
 
 
 # ============================= AI ASSISTANT =============================
+class AIConfigReq(BaseModel):
+    provider: str
+    model: str = Field(min_length=1, max_length=160)
+    base_url: Optional[str] = None
+    api_key: Optional[str] = Field(default=None, max_length=4096)
+    enabled: bool = True
+
+@api.get("/admin/ai-config")
+async def ai_config_get(request: Request, user=Depends(require_role("admin"))):
+    return {"config": ai_assistant.public_config(await ai_assistant.get_config(active_org(user, request))), "presets": ai_assistant.PRESETS}
+
+@api.put("/admin/ai-config")
+async def ai_config_put(body: AIConfigReq, request: Request, user=Depends(require_role("admin"))):
+    org=active_org(user,request)
+    if body.provider not in ai_assistant.PRESETS:
+        raise HTTPException(422,"Unsupported AI provider")
+    url=body.base_url or ai_assistant.PRESETS[body.provider]
+    try:
+        url=await asyncio.to_thread(ai_assistant.validate_url,url,body.provider)
+    except ValueError as exc:
+        raise HTTPException(422,str(exc))
+    existing=await ai_assistant.get_config(org)
+    doc={"org_id":org,"provider":body.provider,"base_url":url,"model":body.model.strip(),"enabled":body.enabled}
+    if body.api_key:
+        doc["key_encrypted"]=ai_assistant.cipher().encrypt(body.api_key.encode()).decode()
+    elif existing and existing.get("provider")==body.provider and existing.get("base_url")==url and existing.get("key_encrypted"):
+        doc["key_encrypted"]=existing["key_encrypted"]
+    if body.provider not in ("ollama","lmstudio") and not doc.get("key_encrypted"):
+        raise HTTPException(422,"An API key is required for cloud providers")
+    await db.ai_configs.update_one({"org_id":org},{"$set":doc,"$unset":{}},upsert=True)
+    if not doc.get("key_encrypted"):
+        await db.ai_configs.update_one({"org_id":org},{"$unset":{"key_encrypted":""}})
+    await audit(org,user,"configure","ai_provider",details={"provider":body.provider,"model":body.model})
+    return {"config":ai_assistant.public_config(doc)}
+
+@api.post("/admin/ai-config/test")
+async def ai_config_test(request: Request, user=Depends(require_role("admin"))):
+    org=active_org(user,request)
+    doc=await ai_assistant.get_config(org)
+    if not doc:
+        raise HTTPException(404,"Configure an AI provider first")
+    try:
+        answer=await ai_assistant.request_completion(doc,[{"role":"system","content":"You are a connectivity test. Answer briefly."},{"role":"user","content":"Reply with: SentinelLab AI connected."}])
+        return {"ok":True,"answer":str(answer)[:400]}
+    except Exception:
+        raise HTTPException(502,"AI provider test failed; verify endpoint, model and credentials")
+
 @api.post("/ai/ask")
 async def ai_ask(body: AIReq, request: Request, user=Depends(get_current_user)):
     org = active_org(user, request)
@@ -847,7 +1373,7 @@ async def list_indicators(request: Request, ioc_type: Optional[str] = None, acti
     filt = {"org_id": org}
     if ioc_type: filt["ioc_type"] = ioc_type
     if active is not None: filt["active"] = active
-    if q: filt["value"] = {"$regex": q, "$options": "i"}
+    if q: filt["value"] = {"$regex": re.escape(q[:128]), "$options": "i"}
     rows = await db.indicators.find(filt, {"_id": 0}).sort("created_at", -1).limit(1000).to_list(1000)
     stats = {}
     for t in ["ip", "domain", "url", "hash", "email"]:
@@ -892,7 +1418,7 @@ async def indicator_hits(ind_id: str, request: Request, user=Depends(get_current
     v = str(ind["value"]).lower()
     fields = {"ip": ["src_ip", "dest_ip"], "domain": ["dns_query"], "hash": ["file_hash"],
               "url": ["dns_query"], "email": ["username"]}.get(ind["ioc_type"], [])
-    ors = [{f: {"$regex": f"^{v}$", "$options": "i"}} for f in fields]
+    ors = [{f: {"$regex": f"^{re.escape(v[:256])}$", "$options": "i"}} for f in fields]
     events = await db.events.find({"org_id": org, "$or": ors or [{"id": "__none__"}]},
                                   {"_id": 0, "raw": 0}).limit(100).to_list(100) if ors else []
     return {"indicator": ind, "hits": events, "count": len(events)}
@@ -1271,14 +1797,37 @@ async def ready():
 
 
 # ============================= STARTUP =============================
+
+
+async def ensure_unique_login_throttle_index(collection):
+    # Fail closed if existing throttle records cannot support a unique index.
+    # Do not delete, merge, or reset authentication evidence automatically.
+    duplicates = await collection.aggregate([
+        {"$group": {"_id": "$identifier", "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$limit": 1},
+    ]).to_list(1)
+    if duplicates:
+        raise RuntimeError("Duplicate login throttle identifiers detected; manual reconciliation required before enforcing uniqueness")
+    # Replace the legacy non-unique index only after the duplicate check.
+    # MongoDB will reject any concurrent duplicate insert during this migration.
+    indexes = await collection.index_information()
+    legacy = indexes.get("identifier_1")
+    if legacy and not legacy.get("unique", False):
+        await collection.drop_index("identifier_1")
+    await collection.create_index("identifier", unique=True)
+
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
+    await db.users.create_index("username", unique=True, sparse=True)
     await db.users.create_index("id", unique=True)
     await db.events.create_index([("org_id", 1), ("timestamp", -1)])
     await db.events.create_index([("org_id", 1), ("category", 1)])
     await db.alerts.create_index([("org_id", 1), ("status", 1)])
-    await db.login_attempts.create_index("identifier")
+    # Preserve existing throttle records: do not force a unique-index migration
+    # until duplicate identifiers have been inspected and safely reconciled.
+    await ensure_unique_login_throttle_index(db.login_attempts)
 
     for oid, name, demo in [(PROD_ORG, "SentinelLab Production", False),
                             (TRAIN_ORG, "Training Lab (Synthetic)", True)]:
@@ -1286,16 +1835,25 @@ async def startup():
             {"$setOnInsert": {"id": oid, "name": name, "is_demo": demo, "created_at": now_iso()}}, upsert=True)
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@sentinellab.io").lower()
-    admin_pw = os.environ.get("ADMIN_PASSWORD", "Sentinel@2026")
+    admin_username = os.environ.get("ADMIN_USERNAME", "socadmin").strip().lower()
+    if not USERNAME_RE.fullmatch(admin_username):
+        raise RuntimeError("ADMIN_USERNAME must be a valid 3–32 character username")
+    admin_pw = os.environ.get("ADMIN_PASSWORD")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
-        await db.users.insert_one({"id": new_id(), "email": admin_email, "name": "SOC Administrator",
+        if not admin_pw or len(admin_pw) < 12:
+            if os.environ.get("SENTINELLAB_DESKTOP") == "1":
+                logger.info("Desktop administrator setup required")
+            else:
+                raise RuntimeError("ADMIN_PASSWORD must be configured with at least 12 characters for initial setup")
+        if admin_pw and len(admin_pw) >= 12:
+            await db.users.insert_one({"id": new_id(), "email": admin_email, "username": admin_username, "name": "SOC Administrator",
                                    "password_hash": hash_password(admin_pw), "role": "super_admin",
                                    "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": TRAIN_ORG,
                                    "theme": "obsidian_dark", "created_at": now_iso()})
-    elif not verify_password(admin_pw, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_pw)}})
-    if not await db.users.find_one({"email": "analyst@sentinellab.io"}):
+    elif not existing.get("username") and not await db.users.find_one({"username": admin_username}):
+        await db.users.update_one({"id": existing["id"]}, {"$set": {"username": admin_username}})
+    if os.environ.get("ENABLE_DEMO_ACCOUNTS") == "true" and not await db.users.find_one({"email": "analyst@sentinellab.io"}):
         await db.users.insert_one({"id": new_id(), "email": "analyst@sentinellab.io", "name": "SOC Analyst",
                                    "password_hash": hash_password("Analyst@2026"), "role": "analyst",
                                    "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": TRAIN_ORG,

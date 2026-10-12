@@ -40,11 +40,12 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(user_id: str, email: str, role: str) -> str:
+def create_access_token(user_id: str, email: str, role: str, session_version: int = 0) -> str:
     payload = {
         "sub": user_id,
         "email": email,
         "role": role,
+        "session_version": session_version,
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TTL_MIN),
         "type": "access",
     }
@@ -93,8 +94,10 @@ async def get_current_user(request: Request) -> dict:
         if payload.get("type") != "access":
             raise HTTPException(status_code=401, detail="Invalid token type")
         user = await db.users.find_one({"id": payload["sub"]})
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
+        if not user or user.get("enabled", True) is False:
+            raise HTTPException(status_code=401, detail="Account unavailable")
+        if payload.get("session_version", 0) != user.get("session_version", 0):
+            raise HTTPException(status_code=401, detail="Session revoked")
         user.pop("password_hash", None)
         return clean(user)
     except jwt.ExpiredSignatureError:
@@ -134,3 +137,29 @@ async def audit(org_id, user, action, resource_type, resource_id=None, details=N
         "details": details or {},
         "timestamp": now_iso(),
     })
+    # Reuse the central audit trail as the notification event bus. Never include
+    # sensitive audit details (passwords, tokens, credentials) in webhook payloads.
+    import asyncio
+    import webhooks
+    category = ("investigation" if resource_type == "investigation" else
+                "ingestion" if resource_type in ("source", "parser", "ingestion") else
+                "security" if resource_type in ("user", "account", "webhook", "membership", "settings") else
+                "system")
+    # Use a strict allowlist: arbitrary audit metadata can contain credentials or PII.
+    safe_actions = {
+        "create": "created", "update": "updated", "delete": "deleted",
+        "login": "signed in", "logout": "signed out",
+        "disable": "disabled", "enable": "enabled",
+        "configure": "configured", "approve": "approved",
+        "revoke": "revoked", "test": "tested",
+    }
+    verb = safe_actions.get(action, action.replace("_", " "))
+    subject = resource_type.replace("_", " ")
+    actor = user.get("email", "system") if user else "system"
+    title = f"{subject.title()} — {verb}"
+    lines = [f"Action: {verb} {subject}", f"Performed by: {actor}"]
+    if resource_id and resource_type not in ("user", "account", "session", "credential", "api_key"):
+        lines.append(f"Resource ID: {str(resource_id)[:100]}")
+    lines.append(f"Workspace: {org_id}")
+    asyncio.create_task(webhooks.emit(org_id, category, title, "\n".join(lines)))
+

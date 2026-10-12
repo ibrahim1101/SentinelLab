@@ -1,0 +1,102 @@
+name: Linux and macOS Desktop Alpha
+on:
+  workflow_dispatch:
+  push:
+    branches: ["fix/phase1-security-regressions"]
+    paths:
+      - "desktop/**"
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/linux-macos-desktop-alpha.yml"
+permissions:
+  contents: read
+jobs:
+  desktop-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            label: Linux-x64
+            target: x86_64-unknown-linux-gnu
+            bundle: deb,appimage
+          - os: macos-15-intel
+            label: macOS-Intel
+            target: x86_64-apple-darwin
+            bundle: dmg
+          - os: macos-15
+            label: macOS-AppleSilicon
+            target: aarch64-apple-darwin
+            bundle: dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev librsvg2-dev patchelf libayatana-appindicator3-dev
+      - name: Install frontend and Tauri dependencies
+        run: |
+          cd frontend && npm install --no-audit --no-fund
+          cd ../desktop && npm install --no-audit --no-fund
+      - name: Generate application icon
+        run: |
+          cd desktop && npx tauri icon "../frontend/public/Neon Global Shield Emblem.png" --fit contain
+      - name: Ensure square Linux AppImage icon
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install Pillow
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          source = Image.open("frontend/public/Neon Global Shield Emblem.png").convert("RGBA")
+          source.thumbnail((512, 512))
+          canvas = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
+          canvas.alpha_composite(source, ((512 - source.width) // 2, (512 - source.height) // 2))
+          output = Path("desktop/src-tauri/icons")
+          output.mkdir(parents=True, exist_ok=True)
+          canvas.save(output / "128x128.png")
+          canvas.resize((256, 256)).save(output / "128x128@2x.png")
+          canvas.save(output / "icon.png")
+          PY
+      - name: Build backend sidecar
+        run: |
+          python -m pip install -r backend/requirements.runtime.txt pyinstaller
+          python -m compileall -q backend
+          python -m PyInstaller --noconfirm --clean --onefile --name sentinellab-api --distpath desktop/src-tauri/binaries --collect-submodules uvicorn --collect-submodules motor --collect-submodules pymongo --collect-submodules cryptography --hidden-import server --hidden-import core --hidden-import parsers --hidden-import detection --hidden-import seed --hidden-import ai_assistant --hidden-import webhooks --hidden-import playbooks --hidden-import mitre_data --paths backend backend/desktop_entry.py
+          mv desktop/src-tauri/binaries/sentinellab-api desktop/src-tauri/binaries/sentinellab-api-${{ matrix.target }}
+          chmod +x desktop/src-tauri/binaries/sentinellab-api-${{ matrix.target }}
+      - name: Smoke-test bundled backend imports
+        run: desktop/src-tauri/binaries/sentinellab-api-${{ matrix.target }} --self-test
+      - name: Build desktop package
+        working-directory: desktop
+        env:
+          CI: 'false'
+          REACT_APP_BACKEND_URL: http://127.0.0.1:18765
+          CARGO_BUILD_JOBS: '2'
+          CARGO_INCREMENTAL: '0'
+          CARGO_PROFILE_RELEASE_DEBUG: '0'
+        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
+      - name: Upload unsigned desktop packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: SentinelLab-${{ matrix.label }}-Alpha-unsigned
+          path: |
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
+          if-no-files-found: error
+          retention-days: 14

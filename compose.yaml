@@ -1,0 +1,42 @@
+services:
+  mongo:
+    image: ${MONGO_IMAGE:-mongo:7}
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  api:
+    build:
+      context: ./backend
+      args:
+        PYTHON_BASE_IMAGE: ${PYTHON_BASE_IMAGE:-python:3.12-slim}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      DB_NAME: sentinellab
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sentinellab.io}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      ENABLE_DEMO_ACCOUNTS: ${ENABLE_DEMO_ACCOUNTS:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+    depends_on:
+      mongo:
+        condition: service_healthy
+  web:
+    build:
+      context: ./frontend
+      args:
+        NODE_BASE_IMAGE: ${NODE_BASE_IMAGE:-node:22-alpine}
+        NGINX_BASE_IMAGE: ${NGINX_BASE_IMAGE:-nginx:1.27-alpine}
+    ports:
+      - '127.0.0.1:8080:80'
+    depends_on:
+      - api
+volumes:
+  mongo_data:

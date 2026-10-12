@@ -2,6 +2,7 @@
 and produces alerts. Supports match, threshold, frequency, indicator rule types.
 No arbitrary code execution: rules are declarative condition sets only."""
 from datetime import datetime, timezone
+import re
 from dateutil import parser as dtparse
 from core import db, new_id, now_iso
 
@@ -13,8 +14,21 @@ OPS = {
     "gt": lambda a, b: _num(a) > _num(b),
     "lt": lambda a, b: _num(a) < _num(b),
     "exists": lambda a, b: a is not None and a != "",
-    "regex": lambda a, b: __import__("re").search(b, str(a), __import__("re").I) is not None,
+    "regex": lambda a, b: safe_regex_search(a, b),
 }
+
+
+def safe_regex_search(value, pattern):
+    """Reject dangerous regex constructs and oversized input; fail closed."""
+    if not isinstance(pattern, str) or len(pattern) > 128 or len(str(value)) > 4096:
+        return False
+    # No groups, lookarounds, backreferences or unbounded quantifiers in analyst patterns.
+    if re.search(r"[(){}]|\\[1-9]|(?<!\\)[*+]", pattern):
+        return False
+    try:
+        return re.search(pattern, str(value), re.I) is not None
+    except re.error:
+        return False
 
 
 def _num(v):
@@ -165,13 +179,15 @@ async def run_detection(org_id, events, persist=True):
         try:
             alerts, matched = await evaluate_rule(rule, events, org_id)
         except Exception as ex:
+            if not persist:
+                continue
             await db.detection_rules.update_one(
-                {"id": rule["id"]},
+                {"id": rule["id"], "org_id": org_id},
                 {"$set": {"last_error": str(ex), "last_run": now_iso()}})
             continue
-        if matched:
+        if matched and persist:
             await db.events.update_many(
-                {"id": {"$in": list(matched)}},
+                {"org_id": org_id, "id": {"$in": list(matched)}},
                 {"$addToSet": {"rule_matches": rule["id"]}})
         new_alerts = []
         for a in alerts:
@@ -183,15 +199,16 @@ async def run_detection(org_id, events, persist=True):
                 })
                 if existing:
                     await db.alerts.update_one(
-                        {"id": existing["id"]},
+                        {"id": existing["id"], "org_id": org_id},
                         {"$set": {"last_seen": a["last_seen"], "updated_at": now_iso()},
                          "$inc": {"event_count": a["event_count"]}})
                     continue
                 await db.alerts.insert_one(dict(a))
             new_alerts.append(a)
             created.append(a)
-        await db.detection_rules.update_one(
-            {"id": rule["id"]},
-            {"$set": {"last_run": now_iso(), "last_error": None},
-             "$inc": {"match_count": len(new_alerts)}})
+        if persist:
+            await db.detection_rules.update_one(
+                {"id": rule["id"], "org_id": org_id},
+                {"$set": {"last_run": now_iso(), "last_error": None},
+                 "$inc": {"match_count": len(new_alerts)}})
     return created

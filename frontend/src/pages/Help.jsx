@@ -1,0 +1,197 @@
+import { useMemo, useState } from "react";
+import { PageHead } from "@/components/common";
+
+const guide = [
+  ["Getting started", [
+    ["Install and launch", "Install MongoDB Community Server locally and ensure port 27017 is reachable. Install the SentinelLab Windows app and launch it; its bundled API starts automatically. MongoDB is a separate service."],
+    ["First administrator setup", "On an empty database, complete the initial administrator form. On an existing database, sign in using the previously created account. Do not manually edit password hashes in MongoDB."],
+    ["Login modes", "Administrator Login accepts admin and super_admin roles; Non-Admin Login accepts other roles. Correct credentials in the wrong mode are rejected. Repeated invalid passwords can trigger temporary account lockouts."],
+    ["Service indicators", "On the login screen, the bottom-right lights show backend diagnostics, MongoDB reachability and API readiness. Red indicates unavailable or still starting; verify MongoDB service and restart if necessary."],
+    ["Closing and upgrading", "Click the window close button, review the process confirmation and confirm. The bundled API should terminate; MongoDB continues independently. Verify the API is stopped before upgrading."],
+  ]],
+  ["Workspace and navigation", [
+    ["Sidebar", "Use the left navigation to open SOC modules. Administration appears only for administrators. The manual is under Settings → How to Use SentinelLab."],
+    ["Workspace selector", "Choose Training Lab for synthetic demonstrations or an authorized production workspace for real data. Always check the active workspace before modifying records."],
+    ["Time range", "Use the top-bar range selector to control supported dashboard and search windows. A narrower range is useful for triage; a longer range helps trend analysis."],
+    ["Global search", "Search for event, alert, investigation, rule, asset, host or IP identifiers in the top bar. Open a result to continue in its module."],
+    ["Notifications and profile", "Use the bell for recent notifications, the palette menu to change appearance, and the profile menu to inspect your role and sign out."],
+  ]],
+  ["Monitoring and detection", [
+    ["Overview", "Start with summary metrics and activity charts. Confirm the workspace and time range, then follow unusual counts or trends into Events or Alerts."],
+    ["Events Explorer", "Inspect normalized security events, filter by available fields and time, and examine details before deciding whether an event is suspicious."],
+    ["Sources & Ingestion", "Review configured sources and incoming event health. Supported input formats include JSON, JSONL, CSV, Syslog and CEF. Check parsing failures and source status if events are missing."],
+    ["Pipeline Observatory", "Inspect the event pipeline stages and throughput or failures. Follow ingestion or parsing anomalies to the affected source."],
+    ["Detection Rules", "Review detection logic and rule status. Test changes with known sample events before enabling them for production workflows."],
+    ["Detection Replay", "Replay eligible historical or sample events against detection logic to validate results without assuming a live incident occurred."],
+    ["Alerts", "Review triggered detections, severity and context. Open the alert, compare supporting events and assign or escalate according to your response process."],
+    ["Threat Hunting", "Use hypotheses, filters and available query controls to search for suspicious behavior across events. Save or document findings in an investigation."],
+    ["MITRE ATT&CK", "Use technique mappings to understand attacker behaviors and detection coverage. Mappings provide context; they do not prove compromise on their own."],
+    ["Threat Intelligence", "Review available indicators and enrichment. External reputation services require configuration; unavailable integrations must not be treated as clean results."],
+  ]],
+  ["Investigation and response", [
+    ["Investigations", "Create or open a case, link relevant evidence and alerts, record findings, and track the response state. Preserve original evidence when possible."],
+    ["Investigation Graph", "Explore linked entities and relationships to understand which hosts, IPs, alerts or events may be connected. Validate relationships against underlying evidence."],
+    ["Playbooks", "Review available response steps and prerequisites before running actions. Confirm targets, scope and permissions, especially in production."],
+    ["Reports", "Choose the available report scope and time window, review the generated information, and export or share only with authorized recipients."],
+    ["AI Security Assistant", "Ask for help interpreting security data or planning an investigation. Verify its suggestions against evidence; provider availability depends on configuration."],
+  ]],
+  ["Settings and administration", [
+    ["General settings", "Configure application name, timezone, default time range and theme. Demo Mode uses simulated data; Reset Training Lab Data can replace demonstration records and requires confirmation."],
+    ["Security overview", "Review password hashing, session policy, rate limits, role-based access, audit logging and workspace isolation. These summaries are informational."],
+    ["Create analyst", "Administration → Create analyst: enter full name, unique email and username, and a strong initial password. The account starts with Training Lab access."],
+    ["User and role management", "Administration → User & Role Management: inspect users and change roles only when required. Confirm role changes and apply least privilege."],
+    ["Account actions", "Super administrators can change usernames, reset other users' passwords, and enable or disable eligible accounts. Password resets revoke existing sessions; verify the user's identity first."],
+    ["Login security alerts", "Super administrators can review repeated failed-login incidents and unlock an account after verifying the user. Never unlock solely because someone requests it."],
+    ["Production membership", "Review workspace memberships and request or revoke production access. Approval may require a second super administrator. Review reconciliation states after interrupted approvals."],
+    ["Ingestion settings", "Review the pipeline sequence, accepted formats, parser/schema versions and dead-letter behavior. This tab describes ingestion capabilities rather than automatically configuring sources."],
+    ["Retention", "Set the supported retention window carefully. Events older than the configured period may be eligible for cleanup; evidence handling can follow separate rules."],
+    ["Integrations", "Check the status of the AI adapter and optional reputation, webhook or email integrations. Offline integrations require their own credentials and configuration."],
+    ["About and audit", "Review application information, database and service health, and recent audit entries. Use the audit history to investigate administrative changes."],
+  ]],
+  ["Webhooks and external notifications", [
+    ["Outgoing webhooks", "Create destinations in Settings → Integrations. Select Discord, Slack, Teams Workflows or Generic HTTPS JSON, enter the URL, choose events, and save."],
+    ["Webhook testing", "After saving, use Send test. A delivered status means the destination accepted the request; confirm the message appears in the external app."],
+    ["Webhook security", "Webhook URLs are secret credentials. Only administrators can manage them. Never paste them into public chats or screenshots."],
+  ]],
+  ["Troubleshooting and safe operation", [
+    ["Backend offline", "Check that SentinelLab launched correctly and that the API process is running. Restart the desktop application if the backend remains unavailable."],
+    ["MongoDB unavailable", "Check the MongoDB Windows service and local port 27017. A service being installed does not guarantee it is reachable."],
+    ["No events or alerts", "Verify workspace, time range, source configuration and ingestion health. No alerts does not automatically mean no threats."],
+    ["Permissions denied", "Check your account role and workspace membership. Ask an administrator for access rather than changing MongoDB records directly."],
+    ["Installer cannot replace API", "Close SentinelLab, confirm shutdown, and verify no sentinellab-api.exe process remains before retrying the installer. Do not select Ignore on a locked executable."],
+    ["Security practices", "Use unique strong passwords, least privilege, separate Training Lab from production, and review audit records after sensitive operations."],
+  ]],
+];
+
+const detailed = {
+  "Install and launch": ["Install MongoDB Community Server and confirm that its Windows service is started. The standard local connection is mongodb://127.0.0.1:27017. Install the latest SentinelLab Windows installer, then launch the desktop shortcut.", "The application launches its bundled FastAPI backend automatically. You should not need to start Python or Docker separately. The first launch can take longer because the packaged backend initializes.", "If the status lights remain unavailable, check the MongoDB service and the SentinelLab backend process before attempting sign-in."],
+  "First administrator setup": ["On a new database with no super administrator, wait for the backend and database to become ready. The first-run setup form should appear automatically.", "Enter a valid administrator email and username and choose a unique password of at least 12 characters. Submit the form once, then use Administrator Login to sign in.", "If the ordinary login form appears instead, an administrator may already exist. Inspect the users collection read-only or use the existing account; do not delete accounts to force setup."],
+  "Login modes": ["Choose Administrator Login for admin or super_admin roles. Choose Non-Admin Login for analyst and other lower-privilege accounts.", "Enter your registered username or email and password. The server validates both credentials and selected login mode before issuing a session.", "A correct password in the wrong mode is rejected. If an account is disabled or temporarily locked, ask an authorized administrator to review its status rather than retrying repeatedly."],
+  "Service indicators": ["Read the compact status indicators at the bottom-right of the login page: backend diagnostics, MongoDB connectivity and API readiness.", "Amber means startup checks are still pending; green means the corresponding service has responded; red means the check failed. The application retries frequently while starting.", "MongoDB being installed is not the same as being reachable. If MongoDB stays red, inspect its service status and port 27017."],
+  "Closing and upgrading": ["Click the desktop window close button. Read the confirmation dialog, which identifies managed SentinelLab processes that will be terminated.", "Choose Cancel to keep working or confirm to close the application and stop its bundled API process tree. MongoDB remains running independently.", "Before running an installer upgrade, verify that sentinellab-api.exe is no longer present in Task Manager. Never ignore an installer error that says the executable is locked."],
+  "Sidebar": ["Use the left navigation to select a module. Each module focuses on a separate part of SOC operations, from ingestion through detection and investigation.", "The Administration shortcut is displayed only for authorized administrator roles. The full manual is under Settings → How to Use SentinelLab.", "If a module does not display records, first check the active workspace and time range before assuming that the feature is broken."],
+  "Workspace selector": ["Select Training Lab to explore synthetic data and safely learn the workflows. Select a production workspace only when your account has been granted access.", "Verify the active workspace before creating rules, editing records, or exporting reports. Training results should never be presented as real security incidents.", "Production membership can require independent approval and is managed through Administration."],
+  "Time range": ["Choose the required time window from the top navigation where supported, such as the last hour, 24 hours or seven days.", "Start with a narrow window when triaging a fresh alert, then expand the range to identify earlier related activity.", "A filter can hide otherwise valid data. If expected events disappear, reset or widen the time range."],
+  "Global search": ["Enter an available event, host, IP, alert or case identifier in the search field. Review the returned matches and open the relevant module.", "Use precise identifiers where possible, then compare timestamps, sources and associated entities.", "Search visibility is restricted by the current account's permissions and workspace."],
+  "Notifications and profile": ["Use the notification control to review messages and security events that require attention. Open an item to inspect the related record when available.", "Use the appearance controls to select your preferred theme. Open the profile menu to verify your account and sign out.", "Always sign out of shared workstations when finished."],
+  "Overview": ["Open Overview after signing in. Confirm the active workspace and time range, then review high-level counts, activity trends and available summary widgets.", "Identify unusual increases in events, high-severity alerts or changes in source activity. Follow the relevant metric into Events Explorer or Alerts for details.", "Dashboard figures are summaries, not proof of an attack. Confirm each finding against individual records."],
+  "Events Explorer": ["Open Events Explorer to inspect normalized records. Choose the relevant time range and apply available filters such as source, severity, host or event type.", "Open an event to review timestamps, normalized fields and original context where available. Compare nearby events from the same host or user.", "Use event identifiers and supporting records when documenting a case. Missing records may indicate an ingestion problem, an incorrect workspace or a restrictive filter."],
+  "Sources & Ingestion": ["Open Sources & Ingestion to review connected sources, source status and ingest activity. Configure or inspect the supported input mechanism for each source.", "SentinelLab supports JSON, JSONL, CSV, Syslog and CEF parsing. Submit a small known-good sample first, then confirm it appears in Events Explorer.", "When ingestion fails, review parse errors or dead-letter information. Validate timestamps and field mappings before relying on detection results."],
+  "Pipeline Observatory": ["Open Pipeline Observatory to inspect the event-processing stages: receive, parse, normalize, enrich, persist, detect and alert.", "Compare available throughput, processing errors and stage health to determine where events are delayed or rejected.", "If a stage shows failures, return to the affected source or parser and retry with a validated sample."],
+  "Detection Rules": ["Open Detection Rules to review the existing detection logic, severity and enabled state. Select a rule to inspect its conditions and intended event types.", "Before enabling or modifying a rule, validate it with representative benign and suspicious samples using the available testing or replay workflow.", "Monitor alert volume after changes. A detection firing is a lead to investigate, not an automatic confirmation of malicious activity."],
+  "Detection Replay": ["Use Detection Replay to evaluate detection logic against eligible historical or synthetic events.", "Select the available replay scope, run the evaluation and inspect which rules match. Compare outcomes with expected test cases.", "Replay is a validation tool; results do not automatically represent new live incidents."],
+  "Alerts": ["Open Alerts and sort or filter by severity, status and time. Start with critical or high-confidence detections and inspect the supporting event details.", "Confirm the affected host, user, source, time and rule before changing the alert state. Link related alerts to an investigation when warranted.", "Record the reason for dismissing or escalating an alert. Avoid treating every alert as a confirmed incident."],
+  "Threat Hunting": ["Begin with a specific hypothesis, such as suspicious sign-in attempts from a host or repeated activity from an IP address.", "Set the workspace and time window, use the available filters or query controls, and compare matching events across users and systems.", "Document both supporting and contradicting evidence. Create or update an investigation when the hunt identifies actionable findings."],
+  "MITRE ATT&CK": ["Open MITRE ATT&CK to review the available tactic and technique mappings. Use them to understand what a detection attempts to identify.", "Compare mapped techniques against enabled rules and observed evidence to identify potential detection coverage gaps.", "A technique label describes a behavior pattern; it does not independently prove that an adversary performed it."],
+  "Threat Intelligence": ["Open Threat Intel to inspect available indicators and enrichment, such as suspicious IPs, domains or hashes.", "Compare indicator context, timestamps and source reliability against local events before escalating.", "Optional external reputation providers require their own credentials. An unavailable lookup is not a clean reputation verdict."],
+  "Investigations": ["Create or open an investigation for related alerts or suspicious events. Record a clear hypothesis, affected entities, supporting evidence and timestamps.", "Use available case status, assignment and notes to track work from initial triage through resolution. Preserve evidence and record why conclusions were reached.", "Do not close a case solely because alerts stopped; verify the underlying activity and document any remaining risk."],
+  "Investigation Graph": ["Open Investigation Graph to visualize available relationships among alerts, hosts, users, IP addresses and other entities.", "Select nodes and connections to inspect the associated records. Follow relationships to identify shared infrastructure or related activity.", "Treat graph links as leads until corroborated by original events and timestamps."],
+  "Playbooks": ["Open Playbooks to review the available response workflows and their required inputs.", "Before executing an action, confirm its target, expected impact, permissions and whether it affects Training Lab or production.", "Document the outcome and verify that the response achieved its intended result. Avoid running disruptive actions without authorization."],
+  "Reports": ["Open Reports and choose the available report type, workspace and time range. Review the included findings and supporting data before exporting.", "Use a report to communicate alert trends, investigation outcomes or operational health to the appropriate audience.", "Check for sensitive information before sharing. A report based on synthetic Training Lab data must be labeled accordingly."],
+  "AI Security Assistant": ["Use the assistant for explanations, investigation ideas or summaries when its provider is configured.", "Provide relevant non-secret context and ask for specific, verifiable reasoning. Compare suggested actions against SentinelLab events and approved procedures.", "Do not share passwords, API keys or sensitive production data with an unapproved provider. AI-generated output can be mistaken."],
+  "General settings": ["Open Settings → General to review application identity, timezone, theme and default time range. Change one setting at a time and confirm it was saved.", "Demo Mode is intended for synthetic Training Lab activity. Reset Training Lab Data can regenerate demonstration records and should only be used when replacement is acceptable.", "Keep production workflows separate from demonstrations and verify the workspace before any reset."],
+  "Security overview": ["Open Administration to inspect account and session security controls and their reported status.", "Review password requirements, lockout policy, role permissions, audit behavior and workspace isolation before deploying to production.", "Informational security summaries do not replace penetration testing or configuration validation."],
+  "Create analyst": ["Sign in with an authorized administrator account, open Administration and locate the Create Analyst form.", "Enter a unique email and username, a display name and a strong initial password. Submit once and check that the new account appears in user management.", "The analyst should use Non-Admin Login. Confirm the assigned workspace and least-privilege role before sharing credentials securely."],
+  "User and role management": ["Open Administration → User & Role Management. Locate the account and inspect its current role and workspace membership.", "Choose the required role only if it matches the person's responsibilities, then review and confirm the change.", "Verify the resulting access with the affected account. Higher privileges should be granted sparingly and administrative changes reviewed in the audit log."],
+  "Account actions": ["Super administrators can access eligible account controls such as username changes, password resets and enable/disable actions.", "Verify the user's identity and select the intended account. Read the confirmation dialog carefully before submitting a sensitive action.", "After a password reset or account disablement, verify session revocation and audit history. Never attempt to recover a plaintext password from MongoDB."],
+  "Login security alerts": ["Open the login security section to review suspicious repeated sign-in attempts, temporary lockouts and associated account details.", "Check the timing, account and context before deciding whether an incident is benign or requires investigation.", "Unlock only after identity verification and document the reason. A locked account can indicate password guessing or compromised credentials."],
+  "Production membership": ["In Administration, review which accounts have production workspace access and which requests are pending.", "Request access only for a justified operational need. A second administrator may need to approve it; self-approval may be prohibited.", "If an approval is interrupted, inspect its status and use reconciliation controls when available. Review the audit log after granting or revoking access."],
+  "Ingestion settings": ["Open Settings → Ingestion to review the documented processing pipeline, supported input formats and parser/schema versions.", "Use this information to prepare compatible source data and to understand how incoming events become normalized records and alerts.", "This page describes pipeline configuration and capabilities; it does not itself guarantee a source is connected or events are arriving."],
+  "Retention": ["Open Settings → Retention to review the current retention period and the available range.", "Adjust the slider to the required number of days and allow the setting to save. Consider storage capacity, investigation needs and legal requirements.", "Events beyond the window may become eligible for cleanup. Preserve required evidence separately according to your organization's policy."],
+  "Integrations": ["Open Settings → Integrations to check which external services are configured and available.", "Review each provider's required credentials or endpoint and configure it through supported deployment settings before relying on its results.", "An offline integration does not mean its security findings are negative. Never hardcode API keys into source files or share them in screenshots."],
+  "About and audit": ["Open Settings → About to review the application version, database health, search backend and AI assistant status.", "Inspect recent audit records for account changes and other sensitive actions. Compare actor, timestamp, action and resource.", "Use audit evidence when investigating unexpected permission changes or administrative operations."],
+  "Backend offline": ["If the backend indicator remains unavailable, wait briefly for cold startup and check Task Manager for the bundled API process.", "Restart SentinelLab and inspect whether the local API is reachable. Confirm that security software is not blocking the executable.", "If the process exits unexpectedly, collect the Windows build version and relevant application logs before troubleshooting further."],
+  "MongoDB unavailable": ["Check whether MongoDB Community Server is installed and its Windows service is running. The expected default endpoint is localhost:27017.", "Use MongoDB Compass or mongosh to test a local connection. Check service configuration and firewall rules if connection fails.", "Restart SentinelLab after restoring database access. Do not delete the database as a troubleshooting shortcut."],
+  "No events or alerts": ["Confirm the correct workspace and a sufficiently broad time range. Check whether any sources are connected and sending events.", "Inspect Sources & Ingestion and Pipeline Observatory for parsing failures or processing delays.", "Check detection rule enablement and matching conditions. No alerts is not proof that the environment is secure."],
+  "Permissions denied": ["Verify the selected login mode, signed-in role and current workspace membership.", "Ask an authorized administrator to review access through Administration. Production access may require independent approval.", "Do not bypass permissions by editing MongoDB account records manually."],
+  "Installer cannot replace API": ["Close SentinelLab and accept the shutdown confirmation. Check Task Manager for a lingering sentinellab-api.exe process.", "If it remains, stop the stale process before retrying the installer. Keep MongoDB running; it is not the locked executable.", "Use Retry after the file lock is cleared. Do not choose Ignore because that can leave mismatched application components."],
+  "Outgoing webhooks": ["Open Settings → Integrations and scroll to Outgoing webhooks. Choose a destination type and enter a friendly name.", "In Discord or Slack, create an incoming webhook for your chosen channel. For Teams, create a Workflows webhook. Paste its HTTPS URL into SentinelLab.", "Tick the notification categories that matter to your team, save the destination, and press Send test. Confirm the test message arrives.", "Use Pause to stop messages temporarily or Delete to remove the destination. Saved URLs are hidden after creation."],
+  "Webhook testing": ["Click Send test on the saved destination.", "Wait for Delivered or Failed. If failed, confirm the URL, network connection, destination permissions and provider-specific webhook setup.", "The delivery status shows whether the remote server accepted the HTTP request, not whether a person has read the message."],
+  "Webhook security": ["Treat a webhook URL as a secret because anyone with the URL may be able to post messages to that destination.", "Use a dedicated channel for security notifications and only subscribe to necessary event categories.", "If a webhook URL is exposed, revoke it at the destination provider and create a replacement."],
+  "Security practices": ["Use unique passwords and role-based least privilege. Keep analyst and administrator accounts separate when appropriate.", "Validate detection rules with synthetic data before enabling them in production and preserve evidence for investigations.", "Review audit events, minimize external integration secrets and maintain database backups according to your organization's policy."]
+};
+
+const beginnerExamples = {
+  "Overview": "This is your security home screen. If the event count jumps, open Events Explorer to see what changed.",
+  "Events Explorer": "An event is like a line in a diary: someone signed in, a file changed, or a connection happened.",
+  "Alerts": "An alert is like a smoke alarm. It tells you to investigate; it does not automatically mean there is a fire.",
+  "Detection Rules": "A rule is a condition such as 'warn me when repeated failed logins occur'. Test rules before enabling them.",
+  "Threat Hunting": "Imagine you suspect unusual midnight logins. Search for login records during those hours.",
+  "Sources & Ingestion": "A firewall sends log messages; ingestion brings them into SentinelLab so you can search them.",
+  "Investigations": "Put related alerts, evidence, and notes in one case folder so your team can follow the story.",
+  "Playbooks": "A playbook is a checklist of response steps. Read each step before performing it.",
+  "Reports": "A report summarizes what happened during a chosen period for your team or manager.",
+  "Create analyst": "Create a teammate's account with analyst permissions instead of giving them full administrator access.",
+  "User and role management": "Roles decide who can view events and who can change users or security settings.",
+  "Production membership": "Training Lab is a practice room. Production is the real workplace; access needs extra care.",
+  "Service indicators": "Amber means waiting, green means connected, and red means a check failed.",
+  "Retention": "A 90-day setting makes older event records eligible for cleanup; it does not mean they disappear immediately.",
+  "Integrations": "An integration connects another service, such as an IP reputation checker, to SentinelLab.",
+  "Outgoing webhooks": "A webhook is a message sent automatically to another app. For example, a critical alert can appear in your Discord security channel."
+};
+const glossary = [
+  [
+    "SOC",
+    "Security Operations Center: a team or workspace that watches security activity."
+  ],
+  [
+    "SIEM",
+    "Security Information and Event Management: software for collecting and examining security logs."
+  ],
+  [
+    "Event",
+    "A recorded action, such as a login or network connection."
+  ],
+  [
+    "Alert",
+    "A warning that a rule found something worth checking."
+  ],
+  [
+    "Rule",
+    "A condition that decides when a warning should appear."
+  ],
+  [
+    "Ingestion",
+    "Bringing event records into SentinelLab."
+  ],
+  [
+    "RBAC",
+    "Role-Based Access Control: each account gets permissions based on its role."
+  ],
+  [
+    "MongoDB",
+    "The database storing SentinelLab accounts and records."
+  ]
+];
+
+export function HelpContent() {
+  const [query, setQuery] = useState("");
+  const [expanded, setExpanded] = useState({});
+  const sections = useMemo(() => guide.map(([title, entries]) => [title, entries.filter(([name, body]) => (title+" "+name+" "+body+" "+(detailed[name]||[]).join(" ")).toLowerCase().includes(query.toLowerCase()))]).filter(([,entries]) => entries.length), [query]);
+  return <div className="space-y-4" data-testid="complete-user-guide">
+    <p className="text-[12px] leading-relaxed" style={{color:"var(--text-2)"}}>This manual covers SentinelLab's current navigation, workflows and security controls. Some features require specific permissions, configured data sources or optional integrations. Follow each topic's steps and verify results before applying changes to production.</p>
+    <input className="inp w-full max-w-xl" type="search" aria-label="Search user guide" placeholder="Search a feature, action, or problem…" value={query} onChange={e=>setQuery(e.target.value)} />
+    <div className="text-[11px]" style={{color:"var(--text-3)"}}>{guide.reduce((n,[,entries])=>n+entries.length,0)} documented options across {guide.length} sections</div>
+    {sections.map(([title,entries])=><section key={title} className="card p-4 space-y-2">
+      <h2 className="text-[15px] font-semibold" style={{color:"var(--text)"}}>{title}</h2>
+      {entries.map(([name,body])=>{const key=title+"/"+name;const open=Boolean(query.trim()) ? expanded[key] !== false : Boolean(expanded[key]);return <div key={key} className="border-t pt-2">
+        <button type="button" className="w-full text-left text-[13px] font-medium py-1 flex justify-between gap-3" aria-expanded={open} onClick={()=>setExpanded(p=>({...p,[key]:!open}))}>{name}<span aria-hidden="true">{open?"−":"+"}</span></button>
+        {open && <div className="text-[12px] leading-relaxed py-2 space-y-2" style={{color:"var(--text-2)"}}>
+          <p><strong>What it does:</strong> {body}</p>
+          {beginnerExamples[name] && <p className="rounded-md p-3" style={{background:"var(--bg)",color:"var(--text)"}}><strong>Simple example:</strong> {beginnerExamples[name]}</p>}
+          <p className="font-semibold" style={{color:"var(--text)"}}>Step by step</p>
+          <ol className="list-decimal pl-5 space-y-1.5">{(detailed[name]||[body]).map(step=><li key={step}>{step}</li>)}</ol>
+        </div>}
+      </div>})}
+    </section>)}
+    {!sections.length && <p className="text-[13px]">No guide entries match that search.</p>}
+    <section className="card p-4 space-y-2"><h2 className="text-[15px] font-semibold">Cybersecurity words explained</h2>{glossary.filter(([word, meaning]) => (word+" "+meaning).toLowerCase().includes(query.toLowerCase())).map(([word,meaning])=><p key={word} className="text-[12px] border-t pt-2"><strong>{word}:</strong> {meaning}</p>)}</section>
+  </div>;
+}
+
+export default function Help() {
+  return <div data-testid="how-to-use-page" className="max-w-5xl">
+    <PageHead title="How to Use SentinelLab" desc="Detailed feature-by-feature user and administrator manual" />
+    <HelpContent />
+  </div>;
+}

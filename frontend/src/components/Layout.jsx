@@ -4,7 +4,7 @@ import {
   Shield, LayoutDashboard, ScrollText, Crosshair, Bell, FileSearch, Cpu,
   Radio, FolderSearch, FileBarChart, Settings as SettingsIcon, Search,
   Palette, LogOut, ChevronDown, Activity, Bot, Check, Target, Globe, Workflow,
-  Network, Repeat, Gauge,
+  Network, Repeat, Gauge, Users,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme, THEMES } from "@/context/ThemeContext";
@@ -61,9 +61,7 @@ export default function Layout({ children }) {
       {/* sidebar */}
       <aside className="w-60 shrink-0 surface border-r flex flex-col fixed h-screen z-30" data-testid="sidebar">
         <div className="h-14 flex items-center gap-2.5 px-4 border-b">
-          <div className="grid place-items-center w-8 h-8 rounded-md" style={{ background: "color-mix(in srgb, var(--cyan) 18%, transparent)", border: "1px solid var(--cyan)" }}>
-            <Shield size={17} style={{ color: "var(--cyan)" }} />
-          </div>
+          <img src="/Neon%20Global%20Shield%20Emblem.png" alt="" aria-hidden="true" className="w-8 h-8 object-contain shrink-0" />
           <div>
             <div className="font-head font-bold text-[15px] leading-none" style={{ color: "var(--text)" }}>SentinelLab</div>
             <div className="text-[10px] mt-0.5" style={{ color: "var(--text-3)" }}>Security Operations Center</div>
@@ -76,6 +74,7 @@ export default function Layout({ children }) {
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-0.5">
+          {["admin", "super_admin"].includes(user?.role) && <NavLink to="/admin" className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`} data-testid="nav-administration"><Users size={16} /> Administration</NavLink>}
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end}
               className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
@@ -97,8 +96,8 @@ export default function Layout({ children }) {
           style={{ background: "color-mix(in srgb, var(--bg) 82%, transparent)" }} data-testid="topbar">
           {/* search */}
           <div className="relative flex-1 max-w-md">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-3)" }} />
-            <input className="inp pl-8 font-mono text-[12.5px]" placeholder="Search events, alerts, hosts, IPs…"
+            <Search size={14} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-3)" }} />
+            <input className="inp font-mono text-[12.5px]" style={{ paddingLeft: 40 }} aria-label="Search events, alerts, hosts, and IPs" placeholder="Search events, alerts, hosts, IPs…"
               value={search} onChange={(e) => doSearch(e.target.value)}
               onBlur={() => setTimeout(() => setResults(null), 200)} data-testid="global-search" />
             {results && (

@@ -1,0 +1,54 @@
+name: Prepare SentinelLab Alpha Release
+on:
+  workflow_dispatch:
+  push:
+    branches: ["fix/phase1-security-regressions"]
+    paths:
+      - ".github/workflows/prepare-alpha-release.yml"
+permissions:
+  contents: write
+  actions: read
+jobs:
+  prepare-draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified platform build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          gh run download 38260679904 --repo "${{ github.repository }}" --dir release-assets
+          gh run download 38260680147 --repo "${{ github.repository }}" --dir release-assets
+      - name: Verify artifacts and create checksum manifest
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find release-assets -type f -print
+          while IFS= read -r -d '' file; do
+            platform=$(basename "$(dirname "$file")")
+            cp "$file" "dist/${platform}-$(basename "$file")"
+          done < <(find release-assets -type f \( -name '*.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' \) -print0)
+          test "$(find dist -maxdepth 1 -name '*.exe' | wc -l)" -ge 1
+          test "$(find dist -maxdepth 1 -name '*.deb' | wc -l)" -ge 1
+          test "$(find dist -maxdepth 1 -name '*.AppImage' | wc -l)" -ge 1
+          test "$(find dist -maxdepth 1 -name '*.dmg' | wc -l)" -ge 2
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+      - name: Create draft GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v0.1.0-alpha --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release v0.1.0-alpha already exists; refusing to overwrite it."
+            exit 1
+          fi
+          gh release create v0.1.0-alpha dist/* \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "SentinelLab v0.1.0-alpha" \
+            --notes-file docs/ALPHA_RELEASE_NOTES.md \
+            --draft --prerelease
+          echo "Draft created: https://github.com/${{ github.repository }}/releases"

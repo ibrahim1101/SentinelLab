@@ -41,8 +41,8 @@ export default function Playbooks() {
       </div>
 
       <div className="card overflow-hidden" data-testid="exec-history">
-        <div className="px-4 py-2.5 border-b font-head font-semibold text-[14px]">Execution History (live runs)</div>
-        {!execs.length ? <Empty msg="No live executions yet — dry-runs are not persisted" /> : (
+        <div className="px-4 py-2.5 border-b font-head font-semibold text-[14px]">Execution History (recorded runs)</div>
+        {!execs.length ? <Empty msg="No recorded runs yet — dry-runs are not saved" /> : (
           <table className="dense w-full">
             <thead><tr><th>Playbook</th><th>Alert</th><th>Mode</th><th>Status</th><th>By</th><th>When</th><th></th></tr></thead>
             <tbody>
@@ -50,10 +50,10 @@ export default function Playbooks() {
                 <tr key={e.id} className="border-t row-hover cursor-pointer" onClick={() => setViewExec(e)} data-testid={`exec-${e.id}`}>
                   <td style={{ color: "var(--text)" }}>{e.playbook_name}</td>
                   <td className="font-mono" style={{ color: "var(--text-2)" }}>{e.alert_id ? e.alert_id.slice(0, 8) : "—"}</td>
-                  <td><span className="pill">{e.dry_run ? "dry-run" : "live"}</span></td>
+                  <td><span className="pill">{e.dry_run ? "dry-run" : "recorded"}</span></td>
                   <td style={{ color: e.status === "completed" ? "#22c55e" : "#FB923C", textTransform: "capitalize" }}>{e.status.replace(/_/g, " ")}</td>
                   <td className="font-mono" style={{ color: "var(--text-2)" }}>{e.run_by}</td>
-                  <td className="font-mono" style={{ color: "var(--text-3)" }}>{fmtTime(e.created_at).slice(0, 16)}</td>
+                  <td className="font-mono" style={{ color: "var(--text-3)" }}>{fmtTime(e.created_at)}</td>
                   <td style={{ color: "var(--cyan)" }}>View</td>
                 </tr>
               ))}
@@ -110,7 +110,14 @@ function RunModal({ pb, alerts, onClose, onDone }) {
     try {
       const { data } = await client.post("/playbooks/run", { playbook_id: pb.id, alert_id: alertId || null, dry_run, approvals });
       setResult(data);
-      if (!dry_run) { toast.success("Playbook executed"); onDone(); }
+      if (!dry_run) {
+        if (data.status === "failed") toast.error("Playbook finished with errors — review the steps");
+        else if (data.status === "needs_approval") toast.warning("Playbook has steps awaiting approval");
+        else if (data.steps?.some((step) => step.status === "simulated")) toast.info("Run recorded — external actions were simulated, not performed");
+        else if (data.status === "completed_with_skips") toast.warning("Playbook recorded with skipped steps");
+        else toast.success("Playbook run recorded");
+        onDone();
+      }
       else toast.info("Dry-run complete — no changes made");
     } catch (e) { toast.error("Run failed"); } finally { setBusy(false); }
   };
@@ -126,7 +133,7 @@ function RunModal({ pb, alerts, onClose, onDone }) {
             {alerts.map((a) => <option key={a.id} value={a.id}>{a.title} ({a.severity})</option>)}
           </select>
           <div className="text-[11px] uppercase mb-1" style={{ color: "var(--text-3)" }}>Approval Gates</div>
-          <p className="text-[11.5px] mb-2" style={{ color: "var(--text-3)" }}>External/impactful steps require explicit approval before a live run executes them.</p>
+          <p className="text-[11.5px] mb-2" style={{ color: "var(--text-3)" }}>External/impactful steps require explicit approval. EDR, firewall, email and identity-provider actions are simulations only; no external changes are made.</p>
           {approvalSteps.map((s) => (
             <label key={s.id} className="flex items-center gap-2 py-1 text-[12.5px] cursor-pointer" style={{ color: "var(--text-2)" }} data-testid={`approve-${s.id}`}>
               <input type="checkbox" checked={approvals.includes(s.id)} onChange={() => toggleApproval(s.id)} /> {s.name}
@@ -134,7 +141,7 @@ function RunModal({ pb, alerts, onClose, onDone }) {
           ))}
           <div className="flex gap-2 mt-4">
             <button className="btn btn-sm flex-1 justify-center" onClick={() => run(true)} disabled={busy} data-testid="dry-run-btn"><ShieldCheck size={13} /> Dry Run</button>
-            <button className="btn btn-primary flex-1 justify-center" onClick={() => run(false)} disabled={busy} data-testid="live-run-btn"><PlayCircle size={13} /> Execute Live</button>
+            <button className="btn btn-primary flex-1 justify-center" onClick={() => run(false)} disabled={busy} data-testid="live-run-btn"><PlayCircle size={13} /> Record Run</button>
           </div>
         </div>
         <div>

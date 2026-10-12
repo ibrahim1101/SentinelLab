@@ -25,11 +25,12 @@ export function AuthProvider({ children }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const login = async (email, password) => {
-    const { data } = await client.post("/auth/login", { email, password });
+  const login = async (email, password, loginMode = "non_admin") => {
+    const { data } = await client.post("/auth/login", { email, password, login_mode: loginMode });
     localStorage.setItem("sl_token", data.access_token);
     localStorage.setItem("sl_workspace", data.user.default_org);
     setUser(data.user);
+    await refresh();
     return data.user;
   };
   const register = async (email, password, name) => {
