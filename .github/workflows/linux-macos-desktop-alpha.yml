@@ -2,7 +2,7 @@ name: Linux and macOS Desktop Alpha
 on:
   workflow_dispatch:
   push:
-    branches: ["fix/phase1-security-regressions"]
+    branches: ["main"]
     paths:
       - "desktop/**"
       - "frontend/**"
