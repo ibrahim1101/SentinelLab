@@ -1,0 +1,43 @@
+name: Generate Dependency Lockfiles (Review Required)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  generate-lockfiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate frontend npm lockfile
+        working-directory: frontend
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Generate desktop npm lockfile
+        working-directory: desktop
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Generate Rust lockfile
+        working-directory: desktop/src-tauri
+        run: cargo generate-lockfile
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify generated lockfiles
+        run: python scripts/verify_dependency_lockfiles.py
+      - name: Record manifest hashes
+        run: |
+          sha256sum frontend/package.json frontend/package-lock.json desktop/package.json desktop/package-lock.json desktop/src-tauri/Cargo.toml desktop/src-tauri/Cargo.lock > dependency-lockfile-hashes.txt
+      - name: Upload lockfiles for review (not committed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SentinelLab-Generated-Lockfiles-Review-Only
+          path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+            desktop/src-tauri/Cargo.lock
+            dependency-lockfile-hashes.txt
+          retention-days: 30
+          if-no-files-found: error
