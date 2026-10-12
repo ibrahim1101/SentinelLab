@@ -26,7 +26,10 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           find release-assets -type f -print
-          find release-assets -type f \( -name '*.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' \) -exec cp -n '{}' dist/ \;
+          while IFS= read -r -d '' file; do
+            platform=$(basename "$(dirname "$file")")
+            cp "$file" "dist/${platform}-$(basename "$file")"
+          done < <(find release-assets -type f \( -name '*.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' \) -print0)
           test "$(find dist -maxdepth 1 -name '*.exe' | wc -l)" -ge 1
           test "$(find dist -maxdepth 1 -name '*.deb' | wc -l)" -ge 1
           test "$(find dist -maxdepth 1 -name '*.AppImage' | wc -l)" -ge 1
