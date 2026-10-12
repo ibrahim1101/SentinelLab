@@ -533,3 +533,11 @@ cd release-review && sha256sum -c SHA256SUMS.txt
 - Added `README.md` license disclosure and copyright attribution for original owned work (`742f2f2`).
 - Added `docs/THIRD_PARTY_LICENSE_REVIEW.md` (`77e2b4d`) to track source/provenance and redistribution review, including Emergent-generated origins, Emergent frontend development dependencies, Tauri, npm/Python/Cargo transitive packages, icons and model assets.
 - **Open release-compliance item:** verify third-party terms and provide required notices and corresponding source for GPL-covered desktop binaries. Adding GPL does not relicense third-party assets or prove dependency-license compatibility. Public release remains a draft until review and publication.
+
+
+### 2026-10-12 — GPL release compliance audit
+- Inspected `main` frontend/desktop manifests, Rust manifest, Python runtime requirements, Windows and Linux/macOS packaging workflows, and release gate.
+- Added `GPL-3.0-only` package metadata to frontend, desktop and Rust manifests; kept the full GPLv3 license at repository root.
+- Found no committed npm/Cargo lockfiles; desktop CI currently resolves npm packages via `npm install`, Python runtime dependencies include a range, and PyInstaller is unpinned. Exact dependency provenance and license inventory remain unverified.
+- Flagged Emergent-hosted frontend development dependencies and branded installer artwork for source/redistribution rights review.
+- Recorded release-blocking compliance checklist in `docs/THIRD_PARTY_LICENSE_REVIEW.md`; existing draft assets must not be represented as rebuilt from current main.
