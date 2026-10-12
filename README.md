@@ -59,3 +59,12 @@ Read [Engineering Journey](docs/ENGINEERING_JOURNEY.md), [Development History](d
 ## Security and reporting
 
 Use only synthetic or authorized data. Do not deploy as a production security monitoring system without further validation. Report vulnerabilities privately to the maintainer, not as public exploit details. When reporting bugs, include OS, package type, reproduction steps and **redacted** logs.
+
+
+## License
+
+SentinelLab's original project code is released under the **GNU General Public License v3.0 only (GPL-3.0-only)**. Copyright (C) 2026 Shaik Ibrahim, for original contributions owned by the copyright holder. See the full [LICENSE](LICENSE) text.
+
+You may use, modify and redistribute the GPL-covered code under GPLv3 terms, including commercially. When conveying covered modified versions, you must satisfy GPLv3 requirements, including providing corresponding source and preserving required notices. GPLv3 does not prohibit commercial use.
+
+**Third-party notices:** SentinelLab includes and depends on components, generated assets, and tooling with their own copyright and licensing terms. The GPL declaration applies only to code and assets that the project copyright holder is authorized to license. It does not relicense independently owned third-party materials. Review third-party notices and redistribution obligations before distributing desktop installers. See [Third-party licensing notes](docs/THIRD_PARTY_LICENSE_REVIEW.md).
