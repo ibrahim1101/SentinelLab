@@ -17,6 +17,7 @@ def configure_environment():
     os.environ.setdefault("MONGO_URL", "mongodb://127.0.0.1:27017/?serverSelectionTimeoutMS=3000")
     os.environ.setdefault("DB_NAME", "sentinellab")
     os.environ.setdefault("ENABLE_DEMO_ACCOUNTS", "false")
+    os.environ["SENTINELLAB_DESKTOP"] = "1"
     os.environ.setdefault("CORS_ORIGINS", "http://tauri.localhost,tauri://localhost")
 
 
