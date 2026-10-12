@@ -7,13 +7,40 @@ use tauri_plugin_shell::{process::CommandChild, ShellExt};
 struct BackendProcess(Mutex<Option<CommandChild>>);
 struct CloseState(AtomicBool);
 
-fn stop_backend(app: &tauri::AppHandle) {
-    if let Some(child) = app.state::<BackendProcess>().0.lock()
-        .expect("backend mutex poisoned").take()
+fn terminate_backend_tree(child: CommandChild) {
+    // PyInstaller one-file executables may launch a child process with the same
+    // executable name. Killing only the sidecar parent can leave that child alive.
+    #[cfg(target_os = "windows")]
     {
-        if let Err(error) = child.kill() {
-            eprintln!("Could not terminate SentinelLab backend: {error}");
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let pid = child.pid();
+        match std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
+            Ok(result) if result.status.success() => return,
+            Ok(result) => eprintln!(
+                "Backend process-tree termination returned {}: {}",
+                result.status,
+                String::from_utf8_lossy(&result.stderr)
+            ),
+            Err(error) => eprintln!("Cannot run taskkill for backend PID {pid}: {error}"),
         }
+    }
+    // Fallback on platforms without taskkill, or when Windows tree termination fails.
+    if let Err(error) = child.kill() {
+        eprintln!("Could not terminate SentinelLab backend: {error}");
+    }
+}
+
+fn stop_backend(app: &tauri::AppHandle) {
+    let backend_state = app.state::<BackendProcess>();
+    let child = backend_state.0.lock()
+        .expect("backend mutex poisoned").take();
+    if let Some(child) = child {
+        terminate_backend_tree(child);
     }
 }
 
@@ -40,7 +67,7 @@ pub fn run() {
                         let mut process = backend_state.0.lock()
                             .expect("backend mutex poisoned");
                         if handle.state::<CloseState>().0.load(Ordering::SeqCst) {
-                            let _ = child.kill();
+                            terminate_backend_tree(child);
                         } else {
                             *process = Some(child);
                         }
