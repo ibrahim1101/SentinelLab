@@ -62,3 +62,12 @@ Added `scripts/export_dependency_declarations.py` and the **Dependency Declarati
 - Added `scripts/verify_dependency_lockfiles.py` to enforce that committed frontend/desktop npm lockfiles reflect their manifests and that a Cargo lockfile exists. **Not yet enabled as a required CI gate**, because the repository still lacks those lockfiles. This avoids breaking the working installer workflows before the files are generated.
 - Required follow-up: run `npm install --package-lock-only --ignore-scripts` separately in `frontend` and `desktop`, then `cargo generate-lockfile` in `desktop/src-tauri`, inspect dependency changes, commit generated lockfiles, and run `python scripts/verify_dependency_lockfiles.py`. Prefer isolated builds and check proprietary package accessibility. Only then change CI to `npm ci` and `cargo --locked`.
 - Lockfiles improve reproducibility but **do not prove** license compliance, binary integrity or supply-chain safety.
+
+
+## Lockfile generation workflow (manual review stage)
+
+A manually triggered [Generate Dependency Lockfiles (Review Required)](../.github/workflows/generate-dependency-lockfiles.yml) workflow now exists. It checks out `main`, uses Node 22 and Rust stable, runs `npm install --package-lock-only --ignore-scripts --no-audit --no-fund` in `frontend/` and `desktop/`, runs `cargo generate-lockfile` in `desktop/src-tauri/`, then validates all three using `python scripts/verify_dependency_lockfiles.py`. If successful, it uploads the three lockfiles plus SHA-256 hashes as an artifact named `SentinelLab-Generated-Lockfiles-Review-Only`.
+
+**Operator action:** GitHub → Actions → **Generate Dependency Lockfiles (Review Required)** → **Run workflow** (select `main`). Download the artifact and review package changes, external registries, licensing and vulnerabilities before committing files to their corresponding directories. This workflow does **not** push commits, update installers, or publish releases. If npm fails because of the Emergent-hosted tarballs, document the failure and review whether those dependencies are needed for production before changing them. Do not remove packages solely to make the workflow pass.
+
+**Status:** workflow committed; execution and resulting lockfiles **not yet verified**. The existing installer workflows remain unchanged until reviewed lockfiles are committed.
