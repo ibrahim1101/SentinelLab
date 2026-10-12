@@ -58,6 +58,18 @@ jobs:
           $target = (rustc -vV | Select-String "^host: ").ToString().Split(" ")[1]
           Move-Item desktop/src-tauri/binaries/sentinellab-api.exe "desktop/src-tauri/binaries/sentinellab-api-$target.exe"
           if (!(Test-Path "desktop/src-tauri/binaries/sentinellab-api-$target.exe")) { throw "Backend executable missing" }
+      - name: Smoke-test bundled backend executable
+        shell: pwsh
+        run: |
+          $target = (rustc -vV | Select-String "^host: ").ToString().Split(" ")[1]
+          $exe = "desktop/src-tauri/binaries/sentinellab-api-$target.exe"
+          $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
+          try {
+            Start-Sleep -Seconds 8
+            if ($process.HasExited) { throw "Bundled backend exited immediately (exit code $($process.ExitCode))" }
+          } finally {
+            if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
       - name: Build Windows NSIS installer
         working-directory: desktop
         run: npm run tauri:build
