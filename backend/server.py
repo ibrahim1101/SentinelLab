@@ -8,6 +8,7 @@ import io
 import csv
 import json
 import logging
+import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 
@@ -25,6 +26,7 @@ from detection import run_detection, evaluate_rule
 import seed as seedmod
 import ai_assistant
 import playbooks as pbmod
+import webhooks as wh
 from mitre_data import TACTICS, TECHNIQUES, ATTACK_VERSION
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -117,6 +119,84 @@ class SettingsReq(BaseModel):
     retention_days: Optional[int] = None
     demo_mode: Optional[bool] = None
 
+
+class WebhookCreateReq(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    provider: str = Field(pattern="^(generic|slack|discord|teams)$")
+    url: str = Field(min_length=12, max_length=2048)
+    events: List[str] = Field(min_length=1, max_length=7)
+    enabled: bool = True
+
+class WebhookUpdateReq(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    url: Optional[str] = Field(default=None, min_length=12, max_length=2048)
+    events: Optional[List[str]] = None
+    enabled: Optional[bool] = None
+
+@api.get("/admin/webhooks")
+async def list_webhooks(request: Request, user=Depends(require_role("admin"))):
+    org = active_org(user, request)
+    rows = await db.webhooks.find({"org_id": org}, {"_id": 0}).to_list(100)
+    return {"webhooks": [wh.public_doc(row) for row in rows], "event_types": sorted(wh.EVENTS)}
+
+@api.post("/admin/webhooks", status_code=201)
+async def create_webhook(body: WebhookCreateReq, request: Request, user=Depends(require_role("admin"))):
+    org = active_org(user, request)
+    if not set(body.events).issubset(wh.EVENTS):
+        raise HTTPException(422, "Unknown webhook event type")
+    if await db.webhooks.count_documents({"org_id": org}) >= 50:
+        raise HTTPException(409, "Maximum of 50 webhooks per workspace")
+    try:
+        await asyncio.to_thread(wh.safe_target, body.url, body.provider)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    doc = {"id": new_id(), "org_id": org, "name": body.name.strip(),
+           "provider": body.provider, "url_encrypted": wh.encrypt_url(body.url),
+           "events": list(set(body.events)), "enabled": body.enabled, "created_at": now_iso(),
+           "last_status": "never_sent", "last_sent": None}
+    await db.webhooks.insert_one(doc)
+    await audit(org, user, "create", "webhook", doc["id"], {"provider": body.provider, "events": doc["events"]})
+    return {"webhook": wh.public_doc(doc)}
+
+@api.patch("/admin/webhooks/{hook_id}")
+async def update_webhook(hook_id: str, body: WebhookUpdateReq, request: Request, user=Depends(require_role("admin"))):
+    org = active_org(user, request)
+    doc = await db.webhooks.find_one({"id": hook_id, "org_id": org})
+    if not doc:
+        raise HTTPException(404, "Webhook not found")
+    changes = body.model_dump(exclude_none=True)
+    if "events" in changes and (not changes["events"] or not set(changes["events"]).issubset(wh.EVENTS)):
+        raise HTTPException(422, "Invalid event subscriptions")
+    if "url" in changes:
+        try:
+            await asyncio.to_thread(wh.safe_target, changes["url"], doc["provider"])
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        changes["url_encrypted"] = wh.encrypt_url(changes.pop("url"))
+    await db.webhooks.update_one({"id": hook_id, "org_id": org}, {"$set": changes})
+    await audit(org, user, "update", "webhook", hook_id, {"fields": list(changes)})
+    return {"webhook": wh.public_doc(await db.webhooks.find_one({"id": hook_id, "org_id": org}))}
+
+@api.delete("/admin/webhooks/{hook_id}")
+async def delete_webhook(hook_id: str, request: Request, user=Depends(require_role("admin"))):
+    org = active_org(user, request)
+    result = await db.webhooks.delete_one({"id": hook_id, "org_id": org})
+    if not result.deleted_count:
+        raise HTTPException(404, "Webhook not found")
+    await audit(org, user, "delete", "webhook", hook_id)
+    return {"ok": True}
+
+@api.post("/admin/webhooks/{hook_id}/test")
+async def test_webhook(hook_id: str, request: Request, user=Depends(require_role("admin"))):
+    org = active_org(user, request)
+    doc = await db.webhooks.find_one({"id": hook_id, "org_id": org})
+    if not doc:
+        raise HTTPException(404, "Webhook not found")
+    event = {"id": new_id(), "org_id": org, "type": "test",
+             "title": "Webhook test", "detail": "SentinelLab can send notifications to this destination.",
+             "timestamp": now_iso()}
+    status = await wh.send_one(doc, event)
+    return {"status": status}
 
 # Desktop initialization is available only to the bundled loopback server.
 @api.get("/desktop/setup-status")
@@ -399,6 +479,8 @@ async def overview(request: Request, time_range: str = "24h", user=Depends(get_c
 async def _notify(org, ntype, text, ref=None):
     await db.notifications.insert_one({"id": new_id(), "org_id": org, "type": ntype, "text": text,
                                        "ref": ref, "read": False, "created_at": now_iso()})
+    category = "critical_alert" if ntype == "critical_alert" else "alert" if "alert" in ntype else "system"
+    asyncio.create_task(wh.emit(org, category, ntype.replace("_", " ").title(), text))
 
 
 @api.post("/ingest")
