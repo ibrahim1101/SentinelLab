@@ -53,3 +53,12 @@ This declaration does **not** transfer copyright in external components or autom
 ## 2026-10-12 follow-up: auditable declaration export
 
 Added `scripts/export_dependency_declarations.py` and the **Dependency Declaration Inventory** GitHub Actions workflow. It exports a downloadable CSV of *direct* npm, Python runtime and Cargo manifest declarations, explicitly marking each license `UNVERIFIED`. This is a first-stage review input, **not** a resolved transitive SBOM or license compatibility certification. It does not change runtime dependency resolution or existing desktop packaging. The next stage is to produce committed lockfiles, resolved inventories, actual license notices and matching release binary provenance.
+
+
+## 2026-10-12 — CI result and lockfile gate
+
+- [Dependency Declaration Inventory workflow](https://github.com/ibrahim1101/SentinelLab/actions/runs/38280984240) **PASSED**. The resulting CSV is an input to audit, not license clearance.
+- [Windows desktop alpha](https://github.com/ibrahim1101/SentinelLab/actions/runs/38280161331) **PASSED** and [Linux/macOS desktop alpha](https://github.com/ibrahim1101/SentinelLab/actions/runs/38280160969) **PASSED** at commit `1fdc8f88`. These are not the final release source commit.
+- Added `scripts/verify_dependency_lockfiles.py` to enforce that committed frontend/desktop npm lockfiles reflect their manifests and that a Cargo lockfile exists. **Not yet enabled as a required CI gate**, because the repository still lacks those lockfiles. This avoids breaking the working installer workflows before the files are generated.
+- Required follow-up: run `npm install --package-lock-only --ignore-scripts` separately in `frontend` and `desktop`, then `cargo generate-lockfile` in `desktop/src-tauri`, inspect dependency changes, commit generated lockfiles, and run `python scripts/verify_dependency_lockfiles.py`. Prefer isolated builds and check proprietary package accessibility. Only then change CI to `npm ci` and `cargo --locked`.
+- Lockfiles improve reproducibility but **do not prove** license compliance, binary integrity or supply-chain safety.
