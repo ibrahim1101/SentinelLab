@@ -139,6 +139,7 @@ async def desktop_setup(body: DesktopSetupReq, request: Request):
     except DuplicateKeyError:
         raise HTTPException(409, "Administrator setup already started")
     if await db.users.find_one({"role": "super_admin"}):
+        await db.bootstrap_state.delete_one({"_id": "desktop-admin"})
         raise HTTPException(409, "Administrator already configured")
     record = {"id": new_id(), "email": str(body.email).lower(), "username": username,
               "name": "SOC Administrator", "password_hash": hash_password(body.password),
