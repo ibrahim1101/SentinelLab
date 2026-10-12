@@ -2,7 +2,7 @@ name: Windows Desktop Alpha Installer
 on:
   workflow_dispatch:
   push:
-    branches: ["fix/phase1-security-regressions"]
+    branches: ["main"]
     paths:
       - "desktop/**"
       - "frontend/**"
