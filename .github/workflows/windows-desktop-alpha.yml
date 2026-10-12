@@ -50,6 +50,11 @@ jobs:
           '@ | python -
           cd desktop
           npx tauri icon sentinellab-icon.png
+      - name: Validate backend Python syntax
+        shell: pwsh
+        run: |
+          python -m compileall -q backend
+          if ($LASTEXITCODE -ne 0) { throw "Backend syntax validation failed" }
       - name: Build bundled FastAPI executable
         shell: pwsh
         run: |
