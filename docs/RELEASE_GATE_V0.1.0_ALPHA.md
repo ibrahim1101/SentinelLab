@@ -32,3 +32,26 @@ Target: October 13, 2026. This checklist is a **release gate**, not evidence of 
 ## Release decision
 
 If Windows installer builds but depends on Docker, document Docker Desktop as a prerequisite. Do not imply the installer embeds the backend or MongoDB. If essential SIEM paths fail, fix them before publishing or explicitly remove them from release claims. Never test against real customer data or reset existing volumes.
+
+
+---
+
+## 2026-10-12 — Release candidate audit (current state; supersedes stale desktop claims above)
+
+The original checklist above was written before the desktop sidecar existed. Its statement that the Tauri project is only a frontend shell is now **obsolete**. The Windows alpha installer bundles the FastAPI backend; MongoDB remains separately installed. User accepted shipping **experimental Linux/macOS builds without physical runtime testing**, with prominent limitations. This is an alpha exception, **not** a claim that beta or production gates are complete.
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| Windows desktop CI | PASS | [38265416099](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265416099) |
+| Linux and macOS package CI | PASS | [38265421720](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265421720) |
+| Login Security Tests | PASS | [38265992950](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265992950) |
+| Phase 1 Security Checks | PASS | [38265992719](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265992719) |
+| Windows installer basic user acceptance | PARTIAL PASS | Windows launch, MongoDB indicator, admin/non-admin login, AI, Discord, shutdown manually observed |
+| Linux/macOS runtime installation | NOT TESTED | CI-only packaging; accepted alpha limitation |
+| Full synthetic SOC end-to-end packaged test | NOT TESTED | Must not advertise production reliability |
+| Release artifact checksums | PREPARED | Draft includes `SHA256SUMS.txt`; recheck after any asset replacement |
+| Draft prerelease | CREATED | `v0.1.0-alpha` draft with six assets |
+| Public prerelease | PENDING | Owner must approve publishing |
+| Single-branch consolidation | PASS | PR #1 merged, only `main` branch; comparison showed no app-source deletions |
+
+**Release decision:** Suitable to *prepare* an explicitly experimental alpha with the above disclosures. Do not treat unchecked full SOC gates as passed. Publish only after verifying actual attached assets and checksum consistency and owner confirmation. For beta/production, use `docs/BETA_RELEASE_GATES.md` with no alpha exceptions.
