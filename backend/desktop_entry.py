@@ -1,6 +1,7 @@
 """Local Windows desktop entry point for SentinelLab."""
 import os
 import secrets
+import sys
 from pathlib import Path
 
 import uvicorn
@@ -23,4 +24,9 @@ def configure_environment():
 
 if __name__ == "__main__":
     configure_environment()
+    if "--self-test" in sys.argv:
+        import server
+        assert server.app is not None
+        print("SentinelLab bundled backend import OK")
+        sys.exit(0)
     uvicorn.run("server:app", host="127.0.0.1", port=18765, log_level="info")
