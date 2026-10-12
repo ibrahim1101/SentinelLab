@@ -91,7 +91,7 @@ jobs:
           CARGO_BUILD_JOBS: '2'
           CARGO_INCREMENTAL: '0'
           CARGO_PROFILE_RELEASE_DEBUG: '0'
-        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundle }} --locked
+        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundle }} -- --locked
       - name: Upload unsigned desktop packages
         uses: actions/upload-artifact@v4
         with:
