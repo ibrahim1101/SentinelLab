@@ -137,3 +137,15 @@ async def audit(org_id, user, action, resource_type, resource_id=None, details=N
         "details": details or {},
         "timestamp": now_iso(),
     })
+    # Reuse the central audit trail as the notification event bus. Never include
+    # sensitive audit details (passwords, tokens, credentials) in webhook payloads.
+    import asyncio
+    import webhooks
+    category = ("investigation" if resource_type == "investigation" else
+                "ingestion" if resource_type in ("source", "parser", "ingestion") else
+                "security" if resource_type in ("user", "account", "webhook", "membership", "settings") else
+                "system")
+    asyncio.create_task(webhooks.emit(org_id, category,
+                                      f"{resource_type}: {action}",
+                                      f"Action by {user.get('email', 'system') if user else 'system'}"))
+
