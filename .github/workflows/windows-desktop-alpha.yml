@@ -50,6 +50,13 @@ jobs:
           '@ | python -
           cd desktop
           npx tauri icon sentinellab-icon.png
+      - name: Check for unresolved merge conflict markers
+        shell: pwsh
+        run: |
+          $paths = @("backend", "frontend/src", "desktop/src-tauri")
+          $files = Get-ChildItem -Path $paths -Recurse -File | Where-Object { $_.Extension -in @(".py", ".js", ".jsx", ".ts", ".tsx", ".rs", ".json") }
+          $conflicts = $files | Select-String -Pattern '^(<<<<<<< |=======\\s*$|>>>>>>> )'
+          if ($conflicts) { $conflicts | Out-Host; throw "Unresolved merge conflict markers" }
       - name: Validate backend Python syntax
         shell: pwsh
         run: |
