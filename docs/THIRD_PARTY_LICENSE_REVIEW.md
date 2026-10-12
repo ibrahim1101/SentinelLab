@@ -103,3 +103,20 @@ Windows and Linux/macOS packaging workflows now run `scripts/verify_dependency_l
 **Open issues for public binary distribution:** (1) complete resolved npm/Python/Rust license and notice inventory, (2) identify which notices/license files are conveyed with the five installers, (3) document GPLv3 corresponding-source access for exact binary source commit `b9b7958e720d93db6191614c07d2c01e7945643d`, and (4) confirm whether any Emergent proprietary runtime component is actually bundled. Current review is a technical compliance audit, not a legal opinion.
 
 **Revised finding:** Emergent-generated code rights are supported by published vendor terms. **Overall third-party notice/binary compliance remains OPEN**, and publication is not certified as fully compliant.
+
+
+## 2026-10-13 — Consolidated single-pass frozen-lockfile audit
+
+**Scope:** Inspected the exact release candidate commit `b9b7958e720d93db6191614c07d2c01e7945643d`, including both npm lockfiles, the Cargo lockfile, frontend build configuration and Python runtime requirements. This is a consolidated audit of accessible metadata; **not a completed binary-level license clearance**.
+
+- **Frontend npm:** 1,552 resolved package records: 1,292 MIT; 75 ISC; 43 CC0-1.0; 42 BSD-3-Clause; 41 Apache-2.0; 41 BSD-2-Clause; 2 Unlicense; 2 0BSD; 12 other SPDX expressions; 1 UNLICENSED; 3 without license metadata. The unusual-license count is based on the frozen npm lockfile, not an assertion of infringement.
+- **Desktop npm:** 12 resolved package records; all declare `Apache-2.0 OR MIT`.
+- **Cargo:** frozen lockfile available with package names, versions, checksums; Cargo.lock does **not** include license metadata, so the Rust license inventory is not independently certified by this check.
+- **Python:** `backend/requirements.runtime.txt` has 14 declared runtime packages, but `cryptography>=44,<47` is not exact, and no resolved transitive wheel/license inventory for the frozen CI sidecar was available in this audit.
+- **Non-registry npm sources:** exactly two, `@emergentbase/overlay@0.1.31` (lockfile license `UNLICENSED`) and `@emergentbase/visual-edits@1.0.12` (no license metadata). Both are declared devDependencies; overlay configuration gates its use to nonproduction. **No proof that neither package is present in the shipped binary was obtained.** Do not bundle or redistribute these proprietary packages absent permission.
+- **Other frontend exceptions:** `axe-core@4.14.0` MPL-2.0; `harmony-reflect@1.6.2` (Apache-2.0 OR MPL-1.1); `node-forge@1.4.0` (BSD-3-Clause OR GPL-2.0); missing lockfile license metadata for `exit@0.1.2` and `esprima@1.2.5` (nested jsonpath dependency). Verify applicable license texts and whether these development/transitive packages are conveyed.
+- **Generated source:** Emergent's official terms grant the user rights to distribute and open-source generated application code, subject to third-party licenses. The logo was reported by the owner as ChatGPT-generated.
+- **GPL source:** repository has GPLv3 `LICENSE` and frozen release source commit; actual compliance with binary-distribution corresponding-source and notice requirements has not been demonstrated.
+- **Actual release assets:** five uploaded installers match recorded candidate SHA-256 digests; a checksum manifest is uploaded, but manifest content and shipped notices have not been fully independently audited.
+
+**Final finding:** No evidence from package manifests alone that the shipped binaries contain a forbidden proprietary Emergent component; equally, no proof of exclusion. **Compliance sign-off is NOT GRANTED** because the shipped binary composition, Rust/Python transitive license inventories, and delivery of notices/corresponding source remain unverified. Do not present this metadata-only audit as a completed legal clearance. These are the concrete remaining evidence gaps, not additional feature-development tasks.
