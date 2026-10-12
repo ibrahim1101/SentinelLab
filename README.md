@@ -1,30 +1,61 @@
 # SentinelLab
 
-SentinelLab is an experimental SOC/SIEM application with a FastAPI backend, React frontend, MongoDB persistence, and a Tauri desktop project. **Pre-release software:** do not deploy as a production security monitoring system without further validation.
+**Experimental cross-platform SOC/SIEM desktop alpha** — React + FastAPI + MongoDB + Tauri 2. SentinelLab provides security-event ingestion, detection, alerts, investigations, threat hunting, IOC workflows, MITRE ATT&CK coverage, playbooks, reporting, AI assistance, and outgoing notifications. Features have different levels of test coverage; this is **not a production-certified SIEM**.
 
-## Windows desktop prerequisite (alpha installer)
+[Release draft / releases](https://github.com/ibrahim1101/SentinelLab/releases) · [Engineering journey](docs/ENGINEERING_JOURNEY.md) · [Alpha release notes](docs/ALPHA_RELEASE_NOTES.md) · [Release gate](docs/RELEASE_GATE_V0.1.0_ALPHA.md) · [Bug reports](https://github.com/ibrahim1101/SentinelLab/issues)
 
-**MongoDB Community Server is required separately.** Install MongoDB Community Server for Windows using the [official MongoDB installation guide](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-windows/). Configure it as a Windows service and ensure it is running on `127.0.0.1:27017`. The Windows alpha installer bundles the FastAPI backend and has been manually tested for local startup and shutdown. MongoDB is **not** bundled; install and run it separately. Linux and macOS desktop packages have passed CI packaging and backend import smoke tests but have **not** been installed or tested on physical Linux/macOS machines. Keep MongoDB bound to localhost for local-only testing and never expose an unauthenticated database to a network.
+## v0.1.0-alpha platform matrix
 
-## Quick start (Docker)
+| Platform | Package | Evidence |
+| --- | --- | --- |
+| Windows x64 | Unsigned NSIS `.exe` | CI packaging passed; user manually verified installation, login, MongoDB status, AI, Discord webhook and shutdown |
+| Linux x64 | Unsigned `.deb`, `.AppImage` | CI packaging and backend import smoke passed; **runtime not tested** |
+| macOS Intel | Unsigned `.dmg` | CI packaging and backend import smoke passed; **runtime not tested** |
+| macOS Apple Silicon | Unsigned `.dmg` | CI packaging and backend import smoke passed; **runtime not tested** |
 
-Prerequisites: Docker Desktop with Docker Compose.
+**MongoDB Community Server is required separately on desktop.** The desktop package bundles the Python API backend, **not** MongoDB. For local evaluation, run MongoDB bound to `127.0.0.1:27017`. Do not expose an unauthenticated MongoDB database to a network. The installers are unsigned and macOS packages are not notarized.
 
-1. Clone this repository and enter its directory.
-2. Copy `.env.example` to `.env`. Set strong, unique `JWT_SECRET` and `ADMIN_PASSWORD` values. Keep `.env` private.
-3. Run `docker compose up -d --build --wait`.
-4. Open http://localhost:8080 in your browser. The backend is exposed locally at http://127.0.0.1:8000.
+## Current functionality
 
-For diagnostics, use `docker compose ps` and `docker compose logs --tail=100`. To stop the stack without deleting stored MongoDB data, run `docker compose down`. **Do not use `docker compose down -v` unless you intend to delete the database volume.**
+- **SOC workflows:** dashboards, events explorer, JSON/JSONL/CSV/Syslog/CEF ingestion, normalization, detection rules, alert triage, investigations, evidence, threat hunting, saved hunts, reports and notifications.
+- **Threat intelligence and response:** manually managed indicators, CSV/STIX IOC imports, ATT&CK technique coverage, investigation graph, detection replay, pipeline observatory, and approval-gated incident response playbooks. External containment adapters are **not** live EDR/firewall actions.
+- **Security:** organization-scoped access, role-aware authentication, account lockout/disable/recovery, audit trail and CI security regressions.
+- **AI:** configurable local Ollama/LM Studio or OpenAI-compatible providers; product guidance and alert assistance. Ollama/model installation is optional and separate.
+- **Outgoing notifications:** generic HTTPS webhooks and Discord, Slack, Teams payload formats; actual Discord delivery has been manually confirmed. VirusTotal, AbuseIPDB and SMTP currently appear as **planned provider placeholders**, not working integrations.
 
-## Release validation
+## Desktop alpha quick start
 
-The GitHub Actions workflows include isolated login-security regressions, disposable MongoDB concurrency tests, Phase 1 security checks, and a Docker smoke test. CI success does not substitute for hands-on validation of log ingestion, detection rules, alerts, investigations, playbooks, and desktop packaging.
+1. Install and start MongoDB Community Server. For Windows, use the [official MongoDB Windows guide](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-windows/).
+2. When the prerelease is published, download the installer matching your OS/CPU from [GitHub Releases](https://github.com/ibrahim1101/SentinelLab/releases). Verify the attached `SHA256SUMS.txt`.
+3. Install and launch SentinelLab. Configure your local database and initial administrator account according to the app's setup prompts. Do not expose the local API or database to the public internet.
+4. Optionally configure AI and webhooks in Settings → Integrations. Never post credentials or unredacted incident data in public issues.
 
-## Release status
+**Status:** `v0.1.0-alpha` is a **draft prerelease**, not publicly published as of the latest repository audit (2026-10-12). The draft contains Windows, Linux and macOS packages and a checksum manifest. The draft packages were built from the verified development tip; successful `main` rebuilds also exist. See [release notes](docs/ALPHA_RELEASE_NOTES.md) for caveats.
 
-Target: `v0.1.0-alpha`. The release is **not yet published**. Windows NSIS installation and basic authentication, MongoDB status, AI assistant, and Discord webhook behavior have been manually exercised. Linux x64 (.deb, .AppImage) and macOS Intel/Apple Silicon (.dmg) packages passed CI on 2026-10-12, but runtime behavior on those operating systems remains **untested**. These builds are unsigned; OS security prompts may appear. Full end-to-end SIEM testing is incomplete. See `docs/ALPHA_RELEASE_NOTES.md` for scope and limitations.
+## Developer / Docker quick start
 
-## Security
+Requires Docker Desktop with Compose. Clone `main`, copy `.env.example` to `.env`, set strong unique `JWT_SECRET` and `ADMIN_PASSWORD`, and keep `.env` private.
 
-Use only synthetic or authorized test data. Never commit passwords, API keys, real customer logs, or incident evidence. Report vulnerabilities privately to the repository maintainer rather than publishing exploit details.
+```bash
+git clone https://github.com/ibrahim1101/SentinelLab.git
+cd SentinelLab
+cp .env.example .env
+# Edit .env to set strong secrets
+docker compose up -d --build --wait
+docker compose ps
+docker compose logs --tail=100
+# Open http://localhost:8080
+docker compose down
+```
+
+The backend is available locally at `http://127.0.0.1:8000` for the Docker stack. **Never run `docker compose down -v` unless you intend to delete database volumes.**
+
+## Verification and development history
+
+The single active branch is `main`; PR #1 was merged. [Windows CI #38265416099](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265416099) and [Linux/macOS CI #38265421720](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265421720) passed. Login security [#38265992950](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265992950) and Phase 1 security [#38265992719](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265992719) passed. CI does not prove every feature works end to end.
+
+Read [Engineering Journey](docs/ENGINEERING_JOURNEY.md), [Development History](docs/DEVELOPMENT_HISTORY.md), [Feature Matrix](docs/FEATURE_MATRIX.md), and [Alpha Release Notes](docs/ALPHA_RELEASE_NOTES.md) for detailed features, fixes, known issues and next steps.
+
+## Security and reporting
+
+Use only synthetic or authorized data. Do not deploy as a production security monitoring system without further validation. Report vulnerabilities privately to the maintainer, not as public exploit details. When reporting bugs, include OS, package type, reproduction steps and **redacted** logs.
