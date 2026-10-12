@@ -145,7 +145,21 @@ async def audit(org_id, user, action, resource_type, resource_id=None, details=N
                 "ingestion" if resource_type in ("source", "parser", "ingestion") else
                 "security" if resource_type in ("user", "account", "webhook", "membership", "settings") else
                 "system")
-    asyncio.create_task(webhooks.emit(org_id, category,
-                                      f"{resource_type}: {action}",
-                                      f"Action by {user.get('email', 'system') if user else 'system'}"))
+    # Use a strict allowlist: arbitrary audit metadata can contain credentials or PII.
+    safe_actions = {
+        "create": "created", "update": "updated", "delete": "deleted",
+        "login": "signed in", "logout": "signed out",
+        "disable": "disabled", "enable": "enabled",
+        "configure": "configured", "approve": "approved",
+        "revoke": "revoked", "test": "tested",
+    }
+    verb = safe_actions.get(action, action.replace("_", " "))
+    subject = resource_type.replace("_", " ")
+    actor = user.get("email", "system") if user else "system"
+    title = f"{subject.title()} — {verb}"
+    lines = [f"Action: {verb} {subject}", f"Performed by: {actor}"]
+    if resource_id and resource_type not in ("user", "account", "session", "credential", "api_key"):
+        lines.append(f"Resource ID: {str(resource_id)[:100]}")
+    lines.append(f"Workspace: {org_id}")
+    asyncio.create_task(webhooks.emit(org_id, category, title, "\\n".join(lines)))
 
