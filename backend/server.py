@@ -984,7 +984,7 @@ async def get_settings(request: Request, user=Depends(get_current_user)):
              "default_time_range": "24h", "retention_days": 90, "demo_mode": False}
         await db.settings.insert_one(dict(s))
         s.pop("_id", None)
-    s["ai_configured"] = ai_assistant.is_configured()
+    s["ai_configured"] = await ai_assistant.configured_for(org)
     return {"settings": s}
 
 
@@ -1266,14 +1266,14 @@ async def admin_audit(request: Request, user=Depends(require_role("soc_manager")
 
 
 @api.get("/admin/health")
-async def admin_health(user=Depends(get_current_user)):
+async def admin_health(request: Request, user=Depends(get_current_user)):
     try:
         await db.command("ping")
         dbok = True
     except Exception:
         dbok = False
     return {"database": "ok" if dbok else "down", "search_backend": "mongo-adapter",
-            "ai_assistant": "configured" if ai_assistant.is_configured() else "disabled"}
+            "ai_assistant": "configured" if await ai_assistant.configured_for(active_org(user, request)) else "disabled"}
 
 
 # ============================= USER PREFS =============================
