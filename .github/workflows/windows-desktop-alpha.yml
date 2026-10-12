@@ -63,8 +63,8 @@ jobs:
         run: |
           $target = (rustc -vV | Select-String "^host: ").ToString().Split(" ")[1]
           $exe = "desktop/src-tauri/binaries/sentinellab-api-$target.exe"
-          & $exe --self-test
-          if ($LASTEXITCODE -ne 0) { throw "Bundled backend import self-test failed with exit code $LASTEXITCODE" }
+          $proc = Start-Process -FilePath $exe -ArgumentList "--self-test" -PassThru -Wait -NoNewWindow
+          if ($proc.ExitCode -ne 0) { throw "Bundled backend import self-test failed with exit code $($proc.ExitCode)" }
       - name: Build Windows NSIS installer
         working-directory: desktop
         run: npm run tauri:build
