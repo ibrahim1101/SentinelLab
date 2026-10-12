@@ -33,7 +33,8 @@ jobs:
       - name: Record manifest hashes
         run: |
           sha256sum frontend/package.json frontend/package-lock.json desktop/package.json desktop/package-lock.json desktop/src-tauri/Cargo.toml desktop/src-tauri/Cargo.lock > dependency-lockfile-hashes.txt
-      - name: Open review PR for generated lockfiles
+      - name: Open review PR for generated lockfiles (optional; repository settings may forbid it)
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
