@@ -140,7 +140,9 @@ async def desktop_setup(body: DesktopSetupReq, request: Request):
     try:
         await db.bootstrap_state.insert_one({"_id": "desktop-admin", "created_at": now_iso()})
     except DuplicateKeyError:
-        raise HTTPException(409, "Administrator setup already started")
+        if await db.users.find_one({"role": "super_admin"}):
+            raise HTTPException(409, "Administrator already configured")
+        raise HTTPException(409, "Administrator setup is reserved; recovery is required")
     if await db.users.find_one({"role": "super_admin"}):
         await db.bootstrap_state.delete_one({"_id": "desktop-admin"})
         raise HTTPException(409, "Administrator already configured")
