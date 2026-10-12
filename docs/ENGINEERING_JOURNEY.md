@@ -455,3 +455,74 @@ Working branch: `fix/phase1-security-regressions`. Pull request: [#1](https://gi
 - **Regression:** real-Mongo integration test for concurrent unknown-identifier attempts verifies generic 401 responses and no lost increments.
 - **Validation:** pending GitHub Actions verification; no local MongoDB test execution claimed.
 - **Unresolved:** a unique index for the identifier is needed to guarantee collision-safe first upserts. Before adding it, audit duplicate legacy throttle documents and design a data-preserving migration. Continue timing/anti-enumeration hardening and session controls.
+
+
+---
+
+## 2026-10-12 — Alpha consolidation, cross-platform packaging, and release handoff
+
+**Status:** The development work from PR [#1](https://github.com/ibrahim1101/SentinelLab/pull/1) was merged into `main` at `35a245610560e8f8bd5d7f44e5e323294d15726f`. The repository now has only one branch, `main`. The earlier statements above saying PR #1 is unmerged or the desktop shell is only a scaffold are **historical snapshots**, not the current status. The approved workflow is direct development on `main` with CI checks.
+
+### Functional work since the initial desktop prototype
+
+- Tauri 2 Windows desktop installer bundles the React frontend and a PyInstaller-packaged FastAPI sidecar. The app manages backend startup and shutdown, includes close confirmation, and has a branded icon. MongoDB Community Server is **still separately installed**; it is not included in the installer.
+- User-reported Windows hands-on checks: installer launches; MongoDB connection/status indicators work; admin and non-admin sign-in; account disabling blocks login; AI model configured with local Ollama `http://127.0.0.1:11434/v1` and `qwen3:14b` responds; Discord webhook test delivers; closing the desktop window stops the backend.
+- AI configuration persists per workspace, supports Ollama/LM Studio and OpenAI-compatible remote providers, and the assistant has a built-in SentinelLab product guide for general app questions. The in-app help manual is not yet fully indexed for retrieval.
+- Integrations UI now has expandable provider sections and persisted online/configured indicators for AI and outgoing webhooks. VirusTotal, AbuseIPDB, and SMTP are catalog placeholders **not functional integrations**.
+- Outgoing webhook providers include generic, Discord, Slack, and Teams payload formats. Discord/Slack literal backslash-n rendering was fixed (`495b047b`, `c817bc9`); audit events now include action, actor, resource, and workspace context while omitting arbitrary detail payloads (`938d689`).
+- Auth hardening includes disabled accounts, temporary lockouts, failed-attempt handling, source-IP/identifier atomic throttle under concurrency, account enumeration regression checks, session behavior, and super-admin recovery/notifications. Security tests are not a formal penetration test.
+
+### Packaging failures and resolutions
+
+| Problem | Evidence / cause | Resolution |
+|---|---|---|
+| Linux/macOS branded icon generation failed | Original image was not square; run `38252947259` | Square icon padding strategy, then `tauri icon --fit contain` (`ef06ff1`, `bd94dae`) |
+| macOS Intel transient Python package DNS failure | `files.pythonhosted.org` resolution; run `38253490163` | Removed unnecessary Pillow install for general icon step (`bd94dae`) |
+| Linux AppImage icon panic | Bundler: `couldn't find a square icon to use as AppImage icon`; runs `38256375886`, `38259297583` | Explicit square Linux icons and bundle icon declarations (`8ba8bf9`, `4f9b1b6`) |
+| Linux Rust build resource pressure | Exit 134 in Linux desktop packaging | Limit `CARGO_BUILD_JOBS=2`, disable incremental/debug overhead (`bd94dae`) |
+| Release workflow failed on repeat | `v0.1.0-alpha` draft already existed; run `38265432904` | Preparation workflow made manual-only (`324dbe6`); existing draft remains intact |
+| Merge into main initially blocked | GitHub ruleset protected `main` | Owner removed blocking ruleset; PR #1 merged `35a2456` |
+| Discord webhook displayed literal newline escapes | Incorrect string join/escaping | `495b047b`, `c817bc9` |
+| AI indicator falsely showed offline | Status read legacy env configuration rather than per-workspace model settings | `16912c88` |
+
+### Verified build and CI evidence
+
+- [Windows desktop installer run 38265416099](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265416099): **success** on `main`; artifact uploaded.
+- [Linux/macOS desktop run 38265421720](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265421720): **success** on `main`; Linux x64 DEB/AppImage and macOS Intel/Apple Silicon DMGs uploaded. CI backend self-tests passed, **physical Linux/macOS installation not tested**.
+- Login Security Tests [38265992950](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265992950) and Phase 1 Security Checks [38265992719](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265992719): **success** on `324dbe6`.
+- [Draft prerelease preparation run 38264254205](https://github.com/ibrahim1101/SentinelLab/actions/runs/38264254205): **success**; draft `v0.1.0-alpha` has five installers plus SHA256SUMS. These uploaded release assets originate from the earlier passing development-branch CI builds; newer `main` build artifacts are available but **not yet substituted into the draft**.
+- [Git comparison of former branch tip against main](https://github.com/ibrahim1101/SentinelLab/compare/358e16cccb04c2494ad0abe64ad6a4ee78aab299...main) at audit time: `main` was five commits ahead, zero behind, with changes limited to three GitHub workflow files. No application source-file deletion was found from the merge.
+- `main` branch is now the sole repository branch; GitHub Actions run history remains visible.
+
+### Release caveats and next actions
+
+- Release `v0.1.0-alpha` is still a **draft**. No claim of public release yet.
+- Before publishing, decide whether to retain the verified existing draft binaries or replace with the latest `main` binaries; ensure checksums match the **actual attached files** and release notes identify the exact build commits. GitHub workflow artifact ZIPs expire.
+- Do not label Linux/macOS as runtime-tested. Windows manual checks are useful but do not replace a clean-host full SOC end-to-end validation.
+- Maintain MongoDB separately, unsigned installer warnings, and explicit experimental security limitations.
+- Outstanding: full synthetic ingestion-to-detection-to-alert-to-investigation-to-playbook-to-report testing; backup/recovery; broader auth/session/security hardening; secure outbound endpoint/DNS handling; signed/notarized installers; VirusTotal/AbuseIPDB/SMTP real integrations; full AI help retrieval.
+- Use `docs/RELEASE_GATE_V0.1.0_ALPHA.md` and `docs/ALPHA_RELEASE_NOTES.md` as current alpha release references. The stricter `docs/BETA_RELEASE_GATES.md` is a **separate future beta gate**, not evidence that alpha is production ready.
+
+### Useful commands
+
+```powershell
+git clone https://github.com/ibrahim1101/SentinelLab.git
+cd SentinelLab
+git checkout main
+git pull --ff-only origin main
+python -m compileall -q backend
+docker compose up -d --build --wait
+docker compose ps
+docker compose logs --tail=100
+docker compose down
+```
+
+```bash
+# With GitHub CLI authenticated:
+gh run list --repo ibrahim1101/SentinelLab --branch main --limit 10
+gh release view v0.1.0-alpha --repo ibrahim1101/SentinelLab
+gh release download v0.1.0-alpha --repo ibrahim1101/SentinelLab --dir ./release-review
+cd release-review && sha256sum -c SHA256SUMS.txt
+```
+
+**Do not use `docker compose down -v` unless intentionally deleting database volumes. Never commit secrets, live customer telemetry, or unredacted webhook URLs.**
