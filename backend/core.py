@@ -161,5 +161,5 @@ async def audit(org_id, user, action, resource_type, resource_id=None, details=N
     if resource_id and resource_type not in ("user", "account", "session", "credential", "api_key"):
         lines.append(f"Resource ID: {str(resource_id)[:100]}")
     lines.append(f"Workspace: {org_id}")
-    asyncio.create_task(webhooks.emit(org_id, category, title, "\\n".join(lines)))
+    asyncio.create_task(webhooks.emit(org_id, category, title, "\n".join(lines)))
 
