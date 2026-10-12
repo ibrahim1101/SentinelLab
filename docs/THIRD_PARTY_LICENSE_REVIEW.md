@@ -23,3 +23,28 @@ This declaration does **not** transfer copyright in external components or autom
 6. Review whether a standalone `NOTICE` or `THIRD_PARTY_NOTICES` file is needed after inventory completion.
 
 **Status: OPEN — legal and dependency-license audit is not complete.** This is a release-compliance checkpoint, not a legal opinion.
+
+
+## 2026-10-12 source and build audit — actionable findings
+
+**Completed:** The repository-root `LICENSE` contains GPL version 3; SPDX `GPL-3.0-only` metadata has now been added to `frontend/package.json`, `desktop/package.json` and `desktop/src-tauri/Cargo.toml`. These declarations describe original project code only; they do not override third-party terms.
+
+**Confirmed gaps in the `main` tree:**
+- No committed `frontend/yarn.lock`, `frontend/package-lock.json`, `desktop/package-lock.json`, or `desktop/src-tauri/Cargo.lock` was present during this audit. This means an exact transitive dependency/license inventory **cannot** be certified from committed source alone.
+- Both desktop CI workflows currently run `npm install --no-audit --no-fund` for frontend and desktop, and Rust resolves dependencies during the Tauri build. There is no lockfile-enforced `npm ci`/equivalent path yet.
+- The frontend manifest has two Emergent-hosted development packages: `@emergentbase/overlay` and `@emergentbase/visual-edits`. Their redistribution rights and actual inclusion in production bundles remain **unverified**.
+- Python runtime dependencies are enumerated in `backend/requirements.runtime.txt`, but transitive versions are not fully pinned. `cryptography>=44,<47` is a range.
+- Desktop CI invokes `pip install ... pyinstaller` without pinning PyInstaller, so build-tool provenance also varies.
+- The branded image `frontend/public/Neon Global Shield Emblem.png` is used to generate installer icons. Its copyright/provenance and redistribution permission must be recorded.
+- The existing draft release assets were built from an earlier source commit; updating license metadata on `main` does **not** update those already-uploaded binaries.
+
+### Required evidence for a distributable alpha
+
+1. **Dependency snapshots:** Generate and commit or archive verified lockfiles for frontend, desktop and Rust. Record exact Python transitive versions from the packaging environment. Do not fabricate an inventory from direct dependencies alone.
+2. **License inventory:** Generate package name, resolved version, SPDX license and notice/source URL for each distributed npm, Python and Cargo component; manually review unknown/multiple/proprietary entries and actual packaging contents.
+3. **Asset provenance:** Confirm legal rights for Emergent-origin code and the shield image; replace or exclude anything not redistributable.
+4. **Binary compliance:** Provide GPLv3 license and required third-party notices in a location accessible to recipients. Provide the corresponding source and build/install scripts for the exact binaries conveyed; document where recipients can retrieve them.
+5. **Release provenance:** Select the final release commit, rerun platform builds, download and checksum the actual artifacts, compare with release `SHA256SUMS.txt`, and document commit-to-asset mapping.
+6. **Alpha truthfulness:** Preserve warnings for unsigned packages, separate MongoDB installation, CI-only Linux/macOS verification and incomplete SOC end-to-end testing.
+
+**Gate decision: BLOCKED for compliance sign-off.** The project may continue technical prerelease preparation, but do not mark dependency licensing or exact binary/source correspondence verified until the above evidence exists. This is an engineering checklist, not legal advice.
