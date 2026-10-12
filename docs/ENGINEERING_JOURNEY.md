@@ -548,3 +548,11 @@ cd release-review && sha256sum -c SHA256SUMS.txt
 - Windows run [38285871269](https://github.com/ibrahim1101/SentinelLab/actions/runs/38285871269) and Linux/macOS run [38285882313](https://github.com/ibrahim1101/SentinelLab/actions/runs/38285882313) **FAILED** in Tauri packaging: Tauri CLI rejected `--locked` as a direct argument (`unexpected argument '--locked'`).
 - Fixed Windows invocation to `npm run tauri:build -- -- --locked` and Linux/macOS invocation to `npx tauri build ... -- --locked`, forwarding `--locked` as a Cargo argument rather than a Tauri option.
 - **Awaiting fresh CI evidence** before declaring reproducible packaging fixed; no release was published.
+
+
+### 2026-10-12 — Locked dependency desktop CI verified
+- Windows Desktop Alpha Installer [run 38289907035](https://github.com/ibrahim1101/SentinelLab/actions/runs/38289907035) **PASS**, uploaded `SentinelLab-Windows-Alpha-unsigned` (~26.5 MB artifact).
+- Linux and macOS Desktop Alpha [run 38289916624](https://github.com/ibrahim1101/SentinelLab/actions/runs/38289916624) **PASS** for Linux x64, macOS Intel, macOS Apple Silicon; uploaded respective unsigned artifacts (~163.3 MB, ~32.1 MB, ~30.9 MB compressed artifacts).
+- Builds enforce committed npm lockfiles with `npm ci` and forward Cargo `--locked` via Tauri CLI.
+- Added `scripts/verify_desktop_artifacts.py` to check extracted Actions ZIP artifact contents for expected installer formats and minimum payload sizes; script must still be exercised on the produced artifacts. Artifact existence alone does not prove installers run, and these are unsigned and not yet tied to a refreshed release draft.
+- Licensing/provenance checks remain **OPEN**, especially Emergent packages and branded artwork. Release remains **DRAFT / NOT PUBLISHED**.
