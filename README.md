@@ -2,9 +2,9 @@
 
 SentinelLab is an experimental SOC/SIEM application with a FastAPI backend, React frontend, MongoDB persistence, and a Tauri desktop project. **Pre-release software:** do not deploy as a production security monitoring system without further validation.
 
-## Windows desktop prerequisite (planned standalone release)
+## Windows desktop prerequisite (alpha installer)
 
-**MongoDB Community Server is required separately.** Install MongoDB Community Server for Windows using the [official MongoDB installation guide](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-windows/). Configure it as a Windows service and ensure it is running on `127.0.0.1:27017`. The Windows app is intended to bundle and start the FastAPI backend automatically, but this integration is **not yet verified**. Do not assume the current installer is standalone. Keep MongoDB bound to localhost for local-only testing and never expose an unauthenticated database to a network.
+**MongoDB Community Server is required separately.** Install MongoDB Community Server for Windows using the [official MongoDB installation guide](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-windows/). Configure it as a Windows service and ensure it is running on `127.0.0.1:27017`. The Windows alpha installer bundles the FastAPI backend and has been manually tested for local startup and shutdown. MongoDB is **not** bundled; install and run it separately. Linux and macOS desktop packages have passed CI packaging and backend import smoke tests but have **not** been installed or tested on physical Linux/macOS machines. Keep MongoDB bound to localhost for local-only testing and never expose an unauthenticated database to a network.
 
 ## Quick start (Docker)
 
@@ -23,7 +23,7 @@ The GitHub Actions workflows include isolated login-security regressions, dispos
 
 ## Release status
 
-Target: `v0.1.0-alpha`. The release is **not yet published**. Desktop installer availability and full end-to-end SIEM testing are not yet verified. Known limitations and actual test results must be recorded before publishing release notes.
+Target: `v0.1.0-alpha`. The release is **not yet published**. Windows NSIS installation and basic authentication, MongoDB status, AI assistant, and Discord webhook behavior have been manually exercised. Linux x64 (.deb, .AppImage) and macOS Intel/Apple Silicon (.dmg) packages passed CI on 2026-10-12, but runtime behavior on those operating systems remains **untested**. These builds are unsigned; OS security prompts may appear. Full end-to-end SIEM testing is incomplete. See `docs/ALPHA_RELEASE_NOTES.md` for scope and limitations.
 
 ## Security
 
