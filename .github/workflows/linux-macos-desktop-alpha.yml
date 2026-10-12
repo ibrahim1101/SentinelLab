@@ -48,10 +48,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev librsvg2-dev patchelf libayatana-appindicator3-dev
+      - name: Verify dependency lockfiles
+        run: python scripts/verify_dependency_lockfiles.py
       - name: Install frontend and Tauri dependencies
         run: |
-          cd frontend && npm install --no-audit --no-fund
-          cd ../desktop && npm install --no-audit --no-fund
+          cd frontend && npm ci --no-audit --no-fund
+          cd ../desktop && npm ci --no-audit --no-fund
       - name: Generate application icon
         run: |
           cd desktop && npx tauri icon "../frontend/public/Neon Global Shield Emblem.png" --fit contain
@@ -89,7 +91,7 @@ jobs:
           CARGO_BUILD_JOBS: '2'
           CARGO_INCREMENTAL: '0'
           CARGO_PROFILE_RELEASE_DEBUG: '0'
-        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
+        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundle }} --locked
       - name: Upload unsigned desktop packages
         uses: actions/upload-artifact@v4
         with:
