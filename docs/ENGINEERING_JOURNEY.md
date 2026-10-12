@@ -541,3 +541,10 @@ cd release-review && sha256sum -c SHA256SUMS.txt
 - Found no committed npm/Cargo lockfiles; desktop CI currently resolves npm packages via `npm install`, Python runtime dependencies include a range, and PyInstaller is unpinned. Exact dependency provenance and license inventory remain unverified.
 - Flagged Emergent-hosted frontend development dependencies and branded installer artwork for source/redistribution rights review.
 - Recorded release-blocking compliance checklist in `docs/THIRD_PARTY_LICENSE_REVIEW.md`; existing draft assets must not be represented as rebuilt from current main.
+
+
+### 2026-10-12 — Strict-lockfile desktop build regression and fix
+- Lockfile PR #2 merged and npm installs were switched to `npm ci`; existing backend packaging and lockfile validation passed in CI.
+- Windows run [38285871269](https://github.com/ibrahim1101/SentinelLab/actions/runs/38285871269) and Linux/macOS run [38285882313](https://github.com/ibrahim1101/SentinelLab/actions/runs/38285882313) **FAILED** in Tauri packaging: Tauri CLI rejected `--locked` as a direct argument (`unexpected argument '--locked'`).
+- Fixed Windows invocation to `npm run tauri:build -- -- --locked` and Linux/macOS invocation to `npx tauri build ... -- --locked`, forwarding `--locked` as a Cargo argument rather than a Tauri option.
+- **Awaiting fresh CI evidence** before declaring reproducible packaging fixed; no release was published.
