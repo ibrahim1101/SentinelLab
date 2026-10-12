@@ -28,6 +28,8 @@ jobs:
           python-version: '3.12'
       - name: Verify generated lockfiles
         run: python scripts/verify_dependency_lockfiles.py
+      - name: Audit nonstandard dependency sources
+        run: python scripts/audit_lockfile_sources.py dependency-source-review.csv
       - name: Record manifest hashes
         run: |
           sha256sum frontend/package.json frontend/package-lock.json desktop/package.json desktop/package-lock.json desktop/src-tauri/Cargo.toml desktop/src-tauri/Cargo.lock > dependency-lockfile-hashes.txt
@@ -56,5 +58,6 @@ jobs:
             desktop/package-lock.json
             desktop/src-tauri/Cargo.lock
             dependency-lockfile-hashes.txt
+            dependency-source-review.csv
           retention-days: 30
           if-no-files-found: error
