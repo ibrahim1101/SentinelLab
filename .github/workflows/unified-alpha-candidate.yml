@@ -1,0 +1,20 @@
+name: Unified Alpha Candidate Build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify frozen source and dependency locks
+        run: |
+          echo "Unified source commit: ${GITHUB_SHA}"
+          python scripts/verify_dependency_lockfiles.py
+  windows:
+    needs: source-gate
+    uses: ./.github/workflows/windows-desktop-alpha.yml
+  linux-macos:
+    needs: source-gate
+    uses: ./.github/workflows/linux-macos-desktop-alpha.yml
