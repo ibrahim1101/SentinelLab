@@ -83,3 +83,10 @@ Updated the manual workflow to **attempt opening a review pull request** for gen
 ## 2026-10-12 — Follow-up after generated-lockfile run
 
 Checked open pull requests after workflow run #38283628307: **none were open**. That successful run used the earlier artifact-only workflow revision; it did not test the later PR creation step. No lockfiles have been committed to `main` yet. Added `scripts/audit_lockfile_sources.py` to flag npm packages whose resolved source is not `registry.npmjs.org`; subsequent manual lockfile runs include `dependency-source-review.csv` in their artifact. Treat flagged sources as review targets, not automatically malicious. The next run must validate both PR creation and source report; if PR creation fails due repository policy, use the downloaded artifact and a reviewed manual commit.
+
+
+## 2026-10-12 — Lockfile merge and reproducible build gate
+
+PR [#2](https://github.com/ibrahim1101/SentinelLab/pull/2) merged as `33f8c051`: committed frontend npm lockfile (1,553 package records), desktop npm lockfile (13 package records), and Cargo lockfile (431 packages). Both npm lockfiles have integrity hashes for resolved dependencies. The only nonstandard npm resolved sources found in review are `@emergentbase/overlay` and `@emergentbase/visual-edits`, from `assets.emergent.sh`; their redistribution status remains **OPEN**.
+
+Windows and Linux/macOS packaging workflows now run `scripts/verify_dependency_lockfiles.py`, use `npm ci`, and request Tauri `--locked` builds. **These updated desktop workflows have not yet been observed passing.** A successful older desktop run does not verify these changes. If any new workflow fails, fix it before releasing; do not revert to floating installs silently. This improves deterministic resolution, not third-party license clearance or guaranteed bit-for-bit identical binaries.
