@@ -55,3 +55,32 @@ The original checklist above was written before the desktop sidecar existed. Its
 | Single-branch consolidation | PASS | PR #1 merged, only `main` branch; comparison showed no app-source deletions |
 
 **Release decision:** Suitable to *prepare* an explicitly experimental alpha with the above disclosures. Do not treat unchecked full SOC gates as passed. Publish only after verifying actual attached assets and checksum consistency and owner confirmation. For beta/production, use `docs/BETA_RELEASE_GATES.md` with no alpha exceptions.
+
+
+---
+
+## 2026-10-12 — Current release-readiness checkpoint
+
+This checkpoint supersedes older CI/build claims above. The original pre-sidecar wording in the first checklist is obsolete: FastAPI is now bundled as a desktop sidecar, while MongoDB remains an external prerequisite.
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| Windows desktop installer with locked npm/Cargo dependencies | **PASS (CI packaging)** | [Windows run 38289907035](https://github.com/ibrahim1101/SentinelLab/actions/runs/38289907035) |
+| Linux x64 + macOS Intel/Apple Silicon locked-dependency packages | **PASS (CI packaging)** | [Linux/macOS run 38289916624](https://github.com/ibrahim1101/SentinelLab/actions/runs/38289916624) |
+| Downloaded artifact structure | **PASS (file presence and sizes only)** | See `docs/ENGINEERING_JOURNEY.md` for five installer files and artifact IDs |
+| Login Security Tests and Phase 1 Security Checks | **PASS on documentation commit 29c741ac** | GitHub Actions run history |
+| Windows hands-on smoke test | **PARTIAL PASS** | Previously observed sign-in and application operations; not a full fresh-install regression |
+| Linux/macOS real installation and runtime | **NOT TESTED** | CI-only alpha limitation accepted by owner |
+| Synthetic SOC ingestion, detection, triage, investigation, playbooks, tenant isolation | **NOT TESTED END TO END** | Do not advertise these as fully validated |
+| Third-party licenses, Emergent code/assets provenance, corresponding source obligations | **BLOCKED** | `docs/THIRD_PARTY_LICENSE_REVIEW.md` |
+| Release-asset SHA-256 match and exact source commit mapping | **PENDING** | Existing draft assets predate locked-dependency builds; do not treat as matching |
+| Draft `v0.1.0-alpha` | **EXISTS; UNPUBLISHED** | GitHub release currently has five installer assets and `SHA256SUMS.txt` |
+| Release approval | **NOT GRANTED** | Owner approval required before publication |
+
+### Immediate release sequence
+1. Record SHA-256 hashes of the five **new** unsigned installer files and the corresponding build commit(s). Ideally rebuild all targets from **one** frozen release commit.
+2. Compare actual candidate release assets against the checksum manifest; replace stale draft assets only after provenance is verified.
+3. Review third-party license obligations, GPL corresponding-source delivery, and rights to Emergent-origin code/artwork. **No compliance sign-off yet.**
+4. Complete a clean Windows installation/upgrade and data-preservation smoke test using synthetic data. Keep the accepted Linux/macOS CI-only limitation explicit.
+5. Run and record synthetic SOC workflows, or narrow release claims to what has actually been tested.
+6. Request explicit owner approval before publishing. **Do not publish automatically.**
