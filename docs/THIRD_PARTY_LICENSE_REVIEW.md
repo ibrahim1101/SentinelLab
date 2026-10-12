@@ -71,3 +71,10 @@ A manually triggered [Generate Dependency Lockfiles (Review Required)](../.githu
 **Operator action:** GitHub → Actions → **Generate Dependency Lockfiles (Review Required)** → **Run workflow** (select `main`). Download the artifact and review package changes, external registries, licensing and vulnerabilities before committing files to their corresponding directories. This workflow does **not** push commits, update installers, or publish releases. If npm fails because of the Emergent-hosted tarballs, document the failure and review whether those dependencies are needed for production before changing them. Do not remove packages solely to make the workflow pass.
 
 **Status:** workflow committed; execution and resulting lockfiles **not yet verified**. The existing installer workflows remain unchanged until reviewed lockfiles are committed.
+
+
+## 2026-10-12 — Generated lockfiles verified in CI
+
+The [manual lockfile generation run #38283628307](https://github.com/ibrahim1101/SentinelLab/actions/runs/38283628307) **PASSED** and uploaded artifact `SentinelLab-Generated-Lockfiles-Review-Only` (artifact ID `11762596650`, SHA-256 digest `2ee1d7def99ebaab9749c801c799aaf2e9f7e1bd52184a078544c1f8dc49684a`). Its archive contains npm lockfile v3 for frontend (1,553 package records), npm lockfile v3 for desktop (13 package records), a Rust `Cargo.lock`, and manifest/lockfile SHA-256 hashes. These are **generated**, not yet merged into `main`, and their license obligations remain unaudited.
+
+Updated the manual workflow to **attempt opening a review pull request** for generated lockfiles on branch `chore/review-generated-dependency-lockfiles` after validation. It still uploads artifacts. The PR step needs repository Actions permission to create pull requests; if GitHub disables that permission, enable **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests** or review and commit the artifact files manually. The new PR behavior has **not yet been tested**. Do not switch desktop packaging to `npm ci` / `cargo --locked` until reviewed lockfiles merge.
