@@ -10,7 +10,7 @@ const guide = [
     ["Closing and upgrading", "Click the window close button, review the process confirmation and confirm. The bundled API should terminate; MongoDB continues independently. Verify the API is stopped before upgrading."],
   ]],
   ["Workspace and navigation", [
-    ["Sidebar", "Use the left navigation to open SOC modules. Administration appears only for administrators. How to Use is available to signed-in users."],
+    ["Sidebar", "Use the left navigation to open SOC modules. Administration appears only for administrators. The manual is under Settings → How to Use SentinelLab."],
     ["Workspace selector", "Choose Training Lab for synthetic demonstrations or an authorized production workspace for real data. Always check the active workspace before modifying records."],
     ["Time range", "Use the top-bar range selector to control supported dashboard and search windows. A narrower range is useful for triage; a longer range helps trend analysis."],
     ["Global search", "Search for event, alert, investigation, rule, asset, host or IP identifiers in the top bar. Open a result to continue in its module."],
@@ -38,8 +38,8 @@ const guide = [
   ["Settings and administration", [
     ["General settings", "Configure application name, timezone, default time range and theme. Demo Mode uses simulated data; Reset Training Lab Data can replace demonstration records and requires confirmation."],
     ["Security overview", "Review password hashing, session policy, rate limits, role-based access, audit logging and workspace isolation. These summaries are informational."],
-    ["Create analyst", "Settings → Security → Create analyst: enter full name, unique email and username, and a strong initial password. The account starts with Training Lab access."],
-    ["User and role management", "Settings → Security → User & Role Management: inspect users and change roles only when required. Confirm role changes and apply least privilege."],
+    ["Create analyst", "Administration → Create analyst: enter full name, unique email and username, and a strong initial password. The account starts with Training Lab access."],
+    ["User and role management", "Administration → User & Role Management: inspect users and change roles only when required. Confirm role changes and apply least privilege."],
     ["Account actions", "Super administrators can change usernames, reset other users' passwords, and enable or disable eligible accounts. Password resets revoke existing sessions; verify the user's identity first."],
     ["Login security alerts", "Super administrators can review repeated failed-login incidents and unlock an account after verifying the user. Never unlock solely because someone requests it."],
     ["Production membership", "Review workspace memberships and request or revoke production access. Approval may require a second super administrator. Review reconciliation states after interrupted approvals."],
@@ -65,7 +65,7 @@ const detailed = {
   "Service indicators": ["Read the compact status indicators at the bottom-right of the login page: backend diagnostics, MongoDB connectivity and API readiness.", "Amber means startup checks are still pending; green means the corresponding service has responded; red means the check failed. The application retries frequently while starting.", "MongoDB being installed is not the same as being reachable. If MongoDB stays red, inspect its service status and port 27017."],
   "Closing and upgrading": ["Click the desktop window close button. Read the confirmation dialog, which identifies managed SentinelLab processes that will be terminated.", "Choose Cancel to keep working or confirm to close the application and stop its bundled API process tree. MongoDB remains running independently.", "Before running an installer upgrade, verify that sentinellab-api.exe is no longer present in Task Manager. Never ignore an installer error that says the executable is locked."],
   "Sidebar": ["Use the left navigation to select a module. Each module focuses on a separate part of SOC operations, from ingestion through detection and investigation.", "The Administration shortcut is displayed only for authorized administrator roles. The full manual is under Settings → How to Use SentinelLab.", "If a module does not display records, first check the active workspace and time range before assuming that the feature is broken."],
-  "Workspace selector": ["Select Training Lab to explore synthetic data and safely learn the workflows. Select a production workspace only when your account has been granted access.", "Verify the active workspace before creating rules, editing records, or exporting reports. Training results should never be presented as real security incidents.", "Production membership can require independent approval and is managed through Settings → Security."],
+  "Workspace selector": ["Select Training Lab to explore synthetic data and safely learn the workflows. Select a production workspace only when your account has been granted access.", "Verify the active workspace before creating rules, editing records, or exporting reports. Training results should never be presented as real security incidents.", "Production membership can require independent approval and is managed through Administration."],
   "Time range": ["Choose the required time window from the top navigation where supported, such as the last hour, 24 hours or seven days.", "Start with a narrow window when triaging a fresh alert, then expand the range to identify earlier related activity.", "A filter can hide otherwise valid data. If expected events disappear, reset or widen the time range."],
   "Global search": ["Enter an available event, host, IP, alert or case identifier in the search field. Review the returned matches and open the relevant module.", "Use precise identifiers where possible, then compare timestamps, sources and associated entities.", "Search visibility is restricted by the current account's permissions and workspace."],
   "Notifications and profile": ["Use the notification control to review messages and security events that require attention. Open an item to inspect the related record when available.", "Use the appearance controls to select your preferred theme. Open the profile menu to verify your account and sign out.", "Always sign out of shared workstations when finished."],
@@ -85,12 +85,12 @@ const detailed = {
   "Reports": ["Open Reports and choose the available report type, workspace and time range. Review the included findings and supporting data before exporting.", "Use a report to communicate alert trends, investigation outcomes or operational health to the appropriate audience.", "Check for sensitive information before sharing. A report based on synthetic Training Lab data must be labeled accordingly."],
   "AI Security Assistant": ["Use the assistant for explanations, investigation ideas or summaries when its provider is configured.", "Provide relevant non-secret context and ask for specific, verifiable reasoning. Compare suggested actions against SentinelLab events and approved procedures.", "Do not share passwords, API keys or sensitive production data with an unapproved provider. AI-generated output can be mistaken."],
   "General settings": ["Open Settings → General to review application identity, timezone, theme and default time range. Change one setting at a time and confirm it was saved.", "Demo Mode is intended for synthetic Training Lab activity. Reset Training Lab Data can regenerate demonstration records and should only be used when replacement is acceptable.", "Keep production workflows separate from demonstrations and verify the workspace before any reset."],
-  "Security overview": ["Open Settings → Security to inspect account and session security controls and their reported status.", "Review password requirements, lockout policy, role permissions, audit behavior and workspace isolation before deploying to production.", "Informational security summaries do not replace penetration testing or configuration validation."],
-  "Create analyst": ["Sign in with an authorized administrator account, open Settings → Security and locate the Create Analyst form.", "Enter a unique email and username, a display name and a strong initial password. Submit once and check that the new account appears in user management.", "The analyst should use Non-Admin Login. Confirm the assigned workspace and least-privilege role before sharing credentials securely."],
-  "User and role management": ["Open Settings → Security → User & Role Management. Locate the account and inspect its current role and workspace membership.", "Choose the required role only if it matches the person's responsibilities, then review and confirm the change.", "Verify the resulting access with the affected account. Higher privileges should be granted sparingly and administrative changes reviewed in the audit log."],
+  "Security overview": ["Open Administration to inspect account and session security controls and their reported status.", "Review password requirements, lockout policy, role permissions, audit behavior and workspace isolation before deploying to production.", "Informational security summaries do not replace penetration testing or configuration validation."],
+  "Create analyst": ["Sign in with an authorized administrator account, open Administration and locate the Create Analyst form.", "Enter a unique email and username, a display name and a strong initial password. Submit once and check that the new account appears in user management.", "The analyst should use Non-Admin Login. Confirm the assigned workspace and least-privilege role before sharing credentials securely."],
+  "User and role management": ["Open Administration → User & Role Management. Locate the account and inspect its current role and workspace membership.", "Choose the required role only if it matches the person's responsibilities, then review and confirm the change.", "Verify the resulting access with the affected account. Higher privileges should be granted sparingly and administrative changes reviewed in the audit log."],
   "Account actions": ["Super administrators can access eligible account controls such as username changes, password resets and enable/disable actions.", "Verify the user's identity and select the intended account. Read the confirmation dialog carefully before submitting a sensitive action.", "After a password reset or account disablement, verify session revocation and audit history. Never attempt to recover a plaintext password from MongoDB."],
   "Login security alerts": ["Open the login security section to review suspicious repeated sign-in attempts, temporary lockouts and associated account details.", "Check the timing, account and context before deciding whether an incident is benign or requires investigation.", "Unlock only after identity verification and document the reason. A locked account can indicate password guessing or compromised credentials."],
-  "Production membership": ["In Settings → Security, review which accounts have production workspace access and which requests are pending.", "Request access only for a justified operational need. A second administrator may need to approve it; self-approval may be prohibited.", "If an approval is interrupted, inspect its status and use reconciliation controls when available. Review the audit log after granting or revoking access."],
+  "Production membership": ["In Administration, review which accounts have production workspace access and which requests are pending.", "Request access only for a justified operational need. A second administrator may need to approve it; self-approval may be prohibited.", "If an approval is interrupted, inspect its status and use reconciliation controls when available. Review the audit log after granting or revoking access."],
   "Ingestion settings": ["Open Settings → Ingestion to review the documented processing pipeline, supported input formats and parser/schema versions.", "Use this information to prepare compatible source data and to understand how incoming events become normalized records and alerts.", "This page describes pipeline configuration and capabilities; it does not itself guarantee a source is connected or events are arriving."],
   "Retention": ["Open Settings → Retention to review the current retention period and the available range.", "Adjust the slider to the required number of days and allow the setting to save. Consider storage capacity, investigation needs and legal requirements.", "Events beyond the window may become eligible for cleanup. Preserve required evidence separately according to your organization's policy."],
   "Integrations": ["Open Settings → Integrations to check which external services are configured and available.", "Review each provider's required credentials or endpoint and configure it through supported deployment settings before relying on its results.", "An offline integration does not mean its security findings are negative. Never hardcode API keys into source files or share them in screenshots."],
@@ -98,10 +98,62 @@ const detailed = {
   "Backend offline": ["If the backend indicator remains unavailable, wait briefly for cold startup and check Task Manager for the bundled API process.", "Restart SentinelLab and inspect whether the local API is reachable. Confirm that security software is not blocking the executable.", "If the process exits unexpectedly, collect the Windows build version and relevant application logs before troubleshooting further."],
   "MongoDB unavailable": ["Check whether MongoDB Community Server is installed and its Windows service is running. The expected default endpoint is localhost:27017.", "Use MongoDB Compass or mongosh to test a local connection. Check service configuration and firewall rules if connection fails.", "Restart SentinelLab after restoring database access. Do not delete the database as a troubleshooting shortcut."],
   "No events or alerts": ["Confirm the correct workspace and a sufficiently broad time range. Check whether any sources are connected and sending events.", "Inspect Sources & Ingestion and Pipeline Observatory for parsing failures or processing delays.", "Check detection rule enablement and matching conditions. No alerts is not proof that the environment is secure."],
-  "Permissions denied": ["Verify the selected login mode, signed-in role and current workspace membership.", "Ask an authorized administrator to review access through Settings → Security. Production access may require independent approval.", "Do not bypass permissions by editing MongoDB account records manually."],
+  "Permissions denied": ["Verify the selected login mode, signed-in role and current workspace membership.", "Ask an authorized administrator to review access through Administration. Production access may require independent approval.", "Do not bypass permissions by editing MongoDB account records manually."],
   "Installer cannot replace API": ["Close SentinelLab and accept the shutdown confirmation. Check Task Manager for a lingering sentinellab-api.exe process.", "If it remains, stop the stale process before retrying the installer. Keep MongoDB running; it is not the locked executable.", "Use Retry after the file lock is cleared. Do not choose Ignore because that can leave mismatched application components."],
   "Security practices": ["Use unique passwords and role-based least privilege. Keep analyst and administrator accounts separate when appropriate.", "Validate detection rules with synthetic data before enabling them in production and preserve evidence for investigations.", "Review audit events, minimize external integration secrets and maintain database backups according to your organization's policy."]
 };
+
+const beginnerExamples = {
+  "Overview": "This is your security home screen. If the event count jumps, open Events Explorer to see what changed.",
+  "Events Explorer": "An event is like a line in a diary: someone signed in, a file changed, or a connection happened.",
+  "Alerts": "An alert is like a smoke alarm. It tells you to investigate; it does not automatically mean there is a fire.",
+  "Detection Rules": "A rule is a condition such as 'warn me when repeated failed logins occur'. Test rules before enabling them.",
+  "Threat Hunting": "Imagine you suspect unusual midnight logins. Search for login records during those hours.",
+  "Sources & Ingestion": "A firewall sends log messages; ingestion brings them into SentinelLab so you can search them.",
+  "Investigations": "Put related alerts, evidence, and notes in one case folder so your team can follow the story.",
+  "Playbooks": "A playbook is a checklist of response steps. Read each step before performing it.",
+  "Reports": "A report summarizes what happened during a chosen period for your team or manager.",
+  "Create analyst": "Create a teammate's account with analyst permissions instead of giving them full administrator access.",
+  "User and role management": "Roles decide who can view events and who can change users or security settings.",
+  "Production membership": "Training Lab is a practice room. Production is the real workplace; access needs extra care.",
+  "Service indicators": "Amber means waiting, green means connected, and red means a check failed.",
+  "Retention": "A 90-day setting makes older event records eligible for cleanup; it does not mean they disappear immediately.",
+  "Integrations": "An integration connects another service, such as an IP reputation checker, to SentinelLab."
+};
+const glossary = [
+  [
+    "SOC",
+    "Security Operations Center: a team or workspace that watches security activity."
+  ],
+  [
+    "SIEM",
+    "Security Information and Event Management: software for collecting and examining security logs."
+  ],
+  [
+    "Event",
+    "A recorded action, such as a login or network connection."
+  ],
+  [
+    "Alert",
+    "A warning that a rule found something worth checking."
+  ],
+  [
+    "Rule",
+    "A condition that decides when a warning should appear."
+  ],
+  [
+    "Ingestion",
+    "Bringing event records into SentinelLab."
+  ],
+  [
+    "RBAC",
+    "Role-Based Access Control: each account gets permissions based on its role."
+  ],
+  [
+    "MongoDB",
+    "The database storing SentinelLab accounts and records."
+  ]
+];
 
 export function HelpContent() {
   const [query, setQuery] = useState("");
@@ -117,12 +169,14 @@ export function HelpContent() {
         <button type="button" className="w-full text-left text-[13px] font-medium py-1 flex justify-between gap-3" aria-expanded={open} onClick={()=>setExpanded(p=>({...p,[key]:!open}))}>{name}<span aria-hidden="true">{open?"−":"+"}</span></button>
         {open && <div className="text-[12px] leading-relaxed py-2 space-y-2" style={{color:"var(--text-2)"}}>
           <p><strong>What it does:</strong> {body}</p>
-          <p className="font-semibold" style={{color:"var(--text)"}}>How to use it</p>
+          {beginnerExamples[name] && <p className="rounded-md p-3" style={{background:"var(--bg)",color:"var(--text)"}}><strong>Simple example:</strong> {beginnerExamples[name]}</p>}
+          <p className="font-semibold" style={{color:"var(--text)"}}>Step by step</p>
           <ol className="list-decimal pl-5 space-y-1.5">{(detailed[name]||[body]).map(step=><li key={step}>{step}</li>)}</ol>
         </div>}
       </div>})}
     </section>)}
     {!sections.length && <p className="text-[13px]">No guide entries match that search.</p>}
+    <section className="card p-4 space-y-2"><h2 className="text-[15px] font-semibold">Cybersecurity words explained</h2>{glossary.filter(([word, meaning]) => (word+" "+meaning).toLowerCase().includes(query.toLowerCase())).map(([word,meaning])=><p key={word} className="text-[12px] border-t pt-2"><strong>{word}:</strong> {meaning}</p>)}</section>
   </div>;
 }
 
