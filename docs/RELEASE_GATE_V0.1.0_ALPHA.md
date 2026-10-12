@@ -84,3 +84,17 @@ This checkpoint supersedes older CI/build claims above. The original pre-sidecar
 4. Complete a clean Windows installation/upgrade and data-preservation smoke test using synthetic data. Keep the accepted Linux/macOS CI-only limitation explicit.
 5. Run and record synthetic SOC workflows, or narrow release claims to what has actually been tested.
 6. Request explicit owner approval before publishing. **Do not publish automatically.**
+
+
+## 2026-10-13 — Unified source build result
+
+**Unified Alpha Candidate Build [#38294692191](https://github.com/ibrahim1101/SentinelLab/actions/runs/38294692191) PASSED all five jobs**, including the source gate, Windows installer, Linux x64, macOS Intel, and macOS Apple Silicon. All jobs checked out the **same source commit** `b9b7958e720d93db6191614c07d2c01e7945643d`.
+
+| Platform | Actions artifact ID | Compressed artifact size |
+| --- | --- | ---: |
+| Windows x64 | `11768026703` | 26,534,393 bytes |
+| Linux x64 | `11767666946` | 163,282,382 bytes |
+| macOS Intel | `11767862517` | 32,086,612 bytes |
+| macOS Apple Silicon | `11768520700` | 30,910,965 bytes |
+
+**Still pending:** download and SHA-256 verify installer payloads from this unified run; ensure the draft release carries these exact binaries and matching checksums; clear third-party source/artwork license rights; and complete or explicitly limit untested runtime claims. The draft release remains unpublished. The source SHA above is the build candidate, not a claim that later documentation commits were included in those binaries.
