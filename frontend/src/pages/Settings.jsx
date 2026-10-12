@@ -295,6 +295,19 @@ export default function Settings() {
                 { id: "virustotal", name: "VirusTotal", desc: "Threat intelligence enrichment — provider configuration not implemented", status: "offline" },
                 { id: "abuseipdb", name: "AbuseIPDB", desc: "IP reputation — provider configuration not implemented", status: "offline" },
                 { id: "smtp", name: "SMTP / Email", desc: "Email reports and alerts — provider configuration not implemented", status: "offline" },
+                { id: "telegram", name: "Telegram", desc: "Bot notifications — planned", status: "offline" },
+                { id: "googlechat", name: "Google Chat", desc: "Space notifications — planned", status: "offline" },
+                { id: "mattermost", name: "Mattermost", desc: "Self-hosted team notifications — planned", status: "offline" },
+                { id: "ntfy", name: "ntfy", desc: "Self-hosted and hosted push notifications — planned", status: "offline" },
+                { id: "pagerduty", name: "PagerDuty", desc: "Incident escalation and on-call alerts — planned", status: "offline" },
+                { id: "opsgenie", name: "Opsgenie", desc: "On-call alert routing — planned", status: "offline" },
+                { id: "jira", name: "Jira", desc: "Issue and incident ticket creation — planned", status: "offline" },
+                { id: "servicenow", name: "ServiceNow", desc: "ITSM incident workflows — planned", status: "offline" },
+                { id: "misp", name: "MISP", desc: "Threat intelligence sharing — planned", status: "offline" },
+                { id: "otx", name: "AlienVault OTX", desc: "Threat intelligence enrichment — planned", status: "offline" },
+                { id: "wazuh", name: "Wazuh", desc: "Security event forwarding — planned", status: "offline" },
+                { id: "elastic", name: "Elastic / OpenSearch", desc: "Search and SIEM interoperability — planned", status: "offline" },
+                { id: "splunk", name: "Splunk", desc: "SIEM forwarding and search — planned", status: "offline" },
               ].map(item => <div key={item.id} className="border-b" style={{ borderColor: "var(--border)" }}>
                 <button type="button" className="w-full flex items-center justify-between gap-3 py-3 text-left" aria-expanded={expandedIntegration === item.id} onClick={() => { setExpandedIntegration(v => v === item.id ? null : item.id); refreshIntegrations(); }} data-testid={`integration-toggle-${item.id}`}>
                   <span className="flex-1"><span className="block text-[13px] font-medium">{item.name}</span><span className="block text-[11.5px]" style={{ color: "var(--text-3)" }}>{item.desc}</span></span>
