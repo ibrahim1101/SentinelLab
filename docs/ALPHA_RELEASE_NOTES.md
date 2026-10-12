@@ -34,7 +34,7 @@ Build evidence: [Linux and macOS workflow run #38260680147](https://github.com/i
 - Windows: manually checked installer, MongoDB connection indicator, admin/non-admin login, desktop close behavior, AI assistant, and Discord webhook delivery.
 - Linux x64: CI built `.deb` and `.AppImage`; backend self-test passed. **Installation/runtime untested.**
 - macOS Intel and Apple Silicon: CI built `.dmg`; backend self-test passed. **Installation/runtime untested.**
-- Automated security workflows have passed on the development branch. This is not an independent security audit.
+- Automated security workflows have passed on the consolidated main branch. This is not an independent security audit.
 
 ## Known limitations
 
@@ -52,7 +52,17 @@ Use [GitHub Issues](https://github.com/ibrahim1101/SentinelLab/issues) with your
 
 - [x] Linux x64 and macOS Intel/Apple Silicon packaging and bundled-backend import checks passed.
 - [x] Basic Windows hands-on desktop and integration checks completed.
-- [ ] Confirm a **current** Windows installer artifact passes CI on the intended release commit.
-- [ ] Collect actual installer files, verify platform names and checksums.
+- [x] Confirm a current Windows installer artifact passes CI on main (run 38265416099).
+- [x] Initial release draft contains five installer packages and SHA256SUMS.txt; **re-verify checksums if replacing assets with newer main builds**.
 - [ ] Publish `v0.1.0-alpha` as a **GitHub prerelease**, with the untested-platform warnings prominently visible.
 - [ ] Download-test the published release assets and monitor bug reports.
+
+
+## Consolidated main branch and asset provenance (2026-10-12)
+
+- PR #1 merged at `35a2456`; repository has one branch, `main`.
+- Windows desktop packaging on main: [run 38265416099](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265416099), passed.
+- Linux/macOS desktop packaging on main: [run 38265421720](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265421720), passed.
+- Login security and Phase 1 security workflows passed on main: [38265992950](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265992950), [38265992719](https://github.com/ibrahim1101/SentinelLab/actions/runs/38265992719).
+- Existing draft release assets originate from earlier passing CI builds at `4f9b1b6`, before the merge. The post-merge source comparison found no application-source changes; only CI workflow changes. The newer main artifacts have **not** been substituted into the draft.
+- Release is still a **draft**, not published. User accepts Linux/macOS CI-only packages for an experimental alpha and will address OS-specific bugs reported by testers.
