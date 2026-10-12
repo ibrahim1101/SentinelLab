@@ -81,7 +81,7 @@ jobs:
           if ($proc.ExitCode -ne 0) { throw "Bundled backend import self-test failed with exit code $($proc.ExitCode)" }
       - name: Build Windows NSIS installer
         working-directory: desktop
-        run: npm run tauri:build -- --locked
+        run: npm run tauri:build -- -- --locked
         env:
           CI: 'false'
           REACT_APP_BACKEND_URL: 'http://127.0.0.1:18765'
