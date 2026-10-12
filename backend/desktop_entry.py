@@ -26,7 +26,8 @@ if __name__ == "__main__":
     configure_environment()
     if "--self-test" in sys.argv:
         import server
-        assert server.app is not None
+        if server.app is None:
+            raise RuntimeError("Bundled FastAPI application is unavailable")
         print("SentinelLab bundled backend import OK")
         sys.exit(0)
     uvicorn.run("server:app", host="127.0.0.1", port=18765, log_level="info")
