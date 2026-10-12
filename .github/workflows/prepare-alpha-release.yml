@@ -2,7 +2,7 @@ name: Prepare SentinelLab Alpha Release
 on:
   workflow_dispatch:
   push:
-    branches: ["fix/phase1-security-regressions"]
+    branches: ["main"]
     paths:
       - ".github/workflows/prepare-alpha-release.yml"
 permissions:
