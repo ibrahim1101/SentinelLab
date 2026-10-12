@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Settings as SIcon, Shield, Database, Clock, Plug, Info, FlaskConical, RefreshCw } from "lucide-react";
 import client from "@/lib/api";
+import HelpTip from "@/components/HelpTip";
 import { useTheme, THEMES } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { PageHead, StatusPill, fmtTime } from "@/components/common";
@@ -185,10 +186,10 @@ export default function Settings() {
                 <select className="inp" value={theme} onChange={(e) => setTheme(e.target.value)} data-testid="set-theme">{THEMES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
               </Field>
               <div className="flex items-center justify-between border-t pt-4">
-                <div><div className="text-[13px] font-medium flex items-center gap-1.5" style={{ color: "var(--text)" }}><FlaskConical size={14} style={{ color: "var(--cyan)" }} /> Demo Mode</div><div className="text-[11.5px]" style={{ color: "var(--text-3)" }}>Use simulated data for demonstration</div></div>
+                <div><div className="text-[13px] font-medium flex items-center gap-1.5" style={{ color: "var(--text)" }}><FlaskConical size={14} style={{ color: "var(--cyan)" }} /> Demo Mode <HelpTip text="Use synthetic Training Lab data for demonstrations. Do not confuse simulated events with real production telemetry." /></div><div className="text-[11.5px]" style={{ color: "var(--text-3)" }}>Use simulated data for demonstration</div></div>
                 <Toggle on={s.demo_mode} onChange={(v) => save({ demo_mode: v })} testId="demo-toggle" />
               </div>
-              <button className="btn btn-sm" onClick={resetDemo} data-testid="reset-demo"><RefreshCw size={13} /> Reset Training Lab Data</button>
+              <button className="btn btn-sm" onClick={resetDemo} data-testid="reset-demo"><RefreshCw size={13} /> Reset Training Lab Data</button><HelpTip text="Regenerates synthetic training data. This may replace existing demonstration records; a confirmation is required." />
             </div>
           )}
           {tab === "security" && (
@@ -202,7 +203,7 @@ export default function Settings() {
               {isAdmin && (
                 <>
                   {isSuperAdmin && <div className="border rounded-md p-4 mt-4 w-full max-w-5xl space-y-3" data-testid="login-security-events">
-                    <div className="font-semibold text-[13px]">Login security alerts ({loginEvents.filter((e) => e.status === "open").length} open)</div>
+                    <div className="font-semibold text-[13px]">Login security alerts ({loginEvents.filter((e) => e.status === "open").length} open) <HelpTip text="Lists temporary account lockouts caused by repeated failed sign-ins. Unlock only after verifying the account owner." /></div>
                     {loginEvents.length === 0 ? <p className="text-[12px]">No account lock incidents recorded.</p> :
                       <div className="space-y-2">{loginEvents.map((event) => <div key={event.id} className="border rounded p-3 flex flex-wrap items-center justify-between gap-3">
                         <div className="text-[12px]"><strong>{event.email}</strong> · {event.failed_count} failed attempts · Source: {event.source_ip} · {event.created_at} · {event.status}</div>
@@ -225,14 +226,14 @@ export default function Settings() {
                     <input className="inp" aria-label="Initial analyst password" placeholder="Initial password (12+ characters)" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newUser.password} onChange={(e) => setNewUser((v) => ({ ...v, password: e.target.value }))} /></div>
                     <button type="submit" className="btn btn-primary" disabled={creatingUser}>{creatingUser ? "Creating…" : "Create Analyst"}</button>
                   </form>
-                  <div className="text-[11px] uppercase mt-5 mb-2" style={{ color: "var(--text-3)" }}>User & Role Management</div>
-                  <div className="w-full overflow-x-auto"><table className="dense w-full min-w-[780px] table-auto"><thead><tr><th className="text-left">User</th><th className="text-left">Email</th><th className="text-left">Role</th>{isSuperAdmin && <th className="text-left">Account actions</th>}</tr></thead><tbody>
+                  <div className="text-[11px] uppercase mt-5 mb-2" style={{ color: "var(--text-3)" }}>User & Role Management <HelpTip text="Assign roles and manage account credentials. Higher roles grant more permissions. Role changes require confirmation and are audited." /></div>
+                  <div className="w-full overflow-x-auto"><table className="dense w-full min-w-[780px] table-auto"><thead><tr><th className="text-left">User</th><th className="text-left">Email</th><th className="text-left">Role <HelpTip text="Controls access privileges. Administrator roles can manage users; super administrators have additional sensitive account controls." /></th>{isSuperAdmin && <th className="text-left">Account actions</th>}</tr></thead><tbody>
                     {users.map((u) => (<tr key={u.id} className="border-t"><td style={{ color: "var(--text)" }}>{u.name}</td><td className="font-mono" style={{ color: "var(--text-2)" }}>{u.email}</td>
                       <td className="min-w-[180px]"><select className="inp w-full min-w-[165px]" value={u.role} onChange={(e) => setUserRole(u.id, e.target.value)} data-testid={`role-${u.id}`}>{Object.entries(roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>{isSuperAdmin && <td className="min-w-[310px]"><div className="flex flex-wrap gap-2 items-center"><span className="text-[11px] font-mono whitespace-nowrap">{u.username || "No username"}</span><button className="btn btn-sm" type="button" onClick={() => { setEditingAccount({ id: u.id, email: u.email, mode: "username" }); setAccountInput(u.username || ""); }}>Username</button>{u.id !== user.id && <><button className="btn btn-sm" type="button" onClick={() => { setEditingAccount({ id: u.id, email: u.email, mode: "password" }); setAccountInput(""); }}>Reset password</button>{u.role !== "super_admin" && <button className="btn btn-sm" type="button" onClick={() => toggleAccount(u)}>{u.enabled === false ? "Enable" : "Disable"}</button>}</>}</div></td>}</tr>))}
                   </tbody></table></div>
                   {isSuperAdmin && editingAccount && <form onSubmit={submitAccountEdit} className="border rounded p-3 my-3 space-y-2"><div className="text-sm font-semibold">{editingAccount.mode === "username" ? "Assign username" : "Reset password"} · {editingAccount.email}</div><input className="inp" autoFocus required type={editingAccount.mode === "password" ? "password" : "text"} autoComplete="off" minLength={editingAccount.mode === "password" ? 12 : 3} maxLength={editingAccount.mode === "password" ? 128 : 32} value={accountInput} onChange={(e) => setAccountInput(e.target.value)} placeholder={editingAccount.mode === "password" ? "New temporary password (12+ characters)" : "Username"} /><div className="flex gap-2"><button className="btn btn-primary" type="submit">Continue</button><button className="btn" type="button" onClick={() => { setEditingAccount(null); setAccountInput(""); }}>Cancel</button></div></form>}
                   {isSuperAdmin && <div className="mt-6 space-y-4 w-full max-w-5xl" data-testid="membership-review">
-                    <div className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Production workspace membership review</div>
+                    <div className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Production workspace membership review <HelpTip text="Review access to real production data. Granting access requires a separate super administrator to approve the request." /></div>
                     <p className="text-[12px]" style={{ color: "var(--text-2)" }}>Currently approved production members: {members.length}. Review older accounts before deployment. Changes are audited and require confirmation.</p>
                     <div className="space-y-2">{approvalQueue.filter((q) => q.status === "pending").map((q) => <div key={q.id} className="flex items-center justify-between gap-2 border-b py-2"><span className="text-[12px]">Pending approval: {users.find((u) => u.id === q.target_id)?.email || q.target_id}</span><button className="btn btn-sm" disabled={!!savingMember || q.requester_id === user.id} onClick={() => approveRequest(q)}>{q.requester_id === user.id ? "Awaiting second admin" : "Approve"}</button></div>)}</div>
                     {approvalQueue.some((q) => q.status === "applying" || q.status === "failed") && <div className="space-y-2 border-t pt-3" data-testid="approval-recovery">
