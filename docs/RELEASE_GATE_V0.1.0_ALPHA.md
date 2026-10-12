@@ -98,3 +98,15 @@ This checkpoint supersedes older CI/build claims above. The original pre-sidecar
 | macOS Apple Silicon | `11768520700` | 30,910,965 bytes |
 
 **Still pending:** download and SHA-256 verify installer payloads from this unified run; ensure the draft release carries these exact binaries and matching checksums; clear third-party source/artwork license rights; and complete or explicitly limit untested runtime claims. The draft release remains unpublished. The source SHA above is the build candidate, not a claim that later documentation commits were included in those binaries.
+
+
+## 2026-10-13 — Final prerelease audit (owner Windows acceptance)
+
+- **Windows acceptance:** Owner confirms the unified Windows installer worked on their PC. This is an owner-reported runtime PASS, not an independently observed clean-install regression or full SOC end-to-end test.
+- **Linux/macOS:** Owner explicitly defers physical tests to future testers; CI build PASS does not mean runtime PASS. Keep this limitation visible in release notes and bug reporting.
+- **Unified candidate:** [run #38294692191](https://github.com/ibrahim1101/SentinelLab/actions/runs/38294692191) PASS; all four platform build jobs plus source gate used `b9b7958e720d93db6191614c07d2c01e7945643d`.
+- **Release metadata checked:** GitHub draft release ID `410702970`, tag `v0.1.0-alpha`, `target_commitish=b9b7958e720d93db6191614c07d2c01e7945643d`, `draft=true`, `prerelease=true`.
+- **Attached binary digests:** All five installer asset SHA-256 digests match the hashes documented in `docs/ALPHA_CANDIDATE_ARTIFACT_SHA256_2026-10-13.md`. `SHA256SUMS.txt` is attached; the manifest's exact content should also be checked if not already done.
+- **Licensing:** **BLOCKED / NOT SIGNED OFF.** The two Emergent packages are listed as frontend dev dependencies; `frontend/craco.config.js` only loads its overlay for nonproduction builds. This reduces concern about bundling that overlay but does **not** prove that the original generated source, branded artwork, third-party dependencies, or required notices are redistributable.
+- **SOC end-to-end validation:** Not completed; experimental claims only.
+- **Decision:** Technical alpha candidate assembled; publication remains on hold pending license/provenance rights and explicit owner approval. Do not publish automatically. No additional release branch or rebuild required unless a blocker is discovered.
