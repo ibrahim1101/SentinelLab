@@ -1665,8 +1665,6 @@ async def startup():
                                    "theme": "obsidian_dark", "created_at": now_iso()})
     elif not existing.get("username") and not await db.users.find_one({"username": admin_username}):
         await db.users.update_one({"id": existing["id"]}, {"$set": {"username": admin_username}})
-    if existing and not verify_password(admin_pw, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_pw)}})
     if os.environ.get("ENABLE_DEMO_ACCOUNTS") == "true" and not await db.users.find_one({"email": "analyst@sentinellab.io"}):
         await db.users.insert_one({"id": new_id(), "email": "analyst@sentinellab.io", "name": "SOC Analyst",
                                    "password_hash": hash_password("Analyst@2026"), "role": "analyst",
