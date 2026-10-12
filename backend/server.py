@@ -1658,8 +1658,12 @@ async def startup():
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
         if not admin_pw or len(admin_pw) < 12:
-            raise RuntimeError("ADMIN_PASSWORD must be configured with at least 12 characters for initial setup")
-        await db.users.insert_one({"id": new_id(), "email": admin_email, "username": admin_username, "name": "SOC Administrator",
+            if os.environ.get("SENTINELLAB_DESKTOP") == "1":
+                logger.info("Desktop administrator setup required")
+            else:
+                raise RuntimeError("ADMIN_PASSWORD must be configured with at least 12 characters for initial setup")
+        if admin_pw and len(admin_pw) >= 12:
+            await db.users.insert_one({"id": new_id(), "email": admin_email, "username": admin_username, "name": "SOC Administrator",
                                    "password_hash": hash_password(admin_pw), "role": "super_admin",
                                    "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": TRAIN_ORG,
                                    "theme": "obsidian_dark", "created_at": now_iso()})
