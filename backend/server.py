@@ -127,6 +127,9 @@ async def desktop_setup_status(request: Request):
 
 @api.post("/desktop/setup")
 async def desktop_setup(body: DesktopSetupReq, request: Request):
+    origin = request.headers.get("origin", "")
+    if origin not in ("http://tauri.localhost", "tauri://localhost"):
+        raise HTTPException(403, "Desktop application origin required")
     if os.environ.get("SENTINELLAB_DESKTOP") != "1" or request.client.host not in ("127.0.0.1", "::1"):
         raise HTTPException(404, "Not found")
     username = body.username.strip().lower()
