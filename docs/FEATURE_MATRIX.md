@@ -55,3 +55,27 @@ Statuses: `Not Started` · `In Progress` · `Implemented` · `Tested` · `Blocke
 
 ## Phase 1 verification note (2026-10-09)
 Milestone 2/3 `Tested` labels above reflect Emergent-reported API checks, not independent CI confirmation. Security stabilization is in progress on `fix/phase1-security-regressions`; do not interpret this matrix as a production certification.
+
+
+## 2026-10-12 — Current alpha status override
+
+**Important:** Historical labels above reflect the original prototype and some Emergent-reported tests. The current evidence below supersedes obsolete "Not Started" statuses for features that were subsequently implemented. "CI passed" is not the same as end-to-end desktop validation.
+
+| Capability | Current status | Evidence / caveat |
+| --- | --- | --- |
+| Windows Tauri installer and bundled FastAPI sidecar | CI passed + basic manual test | Windows workflow `38265416099`; MongoDB installed separately |
+| Linux DEB and AppImage | CI packaged, runtime untested | `38265421720` |
+| macOS Intel and Apple Silicon DMG | CI packaged, runtime untested | `38265421720` |
+| Login hardening, disabled accounts, lockouts | CI passed + selected manual tests | `38265992950`; broader threat modeling remains |
+| Organization/workspace security | Automated regressions | `38265992719`; full packaged multi-tenant tests outstanding |
+| Local and cloud OpenAI-compatible model configuration | Implemented; Ollama manually verified | Local `qwen3:14b` response confirmed |
+| AI product guidance | Implemented | Built-in guide; complete in-app manual retrieval not yet implemented |
+| Discord outgoing webhooks | Implemented + manually delivered | Line breaks and contextual audit event fixes included |
+| Generic/Slack/Teams webhook payload adapters | Implemented; no full physical delivery proof | Provider-specific external service testing pending |
+| VirusTotal, AbuseIPDB, SMTP integration | Planned UI placeholders only | No functional provider integration |
+| MITRE ATT&CK coverage, IOC import/scan, playbooks | Implemented; historical targeted API tests | Full desktop SOC workflow verification pending |
+| Docker Compose + GitHub Actions CI | Implemented | Phase 1 security and desktop packaging jobs pass |
+| Signing/notarization | Not started | All alpha installers unsigned |
+| Full end-to-end SOC regression on installed desktop | Pending | Must not imply full production readiness |
+
+See `docs/ENGINEERING_JOURNEY.md` for the dated decision log and `docs/RELEASE_GATE_V0.1.0_ALPHA.md` for release blockers and explicit exceptions.
