@@ -58,7 +58,7 @@ export default function Login() {
         setErr("Administrator created. Sign in using your new credentials.");
         return;
       }
-      await login(email, password);
+      await login(email, password, adminMode ? "admin" : "non_admin");
     }
     catch (ex) {
       setErr(!ex.response
@@ -80,10 +80,10 @@ export default function Login() {
 
         <form onSubmit={submit} className="card p-5">
           <div className="mb-3">
-            <div className="font-head font-semibold text-[15px]" style={{ color: "var(--text)" }}>{setup ? "Initial administrator setup" : adminMode ? "Administrator sign in" : "Welcome back"}</div>
-            <div className="text-[12px]" style={{ color: "var(--text-3)" }}>{setup ? "Create your first administrator account" : adminMode ? "Sign in with your existing administrator credentials" : "Sign in to your analyst workspace"}</div>
+            <div className="font-head font-semibold text-[15px]" style={{ color: "var(--text)" }}>{setup ? "Initial administrator setup" : adminMode ? "Administrator sign in" : "Non-admin sign in"}</div>
+            <div className="text-[12px]" style={{ color: "var(--text-3)" }}>{setup ? "Create your first administrator account" : adminMode ? "Admin and super-admin accounts only" : "Analyst and lower-privilege accounts only"}</div>
           </div>
-          {!setup && <div className="flex gap-2 mb-3 text-[12px]"><button type="button" className={`px-3 py-1.5 rounded ${!adminMode ? "bg-cyan-700 text-white" : "border border-slate-600"}`} onClick={() => setAdminMode(false)}>Analyst login</button><button type="button" className={`px-3 py-1.5 rounded ${adminMode ? "bg-cyan-700 text-white" : "border border-slate-600"}`} onClick={() => setAdminMode(true)}>Administrator login</button></div>}
+          {!setup && <div className="flex gap-2 mb-3 text-[12px]"><button type="button" className={`px-3 py-1.5 rounded ${!adminMode ? "bg-cyan-700 text-white" : "border border-slate-600"}`} onClick={() => setAdminMode(false)}>Non-Admin Login</button><button type="button" className={`px-3 py-1.5 rounded ${adminMode ? "bg-cyan-700 text-white" : "border border-slate-600"}`} onClick={() => setAdminMode(true)}>Administrator Login</button></div>}
           {setupChecked && !setup && <p className="mb-3 text-[11px]" style={{ color: "var(--text-3)" }}>An administrator already exists. Use its registered username or email and password; creating another administrator is disabled.</p>}
           {err && <div className="mb-3 text-[12px] px-3 py-2 rounded" style={{ background: "rgba(248,113,113,.12)", color: "#F87171", border: "1px solid rgba(248,113,113,.3)" }} data-testid="login-error">{err}</div>}
           {setup && <div className="mb-3 space-y-2"><input className="inp w-full" type="email" required placeholder="Administrator email" value={setupEmail} onChange={e => setSetupEmail(e.target.value)} /><input className="inp w-full" required placeholder="Administrator username" value={setupUsername} onChange={e => setSetupUsername(e.target.value)} /></div>}
