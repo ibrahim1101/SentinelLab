@@ -3,6 +3,7 @@ name = "sentinellab-desktop"
 version = "0.1.0"
 description = "SentinelLab desktop shell"
 edition = "2021"
+license = "GPL-3.0-only"
 
 [lib]
 name = "sentinellab_desktop_lib"
