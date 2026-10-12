@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 import { Shield, Lock, User, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { apiErr } from "@/lib/api";
@@ -10,11 +11,30 @@ export default function Login() {
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [setup, setSetup] = useState(false);
+  const [setupEmail, setSetupEmail] = useState("");
+  const [setupUsername, setSetupUsername] = useState("");
+  useEffect(() => {
+    axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/desktop/setup-status`)
+      .then(({data}) => setSetup(Boolean(data.setup_required))).catch(() => {});
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
     setErr(""); setBusy(true);
-    try { await login(email, password); }
+    try {
+      if (setup) {
+        await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/desktop/setup`, {
+          email: setupEmail, username: setupUsername, password
+        });
+        setSetup(false);
+        setEmail(setupUsername);
+        setPassword("");
+        setErr("Administrator created. Sign in using your new credentials.");
+        return;
+      }
+      await login(email, password);
+    }
     catch (ex) {
       setErr(!ex.response
         ? "SentinelLab cannot connect to its local backend. MongoDB Community Server must be installed and running on localhost:27017. Check the MongoDB service, then restart SentinelLab."
@@ -36,14 +56,15 @@ export default function Login() {
         <form onSubmit={submit} className="card p-5">
           <div className="mb-3">
             <div className="font-head font-semibold text-[15px]" style={{ color: "var(--text)" }}>Welcome back</div>
-            <div className="text-[12px]" style={{ color: "var(--text-3)" }}>Sign in to your analyst workspace</div>
+            <div className="text-[12px]" style={{ color: "var(--text-3)" }}>{setup ? "Create your first administrator account" : "Sign in to your analyst workspace"}</div>
           </div>
           {err && <div className="mb-3 text-[12px] px-3 py-2 rounded" style={{ background: "rgba(248,113,113,.12)", color: "#F87171", border: "1px solid rgba(248,113,113,.3)" }} data-testid="login-error">{err}</div>}
-          <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Email or username</label>
-          <div className="relative mt-1 mb-3">
+          {setup && <div className="mb-3 space-y-2"><input className="inp w-full" type="email" required placeholder="Administrator email" value={setupEmail} onChange={e => setSetupEmail(e.target.value)} /><input className="inp w-full" required placeholder="Administrator username" value={setupUsername} onChange={e => setSetupUsername(e.target.value)} /></div>}
+          {!setup && <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Email or username</label>}
+          {!setup && <div className="relative mt-1 mb-3">
             <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-3)" }} />
             <input className="inp" style={{ paddingLeft: "2.5rem" }} autoComplete="username" type="text" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email" placeholder="Email or username" />
-          </div>
+          </div>}
           <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Password</label>
           <div className="relative mt-1 mb-4">
             <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-3)" }} />
@@ -54,7 +75,7 @@ export default function Login() {
             </button>
           </div>
           <button className="btn btn-primary w-full justify-center" disabled={busy} data-testid="login-submit">
-            {busy ? "Authenticating…" : "Sign In"}
+            {busy ? "Please wait…" : setup ? "Create Administrator" : "Sign In"}
           </button>
 
         </form>
