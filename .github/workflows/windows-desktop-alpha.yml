@@ -59,7 +59,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install -r backend/requirements.runtime.txt pyinstaller
-          python -m PyInstaller --noconfirm --clean --onefile --name sentinellab-api --distpath desktop/src-tauri/binaries --collect-submodules uvicorn --collect-submodules motor --collect-submodules pymongo --hidden-import server --hidden-import core --hidden-import parsers --hidden-import detection --hidden-import seed --hidden-import ai_assistant --hidden-import playbooks --hidden-import mitre_data --paths backend backend/desktop_entry.py
+          python -m PyInstaller --noconfirm --clean --onefile --name sentinellab-api --distpath desktop/src-tauri/binaries --collect-submodules uvicorn --collect-submodules motor --collect-submodules pymongo --hidden-import server --hidden-import core --hidden-import parsers --hidden-import detection --hidden-import seed --hidden-import ai_assistant --hidden-import webhooks --collect-submodules cryptography --hidden-import playbooks --hidden-import mitre_data --paths backend backend/desktop_entry.py
           $target = (rustc -vV | Select-String "^host: ").ToString().Split(" ")[1]
           Move-Item desktop/src-tauri/binaries/sentinellab-api.exe "desktop/src-tauri/binaries/sentinellab-api-$target.exe"
           if (!(Test-Path "desktop/src-tauri/binaries/sentinellab-api-$target.exe")) { throw "Backend executable missing" }
