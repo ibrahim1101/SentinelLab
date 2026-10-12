@@ -132,6 +132,12 @@ async def desktop_setup(body: DesktopSetupReq, request: Request):
     username = body.username.strip().lower()
     if not USERNAME_RE.fullmatch(username):
         raise HTTPException(422, "Invalid administrator username")
+    # An atomic unique sentinel prevents two concurrent bootstrap requests from
+    # creating separate super administrators.
+    try:
+        await db.bootstrap_state.insert_one({"_id": "desktop-admin", "created_at": now_iso()})
+    except DuplicateKeyError:
+        raise HTTPException(409, "Administrator setup already started")
     if await db.users.find_one({"role": "super_admin"}):
         raise HTTPException(409, "Administrator already configured")
     record = {"id": new_id(), "email": str(body.email).lower(), "username": username,
