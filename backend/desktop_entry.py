@@ -1,4 +1,4 @@
-"""Local Windows desktop entry point for SentinelLab."""
+"""Cross-platform local desktop entry point for SentinelLab."""
 import os
 import secrets
 import sys
@@ -10,7 +10,12 @@ import uvicorn
 
 
 def configure_environment():
-    data = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "SentinelLab"
+    if sys.platform == "win32":
+        data = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "SentinelLab"
+    elif sys.platform == "darwin":
+        data = Path.home() / "Library" / "Application Support" / "SentinelLab"
+    else:
+        data = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local" / "share"))) / "SentinelLab"
     data.mkdir(parents=True, exist_ok=True)
     secret_path = data / "jwt.secret"
     if "JWT_SECRET" not in os.environ:
@@ -21,7 +26,7 @@ def configure_environment():
     os.environ.setdefault("DB_NAME", "sentinellab")
     os.environ.setdefault("ENABLE_DEMO_ACCOUNTS", "false")
     os.environ["SENTINELLAB_DESKTOP"] = "1"
-    os.environ.setdefault("CORS_ORIGINS", "http://tauri.localhost,tauri://localhost")
+    os.environ.setdefault("CORS_ORIGINS", "http://tauri.localhost,tauri://localhost,https://tauri.localhost")
 
 
 class DesktopStatusHandler(BaseHTTPRequestHandler):
