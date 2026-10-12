@@ -21,7 +21,8 @@ const TABS = [
 export default function Settings() {
   const { theme, setTheme } = useTheme();
   const { user, roles } = useAuth();
-  const [tab, setTab] = useState(() => window.location.pathname === "/admin" ? "security" : "general");
+  const administration = window.location.pathname === "/admin";
+  const [tab, setTab] = useState(() => administration ? "security" : "general");
   const [s, setS] = useState(null);
   const [users, setUsers] = useState([]);
   const [loginEvents, setLoginEvents] = useState([]);
@@ -167,10 +168,10 @@ export default function Settings() {
 
   return (
     <div data-testid="settings-page">
-      <PageHead title="Settings" desc="Application configuration and management" />
+      <PageHead title={administration ? "Administration" : "Settings"} desc={administration ? "Manage users, permissions, login security, and production access" : "Personal preferences, application configuration, and user guide"} />
       <div className="flex gap-4">
         <div className="w-48 shrink-0 space-y-0.5">
-          {TABS.map((t) => (
+          {TABS.filter(t => administration ? t.id === "security" : t.id !== "security").map((t) => (
             <button key={t.id} className={`nav-item w-full ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)} data-testid={`settings-tab-${t.id}`}>
               <t.icon size={15} /> {t.label}
             </button>
@@ -194,7 +195,7 @@ export default function Settings() {
               <button className="btn btn-sm" onClick={resetDemo} data-testid="reset-demo"><RefreshCw size={13} /> Reset Training Lab Data</button><HelpTip text="Regenerates synthetic training data. This may replace existing demonstration records; a confirmation is required." />
             </div>
           )}
-          {tab === "security" && (
+          {administration && tab === "security" && (
             <div className="space-y-4 w-full min-w-0 text-[13px]">
               <Row k="Password Hashing" v="bcrypt (Argon2id-ready adapter)" />
               <Row k="Session Token" v="JWT · 8h expiry · httpOnly cookie + Bearer" />
