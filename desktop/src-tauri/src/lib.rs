@@ -36,7 +36,8 @@ pub fn run() {
                 };
                 match command.spawn() {
                     Ok((_rx, child)) => {
-                        let mut process = handle.state::<BackendProcess>().0.lock()
+                        let backend_state = handle.state::<BackendProcess>();
+                        let mut process = backend_state.0.lock()
                             .expect("backend mutex poisoned");
                         if handle.state::<CloseState>().0.load(Ordering::SeqCst) {
                             let _ = child.kill();
