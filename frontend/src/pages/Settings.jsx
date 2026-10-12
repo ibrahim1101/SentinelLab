@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Settings as SIcon, Shield, Database, Clock, Plug, Info, FlaskConical, RefreshCw } from "lucide-react";
+import { Settings as SIcon, Shield, Database, Clock, Plug, Info, FlaskConical, RefreshCw, BookOpen } from "lucide-react";
 import client from "@/lib/api";
 import HelpTip from "@/components/HelpTip";
+import { HelpContent } from "@/pages/Help";
 import { useTheme, THEMES } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { PageHead, StatusPill, fmtTime } from "@/components/common";
@@ -14,6 +15,7 @@ const TABS = [
   { id: "retention", label: "Retention", icon: Clock },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "about", label: "About", icon: Info },
+  { id: "guide", label: "How to Use SentinelLab", icon: BookOpen },
 ];
 
 export default function Settings() {
@@ -280,6 +282,7 @@ export default function Settings() {
               <p className="text-[11.5px] mt-2" style={{ color: "var(--text-3)" }}>Optional integrations are credential-driven and disconnected until configured. No API keys are hardcoded.</p>
             </div>
           )}
+          {tab === "guide" && <div className="max-w-5xl" data-testid="settings-user-guide"><h2 className="text-lg font-semibold mb-3">How to Use SentinelLab</h2><HelpContent /></div>}
           {tab === "about" && (
             <div className="text-[13px] space-y-3 max-w-lg">
               <div className="flex items-center gap-2"><Shield size={20} style={{ color: "var(--cyan)" }} /><span className="font-head font-bold text-lg">SentinelLab</span><span className="pill">v1.0.0</span></div>
