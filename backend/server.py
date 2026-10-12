@@ -51,6 +51,7 @@ class DesktopSetupReq(BaseModel):
 class LoginReq(BaseModel):
     email: str = Field(min_length=1, max_length=254)
     password: str
+    login_mode: Optional[str] = Field(default=None, pattern="^(admin|non_admin)$")
 
 USERNAME_RE = re.compile(r"^[a-z][a-z0-9_.-]{2,31}$")
 
@@ -294,6 +295,14 @@ async def login(body: LoginReq, request: Request, response: Response):
     )
     if not cleared.matched_count:
         raise HTTPException(423, "Account temporarily locked. Contact your administrator.")
+    # Mode separation is enforced server-side after validating the password.
+    # A role/mode mismatch is not a failed password attempt and issues no session.
+    is_administrator = user.get("role") in ("admin", "super_admin")
+    if body.login_mode == "admin" and not is_administrator:
+        raise HTTPException(403, "This account cannot sign in through Administrator Login. Use Non-Admin Login.")
+    if body.login_mode == "non_admin" and is_administrator:
+        raise HTTPException(403, "Administrator accounts must use Administrator Login.")
+
     token = create_access_token(user["id"], user["email"], user["role"], user.get("session_version", 0))
     _set_cookie(response, token)
     await audit(user.get("default_org"), user, "login", "session")
