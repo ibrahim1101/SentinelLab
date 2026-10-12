@@ -48,6 +48,11 @@ const guide = [
     ["Integrations", "Check the status of the AI adapter and optional reputation, webhook or email integrations. Offline integrations require their own credentials and configuration."],
     ["About and audit", "Review application information, database and service health, and recent audit entries. Use the audit history to investigate administrative changes."],
   ]],
+  ["Webhooks and external notifications", [
+    ["Outgoing webhooks", "Create destinations in Settings → Integrations. Select Discord, Slack, Teams Workflows or Generic HTTPS JSON, enter the URL, choose events, and save."],
+    ["Webhook testing", "After saving, use Send test. A delivered status means the destination accepted the request; confirm the message appears in the external app."],
+    ["Webhook security", "Webhook URLs are secret credentials. Only administrators can manage them. Never paste them into public chats or screenshots."],
+  ]],
   ["Troubleshooting and safe operation", [
     ["Backend offline", "Check that SentinelLab launched correctly and that the API process is running. Restart the desktop application if the backend remains unavailable."],
     ["MongoDB unavailable", "Check the MongoDB Windows service and local port 27017. A service being installed does not guarantee it is reachable."],
@@ -100,6 +105,9 @@ const detailed = {
   "No events or alerts": ["Confirm the correct workspace and a sufficiently broad time range. Check whether any sources are connected and sending events.", "Inspect Sources & Ingestion and Pipeline Observatory for parsing failures or processing delays.", "Check detection rule enablement and matching conditions. No alerts is not proof that the environment is secure."],
   "Permissions denied": ["Verify the selected login mode, signed-in role and current workspace membership.", "Ask an authorized administrator to review access through Administration. Production access may require independent approval.", "Do not bypass permissions by editing MongoDB account records manually."],
   "Installer cannot replace API": ["Close SentinelLab and accept the shutdown confirmation. Check Task Manager for a lingering sentinellab-api.exe process.", "If it remains, stop the stale process before retrying the installer. Keep MongoDB running; it is not the locked executable.", "Use Retry after the file lock is cleared. Do not choose Ignore because that can leave mismatched application components."],
+  "Outgoing webhooks": ["Open Settings → Integrations and scroll to Outgoing webhooks. Choose a destination type and enter a friendly name.", "In Discord or Slack, create an incoming webhook for your chosen channel. For Teams, create a Workflows webhook. Paste its HTTPS URL into SentinelLab.", "Tick the notification categories that matter to your team, save the destination, and press Send test. Confirm the test message arrives.", "Use Pause to stop messages temporarily or Delete to remove the destination. Saved URLs are hidden after creation."],
+  "Webhook testing": ["Click Send test on the saved destination.", "Wait for Delivered or Failed. If failed, confirm the URL, network connection, destination permissions and provider-specific webhook setup.", "The delivery status shows whether the remote server accepted the HTTP request, not whether a person has read the message."],
+  "Webhook security": ["Treat a webhook URL as a secret because anyone with the URL may be able to post messages to that destination.", "Use a dedicated channel for security notifications and only subscribe to necessary event categories.", "If a webhook URL is exposed, revoke it at the destination provider and create a replacement."],
   "Security practices": ["Use unique passwords and role-based least privilege. Keep analyst and administrator accounts separate when appropriate.", "Validate detection rules with synthetic data before enabling them in production and preserve evidence for investigations.", "Review audit events, minimize external integration secrets and maintain database backups according to your organization's policy."]
 };
 
@@ -118,7 +126,8 @@ const beginnerExamples = {
   "Production membership": "Training Lab is a practice room. Production is the real workplace; access needs extra care.",
   "Service indicators": "Amber means waiting, green means connected, and red means a check failed.",
   "Retention": "A 90-day setting makes older event records eligible for cleanup; it does not mean they disappear immediately.",
-  "Integrations": "An integration connects another service, such as an IP reputation checker, to SentinelLab."
+  "Integrations": "An integration connects another service, such as an IP reputation checker, to SentinelLab.",
+  "Outgoing webhooks": "A webhook is a message sent automatically to another app. For example, a critical alert can appear in your Discord security channel."
 };
 const glossary = [
   [
