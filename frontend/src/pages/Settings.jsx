@@ -279,7 +279,6 @@ export default function Settings() {
               <IntegrationRow name="AI Security Assistant" status={health?.ai_assistant === "configured" ? "online" : "offline"} desc="Provider-independent adapter (OpenAI-compatible / local). Currently uses the managed key." />
               <IntegrationRow name="VirusTotal" status="offline" desc="Threat intel enrichment — requires API key" />
               <IntegrationRow name="AbuseIPDB" status="offline" desc="IP reputation — requires API key" />
-              <IntegrationRow name="Slack Webhook" status="offline" desc="Alert notifications — requires webhook URL" />
               <IntegrationRow name="SMTP / Email" status="offline" desc="Email delivery for reports & alerts" />
               <p className="text-[11.5px] mt-2" style={{ color: "var(--text-3)" }}>AI, VirusTotal, AbuseIPDB and SMTP still require separate provider configuration. Outgoing webhooks can be configured below.</p>
               {isAdmin ? <WebhookSettings /> : <p className="text-[12px] mt-4">Sign in as an administrator to manage outgoing webhooks.</p>}
