@@ -22,12 +22,14 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: desktop/src-tauri
+      - name: Verify dependency lockfiles
+        run: python scripts/verify_dependency_lockfiles.py
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Install Tauri CLI
         working-directory: desktop
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -79,7 +81,7 @@ jobs:
           if ($proc.ExitCode -ne 0) { throw "Bundled backend import self-test failed with exit code $($proc.ExitCode)" }
       - name: Build Windows NSIS installer
         working-directory: desktop
-        run: npm run tauri:build
+        run: npm run tauri:build -- --locked
         env:
           CI: 'false'
           REACT_APP_BACKEND_URL: 'http://127.0.0.1:18765'
