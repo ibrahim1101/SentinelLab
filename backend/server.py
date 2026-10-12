@@ -43,6 +43,11 @@ class RegisterReq(BaseModel):
     password: str = Field(min_length=6)
     name: str
 
+class DesktopSetupReq(BaseModel):
+    email: EmailStr
+    username: str = Field(min_length=3, max_length=32)
+    password: str = Field(min_length=12, max_length=256)
+
 class LoginReq(BaseModel):
     email: str = Field(min_length=1, max_length=254)
     password: str
@@ -110,6 +115,34 @@ class SettingsReq(BaseModel):
     default_time_range: Optional[str] = None
     retention_days: Optional[int] = None
     demo_mode: Optional[bool] = None
+
+
+# Desktop initialization is available only to the bundled loopback server.
+@api.get("/desktop/setup-status")
+async def desktop_setup_status(request: Request):
+    if os.environ.get("SENTINELLAB_DESKTOP") != "1" or request.client.host not in ("127.0.0.1", "::1"):
+        raise HTTPException(404, "Not found")
+    return {"setup_required": not bool(await db.users.find_one({"role": "super_admin"}))}
+
+
+@api.post("/desktop/setup")
+async def desktop_setup(body: DesktopSetupReq, request: Request):
+    if os.environ.get("SENTINELLAB_DESKTOP") != "1" or request.client.host not in ("127.0.0.1", "::1"):
+        raise HTTPException(404, "Not found")
+    username = body.username.strip().lower()
+    if not USERNAME_RE.fullmatch(username):
+        raise HTTPException(422, "Invalid administrator username")
+    if await db.users.find_one({"role": "super_admin"}):
+        raise HTTPException(409, "Administrator already configured")
+    record = {"id": new_id(), "email": str(body.email).lower(), "username": username,
+              "name": "SOC Administrator", "password_hash": hash_password(body.password),
+              "role": "super_admin", "org_ids": [PROD_ORG, TRAIN_ORG],
+              "default_org": TRAIN_ORG, "theme": "obsidian_dark", "created_at": now_iso()}
+    try:
+        await db.users.insert_one(record)
+    except DuplicateKeyError:
+        raise HTTPException(409, "Administrator setup conflict")
+    return {"configured": True}
 
 
 # ============================= AUTH =============================
