@@ -14,9 +14,32 @@ export default function Login() {
   const [setup, setSetup] = useState(false);
   const [setupEmail, setSetupEmail] = useState("");
   const [setupUsername, setSetupUsername] = useState("");
+  const [status, setStatus] = useState(null);
+  const [checking, setChecking] = useState(true);
   useEffect(() => {
-    axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/desktop/setup-status`)
-      .then(({data}) => setSetup(Boolean(data.setup_required))).catch(() => {});
+    let mounted = true;
+    const check = async () => {
+      try {
+        const { data } = await axios.get("http://127.0.0.1:18766/status", { timeout: 3500 });
+        if (!mounted) return;
+        setStatus(data);
+        if (data.mongodb_reachable) {
+          try {
+            const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/desktop/setup-status`, { timeout: 3500 });
+            if (mounted) setSetup(Boolean(response.data.setup_required));
+          } catch {
+            if (mounted) setStatus(prev => ({ ...prev, api_unavailable: true }));
+          }
+        }
+      } catch {
+        if (mounted) setStatus({ backend: "unavailable", mongodb_installed: null, mongodb_reachable: false });
+      } finally {
+        if (mounted) setChecking(false);
+      }
+    };
+    check();
+    const interval = setInterval(check, 5000);
+    return () => { mounted = false; clearInterval(interval); };
   }, []);
 
   const submit = async (e) => {
@@ -53,6 +76,20 @@ export default function Login() {
           <p className="text-[12px]" style={{ color: "var(--text-3)" }}>Security Operations Center</p>
         </div>
 
+        <div className="card p-3 mb-3 text-[12px]" role="status" aria-live="polite" data-testid="desktop-service-status">
+          <div className="font-semibold mb-2" style={{ color: "var(--text)" }}>Local service status</div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`inline-block w-2 h-2 rounded-full ${!checking && status?.backend === "running" ? "bg-green-500" : "bg-red-500"}`} />
+            SentinelLab backend: {checking ? "Checking…" : status?.backend === "running" ? "Diagnostic service online" : "Unavailable"}
+          </div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`inline-block w-2 h-2 rounded-full ${status?.mongodb_reachable ? "bg-green-500" : "bg-red-500"}`} />
+            MongoDB: {checking ? "Checking…" : status?.mongodb_reachable ? "Connected and responding" : status?.mongodb_installed === true ? "Installed, but not reachable" : status?.mongodb_installed === false ? "Windows MongoDB service not found" : "Not reachable (installation unknown)"}
+          </div>
+          {status?.api_unavailable && <p className="mt-2 text-amber-400">Database responds, but the SentinelLab API is not ready. Restart the application.</p>}
+          {!checking && !status?.mongodb_reachable && <p className="mt-2" style={{ color: "var(--text-3)" }}>Install or start MongoDB Community Server on port 27017, then restart SentinelLab. Status refreshes every 5 seconds.</p>}
+          {!checking && status?.mongodb_reachable && !status?.api_unavailable && <p className="mt-2" style={{ color: "var(--text-3)" }}>Database online. First-time administrator setup will appear automatically if needed.</p>}
+        </div>
         <form onSubmit={submit} className="card p-5">
           <div className="mb-3">
             <div className="font-head font-semibold text-[15px]" style={{ color: "var(--text)" }}>{setup ? "Initial setup" : "Welcome back"}</div>
