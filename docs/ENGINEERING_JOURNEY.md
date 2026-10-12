@@ -556,3 +556,13 @@ cd release-review && sha256sum -c SHA256SUMS.txt
 - Builds enforce committed npm lockfiles with `npm ci` and forward Cargo `--locked` via Tauri CLI.
 - Added `scripts/verify_desktop_artifacts.py` to check extracted Actions ZIP artifact contents for expected installer formats and minimum payload sizes; script must still be exercised on the produced artifacts. Artifact existence alone does not prove installers run, and these are unsigned and not yet tied to a refreshed release draft.
 - Licensing/provenance checks remain **OPEN**, especially Emergent packages and branded artwork. Release remains **DRAFT / NOT PUBLISHED**.
+
+
+### 2026-10-12 — Downloaded artifact contents verified
+Downloaded four GitHub Actions artifact ZIPs and inspected their actual contents (not just artifact names). All five unsigned installer files were present and larger than the 100 KB structural threshold:
+- Windows artifact `11764609407`: `SentinelLab_0.1.0_x64-setup.exe` (26,549,876 bytes)
+- Linux artifact `11765541240`: `appimage/SentinelLab_0.1.0_amd64.AppImage` (121,154,040 bytes) and `deb/SentinelLab_0.1.0_amd64.deb` (42,886,282 bytes)
+- macOS Intel artifact `11766640882`: `dmg/SentinelLab_0.1.0_x64.dmg` (32,238,818 bytes)
+- macOS Apple Silicon artifact `11764584236`: `dmg/SentinelLab_0.1.0_aarch64.dmg` (31,061,091 bytes)
+
+Structural verification **PASS**. Physical installation, launch, code-signature checks, malware scanning, complete license compliance, and updated release draft checks remain **NOT VERIFIED**. Do not treat this as permission to publish the alpha.
