@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Settings as SIcon, Shield, Database, Clock, Plug, Info, FlaskConical, RefreshCw, BookOpen } from "lucide-react";
 import client from "@/lib/api";
 import HelpTip from "@/components/HelpTip";
+import WebhookSettings from "@/components/WebhookSettings";
 import { HelpContent } from "@/pages/Help";
 import { useTheme, THEMES } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
@@ -280,7 +281,8 @@ export default function Settings() {
               <IntegrationRow name="AbuseIPDB" status="offline" desc="IP reputation — requires API key" />
               <IntegrationRow name="Slack Webhook" status="offline" desc="Alert notifications — requires webhook URL" />
               <IntegrationRow name="SMTP / Email" status="offline" desc="Email delivery for reports & alerts" />
-              <p className="text-[11.5px] mt-2" style={{ color: "var(--text-3)" }}>Optional integrations are credential-driven and disconnected until configured. No API keys are hardcoded.</p>
+              <p className="text-[11.5px] mt-2" style={{ color: "var(--text-3)" }}>AI, VirusTotal, AbuseIPDB and SMTP still require separate provider configuration. Outgoing webhooks can be configured below.</p>
+              {isAdmin ? <WebhookSettings /> : <p className="text-[12px] mt-4">Sign in as an administrator to manage outgoing webhooks.</p>}
             </div>
           )}
           {tab === "guide" && <div className="max-w-5xl" data-testid="settings-user-guide"><h2 className="text-lg font-semibold mb-3">How to Use SentinelLab</h2><HelpContent /></div>}
