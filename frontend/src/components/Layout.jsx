@@ -4,7 +4,7 @@ import {
   Shield, LayoutDashboard, ScrollText, Crosshair, Bell, FileSearch, Cpu,
   Radio, FolderSearch, FileBarChart, Settings as SettingsIcon, Search,
   Palette, LogOut, ChevronDown, Activity, Bot, Check, Target, Globe, Workflow,
-  Network, Repeat, Gauge,
+  Network, Repeat, Gauge, HelpCircle, Users,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme, THEMES } from "@/context/ThemeContext";
@@ -27,6 +27,7 @@ const NAV = [
   { to: "/playbooks", label: "Playbooks", icon: Workflow },
   { to: "/reports", label: "Reports", icon: FileBarChart },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
+  { to: "/help", label: "How to Use", icon: HelpCircle },
 ];
 const RANGES = ["15m", "1h", "24h", "7d", "30d"];
 
@@ -74,6 +75,7 @@ export default function Layout({ children }) {
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-0.5">
+          {["admin", "super_admin"].includes(user?.role) && <NavLink to="/admin" className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`} data-testid="nav-administration"><Users size={16} /> Administration</NavLink>}
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end}
               className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
