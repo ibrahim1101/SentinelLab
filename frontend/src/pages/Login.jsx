@@ -55,7 +55,7 @@ export default function Login() {
 
         <form onSubmit={submit} className="card p-5">
           <div className="mb-3">
-            <div className="font-head font-semibold text-[15px]" style={{ color: "var(--text)" }}>Welcome back</div>
+            <div className="font-head font-semibold text-[15px]" style={{ color: "var(--text)" }}>{setup ? "Initial setup" : "Welcome back"}</div>
             <div className="text-[12px]" style={{ color: "var(--text-3)" }}>{setup ? "Create your first administrator account" : "Sign in to your analyst workspace"}</div>
           </div>
           {err && <div className="mb-3 text-[12px] px-3 py-2 rounded" style={{ background: "rgba(248,113,113,.12)", color: "#F87171", border: "1px solid rgba(248,113,113,.3)" }} data-testid="login-error">{err}</div>}
@@ -68,12 +68,13 @@ export default function Login() {
           <label className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-3)" }}>Password</label>
           <div className="relative mt-1 mb-4">
             <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-3)" }} />
-            <input className="inp" style={{ paddingLeft: "2.5rem", paddingRight: "2.5rem" }} autoComplete="current-password" type={show ? "text" : "password"} value={password}
+            <input className="inp" style={{ paddingLeft: "2.5rem", paddingRight: "2.5rem" }} autoComplete={setup ? "new-password" : "current-password"} minLength={setup ? 12 : undefined} required type={show ? "text" : "password"} value={password}
               onChange={(e) => setPassword(e.target.value)} data-testid="login-password" />
             <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setShow(!show)} style={{ color: "var(--text-3)" }}>
               {show ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
           </div>
+          {setup && <p className="text-[11px] mb-3" style={{ color: "var(--text-3)" }}>Choose a unique password of at least 12 characters. Setup is available only before the first administrator is created.</p>}
           <button className="btn btn-primary w-full justify-center" disabled={busy} data-testid="login-submit">
             {busy ? "Please wait…" : setup ? "Create Administrator" : "Sign In"}
           </button>
