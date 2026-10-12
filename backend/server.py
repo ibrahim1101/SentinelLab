@@ -1293,6 +1293,53 @@ async def set_workspace(body: dict, user=Depends(get_current_user)):
 
 
 # ============================= AI ASSISTANT =============================
+class AIConfigReq(BaseModel):
+    provider: str
+    model: str = Field(min_length=1, max_length=160)
+    base_url: Optional[str] = None
+    api_key: Optional[str] = Field(default=None, max_length=4096)
+    enabled: bool = True
+
+@api.get("/admin/ai-config")
+async def ai_config_get(request: Request, user=Depends(require_role("admin"))):
+    return {"config": ai_assistant.public_config(await ai_assistant.get_config(active_org(user, request))), "presets": ai_assistant.PRESETS}
+
+@api.put("/admin/ai-config")
+async def ai_config_put(body: AIConfigReq, request: Request, user=Depends(require_role("admin"))):
+    org=active_org(user,request)
+    if body.provider not in ai_assistant.PRESETS:
+        raise HTTPException(422,"Unsupported AI provider")
+    url=body.base_url or ai_assistant.PRESETS[body.provider]
+    try:
+        url=await asyncio.to_thread(ai_assistant.validate_url,url,body.provider)
+    except ValueError as exc:
+        raise HTTPException(422,str(exc))
+    existing=await ai_assistant.get_config(org)
+    doc={"org_id":org,"provider":body.provider,"base_url":url,"model":body.model.strip(),"enabled":body.enabled}
+    if body.api_key:
+        doc["key_encrypted"]=ai_assistant.cipher().encrypt(body.api_key.encode()).decode()
+    elif existing and existing.get("provider")==body.provider and existing.get("base_url")==url and existing.get("key_encrypted"):
+        doc["key_encrypted"]=existing["key_encrypted"]
+    if body.provider not in ("ollama","lmstudio") and not doc.get("key_encrypted"):
+        raise HTTPException(422,"An API key is required for cloud providers")
+    await db.ai_configs.update_one({"org_id":org},{"$set":doc,"$unset":{}},upsert=True)
+    if not doc.get("key_encrypted"):
+        await db.ai_configs.update_one({"org_id":org},{"$unset":{"key_encrypted":""}})
+    await audit(org,user,"configure","ai_provider",details={"provider":body.provider,"model":body.model})
+    return {"config":ai_assistant.public_config(doc)}
+
+@api.post("/admin/ai-config/test")
+async def ai_config_test(request: Request, user=Depends(require_role("admin"))):
+    org=active_org(user,request)
+    doc=await ai_assistant.get_config(org)
+    if not doc:
+        raise HTTPException(404,"Configure an AI provider first")
+    try:
+        answer=await ai_assistant.request_completion(doc,[{"role":"system","content":"You are a connectivity test. Answer briefly."},{"role":"user","content":"Reply with: SentinelLab AI connected."}])
+        return {"ok":True,"answer":str(answer)[:400]}
+    except Exception:
+        raise HTTPException(502,"AI provider test failed; verify endpoint, model and credentials")
+
 @api.post("/ai/ask")
 async def ai_ask(body: AIReq, request: Request, user=Depends(get_current_user)):
     org = active_org(user, request)
