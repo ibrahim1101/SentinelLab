@@ -90,3 +90,16 @@ Checked open pull requests after workflow run #38283628307: **none were open**. 
 PR [#2](https://github.com/ibrahim1101/SentinelLab/pull/2) merged as `33f8c051`: committed frontend npm lockfile (1,553 package records), desktop npm lockfile (13 package records), and Cargo lockfile (431 packages). Both npm lockfiles have integrity hashes for resolved dependencies. The only nonstandard npm resolved sources found in review are `@emergentbase/overlay` and `@emergentbase/visual-edits`, from `assets.emergent.sh`; their redistribution status remains **OPEN**.
 
 Windows and Linux/macOS packaging workflows now run `scripts/verify_dependency_lockfiles.py`, use `npm ci`, and request Tauri `--locked` builds. **These updated desktop workflows have not yet been observed passing.** A successful older desktop run does not verify these changes. If any new workflow fails, fix it before releasing; do not revert to floating installs silently. This improves deterministic resolution, not third-party license clearance or guaranteed bit-for-bit identical binaries.
+
+
+## 2026-10-13 — Emergent output rights and logo provenance review
+
+**Emergent-generated application source:** Official Emergent documentation at https://help.emergent.sh/your-data-ownership and Terms at https://app.emergentagent.com/terms-of-service (sections 7.2–7.3) expressly state that users own generated application code and may modify, distribute, commercialize and open-source it, subject to third-party licenses. Thus, the fact that SentinelLab began as an Emergent-generated app is **not by itself a redistribution blocker**. These permissions do not extend to Emergent's proprietary platform components or override dependencies' own licenses.
+
+**Emergent dev-only packages:** `@emergentbase/overlay` and `@emergentbase/visual-edits` remain in frontend devDependencies. The overlay in `frontend/craco.config.js` is conditionally loaded only for development, not production. Actual shipped binary inspection is still required to rule out other proprietary inclusions; do not assume package installation implies redistribution.
+
+**Artwork:** The owner reports the SentinelLab shield/logo was generated for this project by ChatGPT. Record as user-commissioned AI-generated artwork, not Emergent-provided artwork, based on owner attestation. No third-party stock image origin was reported. AI-generated artwork may not be uniquely copyrightable; ownership/uniqueness guarantees are not inferred.
+
+**Open issues for public binary distribution:** (1) complete resolved npm/Python/Rust license and notice inventory, (2) identify which notices/license files are conveyed with the five installers, (3) document GPLv3 corresponding-source access for exact binary source commit `b9b7958e720d93db6191614c07d2c01e7945643d`, and (4) confirm whether any Emergent proprietary runtime component is actually bundled. Current review is a technical compliance audit, not a legal opinion.
+
+**Revised finding:** Emergent-generated code rights are supported by published vendor terms. **Overall third-party notice/binary compliance remains OPEN**, and publication is not certified as fully compliant.
