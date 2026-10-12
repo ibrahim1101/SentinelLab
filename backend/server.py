@@ -1655,10 +1655,10 @@ async def startup():
     if not USERNAME_RE.fullmatch(admin_username):
         raise RuntimeError("ADMIN_USERNAME must be a valid 3–32 character username")
     admin_pw = os.environ.get("ADMIN_PASSWORD")
-    if not admin_pw or len(admin_pw) < 12:
-        raise RuntimeError("ADMIN_PASSWORD must be configured with at least 12 characters")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
+        if not admin_pw or len(admin_pw) < 12:
+            raise RuntimeError("ADMIN_PASSWORD must be configured with at least 12 characters for initial setup")
         await db.users.insert_one({"id": new_id(), "email": admin_email, "username": admin_username, "name": "SOC Administrator",
                                    "password_hash": hash_password(admin_pw), "role": "super_admin",
                                    "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": TRAIN_ORG,
