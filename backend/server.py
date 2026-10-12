@@ -146,8 +146,9 @@ async def desktop_setup(body: DesktopSetupReq, request: Request):
               "default_org": TRAIN_ORG, "theme": "obsidian_dark", "created_at": now_iso()}
     try:
         await db.users.insert_one(record)
-    except DuplicateKeyError:
-        raise HTTPException(409, "Administrator setup conflict")
+    except Exception:
+        await db.bootstrap_state.delete_one({"_id": "desktop-admin"})
+        raise
     return {"configured": True}
 
 
