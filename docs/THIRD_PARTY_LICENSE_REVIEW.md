@@ -48,3 +48,8 @@ This declaration does **not** transfer copyright in external components or autom
 6. **Alpha truthfulness:** Preserve warnings for unsigned packages, separate MongoDB installation, CI-only Linux/macOS verification and incomplete SOC end-to-end testing.
 
 **Gate decision: BLOCKED for compliance sign-off.** The project may continue technical prerelease preparation, but do not mark dependency licensing or exact binary/source correspondence verified until the above evidence exists. This is an engineering checklist, not legal advice.
+
+
+## 2026-10-12 follow-up: auditable declaration export
+
+Added `scripts/export_dependency_declarations.py` and the **Dependency Declaration Inventory** GitHub Actions workflow. It exports a downloadable CSV of *direct* npm, Python runtime and Cargo manifest declarations, explicitly marking each license `UNVERIFIED`. This is a first-stage review input, **not** a resolved transitive SBOM or license compatibility certification. It does not change runtime dependency resolution or existing desktop packaging. The next stage is to produce committed lockfiles, resolved inventories, actual license notices and matching release binary provenance.
