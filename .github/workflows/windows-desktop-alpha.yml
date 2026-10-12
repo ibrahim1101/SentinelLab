@@ -6,6 +6,7 @@ on:
     paths:
       - "desktop/**"
       - "frontend/**"
+      - "backend/**"
       - ".github/workflows/windows-desktop-alpha.yml"
 permissions:
   contents: read
