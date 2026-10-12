@@ -54,9 +54,9 @@ def payload_for(provider, event):
     title = str(event["title"])[:180]
     detail = str(event.get("detail", ""))[:1500]
     if provider == "slack":
-        return {"text": f"*SentinelLab · {title}*\\n{detail}"}
+        return {"text": f"*SentinelLab · {title}*\n{detail}"}
     if provider == "discord":
-        return {"content": f"**SentinelLab · {title}**\\n{detail}"[:1900], "allowed_mentions": {"parse": []}}
+        return {"content": f"**SentinelLab · {title}**\n{detail}"[:1900], "allowed_mentions": {"parse": []}}
     if provider == "teams":
         return {"type": "message", "attachments": [{"contentType": "application/vnd.microsoft.card.adaptive", "content": {"type": "AdaptiveCard", "version": "1.2", "body": [{"type": "TextBlock", "text": "SentinelLab · " + title, "weight": "Bolder", "wrap": True}, {"type": "TextBlock", "text": detail or event["type"], "wrap": True}]}}]}
     return {"source": "SentinelLab", "id": event["id"], "event": event["type"], "title": title, "detail": detail, "workspace": event["org_id"], "timestamp": event["timestamp"]}
