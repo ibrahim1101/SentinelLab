@@ -19,29 +19,53 @@ export default function Login() {
   const [status, setStatus] = useState(null);
   const [checking, setChecking] = useState(true);
   useEffect(() => {
-    let mounted = true;
+    let active = true;
+    let timer;
+    let controller;
+    let delay = 250;
     const check = async () => {
+      controller = new AbortController();
       try {
-        const { data } = await axios.get("http://127.0.0.1:18766/status", { timeout: 3500 });
-        if (!mounted) return;
+        const { data } = await axios.get("http://127.0.0.1:18766/status", {
+          timeout: 1800, signal: controller.signal
+        });
+        if (!active) return;
         setStatus(data);
         if (data.mongodb_reachable) {
           try {
-            const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/desktop/setup-status`, { timeout: 3500 });
-            if (mounted) { setSetup(Boolean(response.data.setup_required)); setSetupChecked(true); setStatus(prev => ({ ...prev, api_unavailable: false })); }
+            const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/desktop/setup-status`, {
+              timeout: 1800, signal: controller.signal
+            });
+            if (!active) return;
+            setSetup(Boolean(response.data.setup_required));
+            setSetupChecked(true);
+            setStatus(prev => ({ ...prev, api_unavailable: false }));
+            delay = 4000;
           } catch {
-            if (mounted) { setSetupChecked(false); setStatus(prev => ({ ...prev, api_unavailable: true })); }
+            if (active) {
+              setSetupChecked(false);
+              setStatus(prev => ({ ...prev, api_unavailable: true }));
+              delay = 500;
+            }
           }
+        } else {
+          setSetupChecked(false);
+          delay = 500;
         }
-      } catch {
-        if (mounted) setStatus({ backend: "unavailable", mongodb_installed: null, mongodb_reachable: false });
+      } catch (error) {
+        if (!active || axios.isCancel(error)) return;
+        setStatus({ backend: "unavailable", mongodb_installed: null, mongodb_reachable: false });
+        setSetupChecked(false);
+        delay = 500;
       } finally {
-        if (mounted) setChecking(false);
+        if (active) {
+          setChecking(false);
+          timer = setTimeout(check, delay);
+        }
       }
     };
     check();
-    const interval = setInterval(check, 5000);
-    return () => { mounted = false; clearInterval(interval); };
+    return () => { active = false; clearTimeout(timer); controller?.abort(); };
   }, []);
 
   const submit = async (e) => {
@@ -109,9 +133,9 @@ export default function Login() {
         </form>
       </div>
       <div className="absolute bottom-3 right-4 flex flex-wrap justify-end gap-x-4 gap-y-1 text-[11px]" role="status" aria-live="polite" data-testid="desktop-service-status" style={{ color: "var(--text-3)" }}>
-        <span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${status?.backend === "running" ? "bg-green-500" : "bg-red-500"}`} />Backend: {checking ? "Checking" : status?.backend === "running" ? "Online" : "Offline"}</span>
-        <span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${status?.mongodb_reachable ? "bg-green-500" : "bg-red-500"}`} />MongoDB: {checking ? "Checking" : status?.mongodb_reachable ? "Connected" : "Unavailable"}</span>
-        <span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${setupChecked ? "bg-green-500" : "bg-red-500"}`} />API: {setupChecked ? "Ready" : "Waiting"}</span>
+        <span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${status?.backend === "running" ? "bg-green-500" : checking || !status ? "bg-amber-400" : "bg-red-500"}`} />Backend: {checking || !status ? "Starting" : status?.backend === "running" ? "Online" : "Offline"}</span>
+        <span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${status?.mongodb_reachable ? "bg-green-500" : checking || !status || status?.backend !== "running" ? "bg-amber-400" : "bg-red-500"}`} />MongoDB: {checking || !status || status?.backend !== "running" ? "Starting" : status?.mongodb_reachable ? "Connected" : "Unavailable"}</span>
+        <span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${setupChecked ? "bg-green-500" : checking || !status || status?.backend !== "running" ? "bg-amber-400" : "bg-red-500"}`} />API: {setupChecked ? "Ready" : "Starting"}</span>
       </div>
     </div>
   );
