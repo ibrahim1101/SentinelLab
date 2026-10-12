@@ -19,7 +19,7 @@ const TABS = [
 export default function Settings() {
   const { theme, setTheme } = useTheme();
   const { user, roles } = useAuth();
-  const [tab, setTab] = useState("general");
+  const [tab, setTab] = useState(() => window.location.pathname === "/admin" ? "security" : "general");
   const [s, setS] = useState(null);
   const [users, setUsers] = useState([]);
   const [loginEvents, setLoginEvents] = useState([]);
