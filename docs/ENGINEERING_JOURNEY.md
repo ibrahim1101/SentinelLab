@@ -526,3 +526,10 @@ cd release-review && sha256sum -c SHA256SUMS.txt
 ```
 
 **Do not use `docker compose down -v` unless intentionally deleting database volumes. Never commit secrets, live customer telemetry, or unredacted webhook URLs.**
+
+
+### 2026-10-12 — GPLv3 licensing before first public alpha
+- Owner explicitly approved **GNU GPL v3.0 only** for original SentinelLab project code. Added unmodified full GNU GPL version 3 text as repository-root `LICENSE` (`f475e61`).
+- Added `README.md` license disclosure and copyright attribution for original owned work (`742f2f2`).
+- Added `docs/THIRD_PARTY_LICENSE_REVIEW.md` (`77e2b4d`) to track source/provenance and redistribution review, including Emergent-generated origins, Emergent frontend development dependencies, Tauri, npm/Python/Cargo transitive packages, icons and model assets.
+- **Open release-compliance item:** verify third-party terms and provide required notices and corresponding source for GPL-covered desktop binaries. Adding GPL does not relicense third-party assets or prove dependency-license compatibility. Public release remains a draft until review and publication.
