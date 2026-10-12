@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Settings as SIcon, Shield, Database, Clock, Plug, Info, FlaskConical, RefreshCw, BookOpen } from "lucide-react";
+import { Settings as SIcon, Shield, Database, Clock, Plug, Info, FlaskConical, RefreshCw, BookOpen, ChevronDown } from "lucide-react";
 import client from "@/lib/api";
 import HelpTip from "@/components/HelpTip";
 import WebhookSettings from "@/components/WebhookSettings";
@@ -34,6 +34,15 @@ export default function Settings() {
   const [accountInput, setAccountInput] = useState("");
   const [audit, setAudit] = useState([]);
   const [health, setHealth] = useState(null);
+  const [integrationState, setIntegrationState] = useState({ ai: false, webhooks: false, loaded: false });
+  const [expandedIntegration, setExpandedIntegration] = useState(null);
+  const refreshIntegrations = async () => {
+    if (!isAdmin) return;
+    try {
+      const [ai, hooks] = await Promise.all([client.get("/admin/ai-config"), client.get("/admin/webhooks")]);
+      setIntegrationState({ ai: Boolean(ai.data.config?.enabled && ai.data.config?.model), webhooks: (hooks.data.webhooks || []).some(h => h.enabled), loaded: true });
+    } catch { setIntegrationState(v => ({ ...v, loaded: false })); }
+  };
   const isAdmin = ["admin", "super_admin"].includes(user?.role);
   const isSuperAdmin = user?.role === "super_admin";
   const [members, setMembers] = useState([]);
@@ -59,6 +68,8 @@ export default function Settings() {
     if (isSuperAdmin) client.get("/admin/membership-review").then(({ data }) => setMembers(data.production_members)).catch(() => toast.error("Could not load production membership review"));
     client.get("/admin/audit").then(({ data }) => setAudit(data.audit)).catch(() => {});
   }, []);
+
+  useEffect(() => { if (tab === "integrations" && isAdmin) refreshIntegrations(); }, [tab, isAdmin]);
 
   const save = async (patch) => { const { data } = await client.put("/settings", patch); setS(data); toast.success("Settings saved"); };
   const resetDemo = () => askConfirm("Reset Training Lab data?", "This regenerates synthetic demo data. Existing Training Lab demo records may be replaced.", async () => { await client.post("/demo/reset"); toast.success("Demo data regenerated"); }, true);
@@ -276,13 +287,25 @@ export default function Settings() {
             </div>
           )}
           {tab === "integrations" && (
-            <div className="space-y-3 max-w-lg">
-              <IntegrationRow name="AI Security Assistant" status={health?.ai_assistant === "configured" ? "online" : "offline"} desc="Provider-independent adapter (OpenAI-compatible / local). Currently uses the managed key." />
-              <IntegrationRow name="VirusTotal" status="offline" desc="Threat intel enrichment — requires API key" />
-              <IntegrationRow name="AbuseIPDB" status="offline" desc="IP reputation — requires API key" />
-              <IntegrationRow name="SMTP / Email" status="offline" desc="Email delivery for reports & alerts" />
-              <p className="text-[11.5px] mt-2" style={{ color: "var(--text-3)" }}>AI, VirusTotal, AbuseIPDB and SMTP still require separate provider configuration. Outgoing webhooks can be configured below.</p>
-              {isAdmin ? <><AIModelSettings /><WebhookSettings /></> : <p className="text-[12px] mt-4">Sign in as an administrator to configure AI providers and webhooks.</p>}
+            <div className="space-y-1 max-w-2xl" data-testid="integration-accordion">
+              <p className="text-[12px] pb-3" style={{ color: "var(--text-3)" }}>Expand a provider to view its configuration and availability. Online means enabled/configured, not a live connectivity guarantee.</p>
+              {[
+                { id: "ai", name: "AI Security Assistant", desc: "Local Ollama / LM Studio or cloud AI models", status: integrationState.loaded && integrationState.ai ? "online" : "offline" },
+                { id: "webhooks", name: "Outgoing Webhooks", desc: "Discord, Slack, Teams and generic HTTPS destinations", status: integrationState.loaded && integrationState.webhooks ? "online" : "offline" },
+                { id: "virustotal", name: "VirusTotal", desc: "Threat intelligence enrichment — provider configuration not implemented", status: "offline" },
+                { id: "abuseipdb", name: "AbuseIPDB", desc: "IP reputation — provider configuration not implemented", status: "offline" },
+                { id: "smtp", name: "SMTP / Email", desc: "Email reports and alerts — provider configuration not implemented", status: "offline" },
+              ].map(item => <div key={item.id} className="border-b" style={{ borderColor: "var(--border)" }}>
+                <button type="button" className="w-full flex items-center justify-between gap-3 py-3 text-left" aria-expanded={expandedIntegration === item.id} onClick={() => { setExpandedIntegration(v => v === item.id ? null : item.id); refreshIntegrations(); }} data-testid={`integration-toggle-${item.id}`}>
+                  <span className="flex-1"><span className="block text-[13px] font-medium">{item.name}</span><span className="block text-[11.5px]" style={{ color: "var(--text-3)" }}>{item.desc}</span></span>
+                  <StatusPill status={item.status} />
+                  <ChevronDown size={16} className={expandedIntegration === item.id ? "rotate-180" : ""} />
+                </button>
+                {expandedIntegration === item.id && <div className="pb-4 pl-2" data-testid={`integration-panel-${item.id}`}>
+                  {!isAdmin ? <p className="text-[12px]">Administrator access is required to configure integrations.</p> : item.id === "ai" ? <AIModelSettings /> : item.id === "webhooks" ? <WebhookSettings /> : <p className="text-[12px]" style={{ color: "var(--text-3)" }}>This provider is planned but its credential storage, connection tests, and backend functionality are not implemented yet. It cannot be enabled in this build.</p>}
+                  {(item.id === "ai" || item.id === "webhooks") && isAdmin && <button type="button" className="btn btn-sm mt-3" onClick={refreshIntegrations}>Refresh status</button>}
+                </div>}
+              </div>)}
             </div>
           )}
           {tab === "guide" && <div className="max-w-5xl" data-testid="settings-user-guide"><h2 className="text-lg font-semibold mb-3">How to Use SentinelLab</h2><HelpContent /></div>}
