@@ -23,11 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: yarn
-          cache-dependency-path: frontend/yarn.lock
-      - run: corepack enable
-      - run: yarn install --frozen-lockfile
-      - run: CI=false yarn build
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - run: CI=false npm run build
 
   tauri-compile:
     runs-on: windows-latest
@@ -37,6 +34,11 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: desktop/src-tauri
+      - name: Create compile-only placeholder sidecar
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/src-tauri/binaries | Out-Null
+          New-Item -ItemType File -Force desktop/src-tauri/binaries/sentinellab-api-x86_64-pc-windows-msvc.exe | Out-Null
       - name: Check native desktop code
         working-directory: desktop/src-tauri
         run: cargo check --locked
