@@ -1,0 +1,42 @@
+name: Desktop export regression checks
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'desktop/**'
+      - 'backend/server.py'
+      - '.github/workflows/desktop-export-checks.yml'
+  push:
+    branches:
+      - 'fix/desktop-event-export-search'
+  workflow_dispatch:
+
+jobs:
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile
+      - run: CI=false yarn build
+
+  tauri-compile:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Check native desktop code
+        working-directory: desktop/src-tauri
+        run: cargo check --locked
