@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { Bot, X, Send, Sparkles } from "lucide-react";
+import { Bot, X, Send, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import client, { apiErr } from "@/lib/api";
 
 export default function AIAssistant() {
   const [open, setOpen] = useState(false);
+  const [launcherVisible, setLauncherVisible] = useState(false);
   const [msgs, setMsgs] = useState([{ role: "ai", text: "Hi — I'm the SentinelLab assistant. Ask me to explain an alert, summarize an investigation, or suggest a hunt query. I only use data from your workspace." }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,12 +27,28 @@ export default function AIAssistant() {
 
   return (
     <>
-      <button className="fixed bottom-5 right-5 z-40 grid place-items-center w-12 h-12 rounded-full shadow-lg"
-        style={{ background: "var(--cyan)", color: "#04161c" }} onClick={() => setOpen(!open)} data-testid="ai-toggle">
-        {open ? <X size={20} /> : <Bot size={20} />}
-      </button>
+      <div className="fixed bottom-5 right-0 z-40 flex items-center gap-1" data-testid="ai-launcher">
+        {launcherVisible && (
+          <button className="grid place-items-center w-11 h-11 rounded-full shadow-lg"
+            style={{ background: "var(--cyan)", color: "#04161c" }}
+            onClick={() => setOpen((value) => !value)}
+            aria-label={open ? "Close AI Security Assistant" : "Open AI Security Assistant"}
+            aria-expanded={open}
+            data-testid="ai-toggle">
+            {open ? <X size={19} /> : <Bot size={19} />}
+          </button>
+        )}
+        <button className="grid place-items-center w-5 h-12 rounded-l-lg shadow-md border border-r-0"
+          style={{ background: "var(--surface)", color: "var(--text-2)", borderColor: "var(--border)" }}
+          onClick={() => { setLauncherVisible((visible) => !visible); setOpen(false); }}
+          aria-label={launcherVisible ? "Hide AI assistant launcher" : "Show AI assistant launcher"}
+          aria-expanded={launcherVisible}
+          data-testid="ai-launcher-arrow">
+          {launcherVisible ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+        </button>
+      </div>
       {open && (
-        <div className="fixed bottom-20 right-5 z-40 card flex flex-col w-96 max-w-[92vw] fade-in" style={{ height: 480 }} data-testid="ai-panel">
+        <div className="fixed bottom-20 right-5 z-40 card flex flex-col w-96 max-w-[calc(100vw-2rem)] fade-in" style={{ height: "min(480px, calc(100dvh - 7rem))" }} data-testid="ai-panel">
           <div className="h-11 flex items-center gap-2 px-3 border-b">
             <Sparkles size={15} style={{ color: "var(--cyan)" }} />
             <span className="font-head font-semibold text-[14px]" style={{ color: "var(--text)" }}>AI Security Assistant</span>
