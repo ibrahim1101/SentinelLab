@@ -1,0 +1,14 @@
+name: Windows Desktop Fix Branch Installer
+
+on:
+  push:
+    branches:
+      - fix/desktop-event-export-search
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    uses: ./.github/workflows/windows-desktop-alpha.yml
