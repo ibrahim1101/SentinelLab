@@ -92,11 +92,19 @@ async def test_duplicate_alert_merges_evidence_without_count_inflation(monkeypat
                "timestamp": "2026-10-09T12:00:00+00:00", "severity": "medium"}
               for event_id in ("evt-1", "evt-2")]
     assert await run_detection("org-1", events, persist=True) == []
-    assert fake.alerts.update_one.await_count == 2
-    first = fake.alerts.update_one.await_args_list[0]
-    assert first.args[0] == {"id": "alert-1", "org_id": "org-1"}
-    assert first.args[1]["$addToSet"]["related_events"]["$each"] == ["evt-1", "evt-2"]
-    second = fake.alerts.update_one.await_args_list[1]
-    assert second.args[1][0]["$set"]["event_count"] == {
-        "$size": {"$ifNull": ["$related_events", []]}}
+    assert fake.alerts.update_one.await_count == 1
+    call = fake.alerts.update_one.await_args
+    assert call.args[0] == {"id": "alert-1", "org_id": "org-1"}
+    pipeline = call.args[1]
+    assert pipeline[0]["$set"]["related_events"] == {
+        "$setUnion": [{"$ifNull": ["$related_events", []]}, ["evt-1", "evt-2"]]}
+    assert pipeline[1]["$set"]["event_count"] == {"$size": "$related_events"}
     fake.alerts.insert_one.assert_not_awaited()
+
+
+def test_alert_preserves_more_than_200_evidence_references():
+    events = [{"id": f"evt-{i}", "timestamp": "2026-10-09T12:00:00Z",
+               "severity": "low"} for i in range(250)]
+    alert = detection._build_alert({"id": "rule-1", "name": "Test"}, "org-1", events)
+    assert len(alert["related_events"]) == 250
+    assert alert["event_count"] == 250
