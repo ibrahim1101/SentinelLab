@@ -8,6 +8,7 @@ from core import new_id, now_iso
 
 PARSER_VERSION = "1.0"
 SCHEMA_VERSION = "1.0"
+MAX_INGEST_EVENTS = 10000
 
 NORMALIZED_FIELDS = [
     "category", "event_type", "action", "outcome", "severity", "host",
@@ -181,6 +182,11 @@ def parse_payload(payload, fmt: str):
             records = data if isinstance(data, list) else [data]
         except Exception:
             records = [{"message": l} for l in str(payload).splitlines() if l.strip()]
+    if len(records) > MAX_INGEST_EVENTS:
+        raise ValueError("Too many events in one request")
+    for index, record in enumerate(records):
+        if not isinstance(record, dict):
+            raise ValueError(f"Event at index {index} must be a mapping")
     return records
 
 
