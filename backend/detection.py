@@ -44,8 +44,17 @@ def _parse_ts(v):
         if d.tzinfo is None:
             d = d.replace(tzinfo=timezone.utc)
         return d
-    except Exception:
-        return datetime.now(timezone.utc)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise ValueError(f"Invalid event timestamp: {v!r}") from exc
+
+
+def _valid_event_timestamp(event):
+    """Exclude malformed timestamps from temporal correlation."""
+    try:
+        _parse_ts(event.get("timestamp"))
+        return True
+    except ValueError:
+        return False
 
 
 def event_matches(conditions, event) -> bool:
@@ -126,7 +135,7 @@ async def evaluate_rule(rule, events, org_id):
         group_by = params.get("group_by", "src_ip")
         window = int(params.get("window_minutes", 5))
         threshold = int(params.get("threshold", 5))
-        filtered = [e for e in events if event_matches(conds, e)]
+        filtered = [e for e in events if event_matches(conds, e) and _valid_event_timestamp(e)]
         groups = {}
         for e in filtered:
             key = e.get(group_by) or "unknown"
