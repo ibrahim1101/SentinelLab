@@ -89,7 +89,7 @@ def _build_alert(rule, org_id, events, title=None):
         "host": first.get("host"),
         "src_ip": first.get("src_ip"),
         "username": first.get("username"),
-        "related_events": [e["id"] for e in events][:200],
+        "related_events": list(dict.fromkeys(e["id"] for e in events)),
         "event_count": len(events),
         "mitre": rule.get("mitre", []),
         "first_seen": first["timestamp"],
@@ -198,14 +198,18 @@ async def run_detection(org_id, events, persist=True):
                     "status": {"$in": ["new", "triaged", "investigating"]},
                 })
                 if existing:
+                    # Atomic union makes repeated scans idempotent and avoids a
+                    # second write racing with other detection workers.
                     await db.alerts.update_one(
                         {"id": existing["id"], "org_id": org_id},
-                        {"$set": {"last_seen": a["last_seen"], "updated_at": now_iso()},
-                         "$addToSet": {"related_events": {"$each": a["related_events"]}}})
-                    # Count unique linked evidence, rather than inflating on replay.
-                    await db.alerts.update_one(
-                        {"id": existing["id"], "org_id": org_id},
-                        [{"$set": {"event_count": {"$size": {"$ifNull": ["$related_events", []]}}}}])
+                        [{"$set": {
+                            "related_events": {"$setUnion": [
+                                {"$ifNull": ["$related_events", []]},
+                                a["related_events"]]},
+                            "last_seen": a["last_seen"],
+                            "updated_at": now_iso(),
+                        }},
+                         {"$set": {"event_count": {"$size": "$related_events"}}}])
                     continue
                 await db.alerts.insert_one(dict(a))
             new_alerts.append(a)
