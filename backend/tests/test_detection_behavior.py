@@ -136,3 +136,27 @@ async def test_indicator_multi_field_match_counts_event_once(monkeypatch):
     assert len(alerts) == 1
     assert alerts[0]["event_count"] == 1
     assert alerts[0]["related_events"] == ["event-1"]
+
+
+def test_invalid_timestamp_does_not_become_current_time():
+    with pytest.raises(ValueError, match="Invalid event timestamp"):
+        detection._parse_ts("not-a-timestamp")
+    assert not detection._valid_event_timestamp({"timestamp": "not-a-timestamp"})
+    assert not detection._valid_event_timestamp({})
+    assert detection._valid_event_timestamp({"timestamp": "2026-10-09T12:00:00Z"})
+
+
+@pytest.mark.asyncio
+async def test_threshold_excludes_malformed_event_timestamps():
+    rule = {"id": "threshold-1", "name": "Burst", "rule_type": "threshold",
+            "params": {"conditions": [], "group_by": "src_ip",
+                       "window_minutes": 5, "threshold": 2}}
+    events = [
+        {"id": "good-1", "src_ip": "192.0.2.1",
+         "timestamp": "2026-10-09T12:00:00Z", "severity": "low"},
+        {"id": "bad-1", "src_ip": "192.0.2.1",
+         "timestamp": "garbled", "severity": "low"},
+    ]
+    alerts, matched = await detection.evaluate_rule(rule, events, "org-1")
+    assert alerts == []
+    assert matched == set()
