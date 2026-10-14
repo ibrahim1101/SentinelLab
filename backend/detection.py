@@ -158,12 +158,15 @@ async def evaluate_rule(rule, events, org_id):
                   "hash": ["file_hash"]}
         hits = []
         for e in events:
-            for ioc_type, ev_fields in fields.items():
-                for f in ev_fields:
-                    val = e.get(f)
-                    if val and str(val).lower() in ioc_map.get(ioc_type, {}):
-                        hits.append(e)
-                        matched_ids.add(e["id"])
+            # One event can match multiple IOC fields; it is still one event.
+            is_match = any(
+                e.get(field) and str(e[field]).lower() in ioc_map.get(ioc_type, {})
+                for ioc_type, ev_fields in fields.items()
+                for field in ev_fields
+            )
+            if is_match:
+                hits.append(e)
+                matched_ids.add(e["id"])
         if hits:
             alerts.append(_build_alert(rule, org_id, hits,
                                        title=f"{rule['name']} — IOC match ({len(hits)})"))
