@@ -530,14 +530,14 @@ async def list_events(request: Request, q: Optional[str] = None, severity: Optio
     if source_id: filt["source_id"] = source_id
     if host: filt["host"] = host
     if username: filt["username"] = username
-    if ip: filt["$or"] = [{"src_ip": ip}, {"dest_ip": ip}]
+    if ip: filt.setdefault("$and", []).append({"$or": [{"src_ip": ip}, {"dest_ip": ip}]})
     if q:
-        filt["$or"] = [{"host": {"$regex": re.escape(q[:128]), "$options": "i"}},
+        filt.setdefault("$and", []).append({"$or": [{"host": {"$regex": re.escape(q[:128]), "$options": "i"}},
                        {"username": {"$regex": re.escape(q[:128]), "$options": "i"}},
                        {"src_ip": {"$regex": re.escape(q[:128]), "$options": "i"}},
                        {"dest_ip": {"$regex": re.escape(q[:128]), "$options": "i"}},
                        {"process_name": {"$regex": re.escape(q[:128]), "$options": "i"}},
-                       {"event_type": {"$regex": re.escape(q[:128]), "$options": "i"}}]
+                       {"event_type": {"$regex": re.escape(q[:128]), "$options": "i"}}]})
     total = await db.events.count_documents(filt)
     skip = (page - 1) * page_size
     rows = await db.events.find(filt, {"_id": 0, "raw": 0}).sort(sort, order).skip(skip).limit(page_size).to_list(page_size)
