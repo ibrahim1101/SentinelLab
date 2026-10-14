@@ -572,6 +572,18 @@ async def export_events(request: Request, format: str = "json", time_range: str 
                              headers={"Content-Disposition": "attachment; filename=events.json"})
 
 
+def _related_event_filter(org, event_id, event):
+    """Correlate only on populated identifiers, never MongoDB null matches."""
+    identifiers = [
+        {field: event[field]}
+        for field in ("src_ip", "host")
+        if isinstance(event.get(field), str) and event[field].strip()
+    ]
+    if not identifiers:
+        return None
+    return {"org_id": org, "id": {"$ne": event_id}, "$or": identifiers}
+
+
 @api.get("/events/{event_id}")
 async def event_detail(event_id: str, request: Request, user=Depends(get_current_user)):
     org = active_org(user, request)
@@ -579,10 +591,10 @@ async def event_detail(event_id: str, request: Request, user=Depends(get_current
     if not e:
         raise HTTPException(404, "Event not found")
     related_alerts = await db.alerts.find({"org_id": org, "related_events": event_id}, {"_id": 0}).to_list(50)
-    related_events = await db.events.find(
-        {"org_id": org, "id": {"$ne": event_id},
-         "$or": [{"src_ip": e.get("src_ip")}, {"host": e.get("host")}]},
-        {"_id": 0, "raw": 0}).limit(10).to_list(10)
+    related_filter = _related_event_filter(org, event_id, e)
+    related_events = (await db.events.find(
+        related_filter, {"_id": 0, "raw": 0}).limit(10).to_list(10)
+        if related_filter is not None else [])
     return {"event": e, "related_alerts": related_alerts, "related_events": related_events}
 
 
