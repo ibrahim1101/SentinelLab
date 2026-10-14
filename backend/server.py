@@ -718,9 +718,8 @@ async def update_alert(alert_id: str, body: AlertUpdate, request: Request, user=
     return clean(await db.alerts.find_one({"id": alert_id, "org_id": org}, {"_id": 0}))
 
 
-@api.post("/alerts/bulk")
-async def bulk_alerts(request: Request, body: dict, user=Depends(require_role("analyst"))):
-    org = active_org(user, request)
+def _validate_bulk_alert_update(body):
+    """Validate bulk alert changes before touching persisted alert state."""
     ids = body.get("ids")
     status = body.get("status")
     if (not isinstance(ids, list) or not ids or len(ids) > 500
@@ -729,8 +728,15 @@ async def bulk_alerts(request: Request, body: dict, user=Depends(require_role("a
     if not isinstance(status, str) or not status.strip():
         raise HTTPException(422, "status must be a non-empty string")
     ids = list(dict.fromkeys(ids))
+    return ids, status.strip()
+
+
+@api.post("/alerts/bulk")
+async def bulk_alerts(request: Request, body: dict, user=Depends(require_role("analyst"))):
+    org = active_org(user, request)
+    ids, status = _validate_bulk_alert_update(body)
     result = await db.alerts.update_many({"id": {"$in": ids}, "org_id": org},
-                                         {"$set": {"status": status.strip(), "updated_at": now_iso()}})
+                                         {"$set": {"status": status, "updated_at": now_iso()}})
     return {"updated": result.modified_count}
 
 
