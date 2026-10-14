@@ -201,7 +201,11 @@ async def run_detection(org_id, events, persist=True):
                     await db.alerts.update_one(
                         {"id": existing["id"], "org_id": org_id},
                         {"$set": {"last_seen": a["last_seen"], "updated_at": now_iso()},
-                         "$inc": {"event_count": a["event_count"]}})
+                         "$addToSet": {"related_events": {"$each": a["related_events"]}}})
+                    # Count unique linked evidence, rather than inflating on replay.
+                    await db.alerts.update_one(
+                        {"id": existing["id"], "org_id": org_id},
+                        [{"$set": {"event_count": {"$size": {"$ifNull": ["$related_events", []]}}}}])
                     continue
                 await db.alerts.insert_one(dict(a))
             new_alerts.append(a)
