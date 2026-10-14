@@ -517,13 +517,9 @@ async def ingest_upload(request: Request, source_id: str = Query(...), format: s
     return await ingest(IngestReq(source_id=source_id, format=format, payload=content), request, user)
 
 
-@api.get("/events")
-async def list_events(request: Request, q: Optional[str] = None, severity: Optional[str] = None,
-                      category: Optional[str] = None, source_id: Optional[str] = None,
-                      host: Optional[str] = None, username: Optional[str] = None, ip: Optional[str] = None,
-                      time_range: str = "24h", page: int = 1, page_size: int = 50,
-                      sort: str = "timestamp", order: int = -1, user=Depends(get_current_user)):
-    org = active_org(user, request)
+def _build_event_list_filter(org, time_range, severity=None, category=None, source_id=None,
+                             host=None, username=None, ip=None, q=None):
+    """Build tenant-scoped event filters; IP and text searches must both match."""
     filt = {"org_id": org, "timestamp": {"$gte": _range_to_iso(time_range)}}
     if severity: filt["severity"] = severity
     if category: filt["category"] = category
@@ -538,6 +534,18 @@ async def list_events(request: Request, q: Optional[str] = None, severity: Optio
                        {"dest_ip": {"$regex": re.escape(q[:128]), "$options": "i"}},
                        {"process_name": {"$regex": re.escape(q[:128]), "$options": "i"}},
                        {"event_type": {"$regex": re.escape(q[:128]), "$options": "i"}}]})
+
+    return filt
+
+
+@api.get("/events")
+async def list_events(request: Request, q: Optional[str] = None, severity: Optional[str] = None,
+                      category: Optional[str] = None, source_id: Optional[str] = None,
+                      host: Optional[str] = None, username: Optional[str] = None, ip: Optional[str] = None,
+                      time_range: str = "24h", page: int = 1, page_size: int = 50,
+                      sort: str = "timestamp", order: int = -1, user=Depends(get_current_user)):
+    org = active_org(user, request)
+    filt = _build_event_list_filter(org, time_range, severity, category, source_id, host, username, ip, q)
     total = await db.events.count_documents(filt)
     skip = (page - 1) * page_size
     rows = await db.events.find(filt, {"_id": 0, "raw": 0}).sort(sort, order).skip(skip).limit(page_size).to_list(page_size)
