@@ -721,10 +721,16 @@ async def update_alert(alert_id: str, body: AlertUpdate, request: Request, user=
 @api.post("/alerts/bulk")
 async def bulk_alerts(request: Request, body: dict, user=Depends(require_role("analyst"))):
     org = active_org(user, request)
-    ids = body.get("ids", [])
+    ids = body.get("ids")
     status = body.get("status")
+    if (not isinstance(ids, list) or not ids or len(ids) > 500
+            or any(not isinstance(item, str) or not item.strip() for item in ids)):
+        raise HTTPException(422, "ids must be a non-empty list of up to 500 alert IDs")
+    if not isinstance(status, str) or not status.strip():
+        raise HTTPException(422, "status must be a non-empty string")
+    ids = list(dict.fromkeys(ids))
     result = await db.alerts.update_many({"id": {"$in": ids}, "org_id": org},
-                                         {"$set": {"status": status, "updated_at": now_iso()}})
+                                         {"$set": {"status": status.strip(), "updated_at": now_iso()}})
     return {"updated": result.modified_count}
 
 
