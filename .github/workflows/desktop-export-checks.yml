@@ -1,0 +1,62 @@
+name: Desktop export regression checks
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'desktop/**'
+      - 'backend/server.py'
+      - '.github/workflows/desktop-export-checks.yml'
+  push:
+    branches:
+      - 'fix/desktop-event-export-search'
+  workflow_dispatch:
+
+jobs:
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - run: npm install --no-save --legacy-peer-deps --no-audit --no-fund react-is@19.0.0
+      - run: CI=false npm run build
+
+  tauri-compile:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Create compile-only placeholder sidecar
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/src-tauri/binaries | Out-Null
+          New-Item -ItemType File -Force desktop/src-tauri/binaries/sentinellab-api-x86_64-pc-windows-msvc.exe | Out-Null
+      - name: Generate CI-only icon assets
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $dir = "desktop/src-tauri/icons"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $bmp = [System.Drawing.Bitmap]::new(64, 64)
+          try {
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            try { $g.Clear([System.Drawing.Color]::FromArgb(30, 30, 30)) } finally { $g.Dispose() }
+            $bmp.Save((Join-Path $dir "icon.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+            $icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+            try {
+              $fs = [System.IO.File]::Create((Join-Path $dir "icon.ico"))
+              try { $icon.Save($fs) } finally { $fs.Dispose() }
+            } finally { $icon.Dispose() }
+          } finally { $bmp.Dispose() }
+      - name: Check native desktop code
+        working-directory: desktop/src-tauri
+        run: cargo check --locked

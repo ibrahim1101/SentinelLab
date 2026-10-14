@@ -16,6 +16,7 @@ export default function Events() {
   const [filters, setFilters] = useState({ q: "", severity: "", category: "" });
   const [sel, setSel] = useState(null);
   const [tab, setTab] = useState("overview");
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(() => {
     const p = new URLSearchParams({ time_range: range, page, page_size: 50, ...filters });
@@ -28,14 +29,47 @@ export default function Events() {
     setSel(data); setTab("overview");
   };
 
-  const exportData = (fmt) => {
-    const token = localStorage.getItem("sl_token"), ws = localStorage.getItem("sl_workspace");
-    fetch(`${API}/events/export/data?format=${fmt}&time_range=${range}&severity=${filters.severity}`, {
-      headers: { Authorization: `Bearer ${token}`, "X-Workspace-Id": ws },
-    }).then((r) => r.blob()).then((b) => {
-      const u = URL.createObjectURL(b); const a = document.createElement("a");
-      a.href = u; a.download = `events.${fmt}`; a.click();
-    });
+  const exportData = async (fmt) => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({
+        format: fmt, time_range: range,
+        severity: filters.severity, category: filters.category, q: filters.q,
+      });
+      const response = await client.get(`/events/export/data?${params}`, {
+        responseType: "blob",
+      });
+      if (response.data.size === 0) throw new Error("The server returned an empty export.");
+      const filename = `sentinellab-events.${fmt}`;
+      // Browser-style anchor downloads can be silently blocked in WebView2.
+      // The desktop shell uses a native Save As dialog instead.
+      if (window.__TAURI_INTERNALS__?.invoke) {
+        const bytes = Array.from(new Uint8Array(await response.data.arrayBuffer()));
+        const saved = await window.__TAURI_INTERNALS__.invoke("save_event_export", {
+          filename, contents: bytes,
+        });
+        if (saved) toast.success(`Saved ${filename}`);
+        return;
+      }
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      try {
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        toast.success("Export requested");
+      } finally {
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+      }
+    } catch (error) {
+      console.error("Event export failed", error);
+      toast.error(`Export failed: ${error?.message || "Unknown error"}`);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const totalPages = data ? Math.ceil(data.total / 50) : 1;
@@ -43,8 +77,8 @@ export default function Events() {
   return (
     <div data-testid="events-explorer">
       <PageHead title="Events Explorer" desc="Search and analyze ingested security events">
-        <button className="btn btn-sm" onClick={() => exportData("csv")} data-testid="export-csv"><Download size={13} /> CSV</button>
-        <button className="btn btn-sm" onClick={() => exportData("json")} data-testid="export-json"><Download size={13} /> JSON</button>
+        <button className="btn btn-sm" onClick={() => exportData("csv")} disabled={exporting} data-testid="export-csv"><Download size={13} /> CSV</button>
+        <button className="btn btn-sm" onClick={() => exportData("json")} disabled={exporting} data-testid="export-json"><Download size={13} /> JSON</button>
       </PageHead>
 
       <div className="card p-3 mb-3 flex flex-wrap items-center gap-2" data-testid="events-filters">

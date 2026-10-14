@@ -44,8 +44,26 @@ fn stop_backend(app: &tauri::AppHandle) {
     }
 }
 
+
+// Native export bypasses WebView2 automatic-download permissions.
+// Returns false when the user cancels the Save As dialog.
+#[tauri::command]
+async fn save_event_export(app: tauri::AppHandle, filename: String, contents: Vec<u8>) -> Result<bool, String> {
+    if filename != "sentinellab-events.json" && filename != "sentinellab-events.csv" {
+        return Err("Unsupported export filename".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let chosen = app.dialog().file().set_file_name(&filename).blocking_save_file();
+        let Some(chosen) = chosen else { return Ok(false); };
+        let path = chosen.into_path().map_err(|e| e.to_string())?;
+        std::fs::write(path, contents).map_err(|e| e.to_string())?;
+        Ok(true)
+    }).await.map_err(|e| e.to_string())?
+}
+
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![save_event_export])
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(BackendProcess(Mutex::new(None)))

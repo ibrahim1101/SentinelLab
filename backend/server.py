@@ -554,10 +554,18 @@ async def list_events(request: Request, q: Optional[str] = None, severity: Optio
 
 @api.get("/events/export/data")
 async def export_events(request: Request, format: str = "json", time_range: str = "24h",
-                        severity: Optional[str] = None, user=Depends(get_current_user)):
+                        severity: Optional[str] = None, category: Optional[str] = None,
+                        q: Optional[str] = None, user=Depends(get_current_user)):
     org = active_org(user, request)
     filt = {"org_id": org, "timestamp": {"$gte": _range_to_iso(time_range)}}
+    if format not in ("json", "csv"):
+        raise HTTPException(422, "Unsupported export format")
     if severity: filt["severity"] = severity
+    if category: filt["category"] = category
+    if q:
+        search = {"$regex": re.escape(q[:128]), "$options": "i"}
+        filt["$or"] = [{field: search} for field in
+                       ("host", "username", "src_ip", "dest_ip", "process_name", "event_type")]
     rows = await db.events.find(filt, {"_id": 0, "raw": 0}).limit(5000).to_list(5000)
     if format == "csv":
         buf = io.StringIO()
