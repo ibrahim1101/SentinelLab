@@ -108,3 +108,31 @@ def test_alert_preserves_more_than_200_evidence_references():
     alert = detection._build_alert({"id": "rule-1", "name": "Test"}, "org-1", events)
     assert len(alert["related_events"]) == 250
     assert alert["event_count"] == 250
+
+
+@pytest.mark.asyncio
+async def test_indicator_multi_field_match_counts_event_once(monkeypatch):
+    from types import SimpleNamespace
+
+    class Cursor:
+        async def to_list(self, length):
+            return [
+                {"ioc_type": "ip", "value": "192.0.2.10", "active": True},
+                {"ioc_type": "domain", "value": "malicious.example", "active": True},
+            ]
+
+    class Indicators:
+        def find(self, *args, **kwargs):
+            assert args[0]["org_id"] == "org-1"
+            return Cursor()
+
+    monkeypatch.setattr(detection, "db", SimpleNamespace(indicators=Indicators()))
+    rule = {"id": "rule-ioc", "name": "IOC test", "rule_type": "indicator"}
+    event = {"id": "event-1", "timestamp": "2026-10-09T12:00:00Z",
+             "src_ip": "192.0.2.10", "dest_ip": "192.0.2.10",
+             "dns_query": "malicious.example", "severity": "high"}
+    alerts, matched = await detection.evaluate_rule(rule, [event], "org-1")
+    assert matched == {"event-1"}
+    assert len(alerts) == 1
+    assert alerts[0]["event_count"] == 1
+    assert alerts[0]["related_events"] == ["event-1"]
