@@ -119,8 +119,11 @@ def test_docker_registry_retry_helper_is_bounded_and_configurable():
     script = (ROOT.parent / "scripts" / "pull-mongo-with-retry.sh").read_text()
     assert 'set -euo pipefail' in script
     assert 'MONGO_IMAGE:-mongo:7' in script
-    assert 'for attempt in 1 2 3 4 5' in script
-    assert 'docker pull "$image"' in script
+    assert 'MONGO_PULL_ATTEMPTS:-3' in script
+    assert 'MONGO_FALLBACK_IMAGE:-mongo:7' in script
+    assert 'attempt<=attempts' in script
+    assert 'docker pull "$candidate"' in script
+    assert 'docker tag "$fallback" "$image"' in script
     assert 'exit 1' in script
 
 
