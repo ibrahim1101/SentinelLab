@@ -58,9 +58,17 @@ def _valid_event_timestamp(event):
 
 
 def event_matches(conditions, event) -> bool:
-    """All conditions (AND). Each: {field, op, value}."""
-    for c in conditions or []:
+    """All conditions (AND). Malformed conditions fail closed."""
+    if not isinstance(conditions, (list, tuple)):
+        return False
+    if not isinstance(event, dict):
+        return False
+    for c in conditions:
+        if not isinstance(c, dict):
+            return False
         field, op, value = c.get("field"), c.get("op", "eq"), c.get("value")
+        if not isinstance(field, str) or not field:
+            return False
         fn = OPS.get(op)
         if not fn:
             return False
