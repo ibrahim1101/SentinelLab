@@ -483,7 +483,39 @@ async def _notify(org, ntype, text, ref=None):
     asyncio.create_task(wh.emit(org, category, ntype.replace("_", " ").title(), text))
 
 
+INGEST_JSON_MAX_BYTES = 8 * 1024 * 1024
+
+
+async def _read_bounded_ingest_json(request: Request, max_bytes: int = INGEST_JSON_MAX_BYTES) -> IngestReq:
+    """Enforce a byte cap while streaming, before parsing a telemetry JSON body."""
+    from pydantic import ValidationError
+
+    declared = request.headers.get("content-length")
+    if declared is not None:
+        try:
+            if int(declared) > max_bytes:
+                raise HTTPException(413, "Ingestion JSON exceeds the 8 MiB limit")
+        except ValueError:
+            raise HTTPException(400, "Invalid Content-Length")
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > max_bytes:
+            raise HTTPException(413, "Ingestion JSON exceeds the 8 MiB limit")
+        data.extend(chunk)
+    try:
+        return IngestReq.model_validate_json(bytes(data))
+    except ValidationError as exc:
+        raise HTTPException(422, detail=exc.errors(include_context=False, include_input=False))
+    except ValueError:
+        raise HTTPException(400, "Invalid ingestion JSON")
+
+
 @api.post("/ingest")
+async def ingest_json(request: Request, user=Depends(require_role("analyst"))):
+    body = await _read_bounded_ingest_json(request)
+    return await ingest(body, request, user)
+
+
 async def ingest(body: IngestReq, request: Request, user=Depends(require_role("analyst"))):
     org = active_org(user, request)
     source = await db.sources.find_one({"id": body.source_id, "org_id": org}, {"_id": 0})
