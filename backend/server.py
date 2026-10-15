@@ -698,8 +698,11 @@ async def backtest_rule(rule_id: str, request: Request, time_range: str = "7d", 
     r = await db.detection_rules.find_one({"id": rule_id, "org_id": org}, {"_id": 0})
     if not r:
         raise HTTPException(404, "Rule not found")
+    if time_range not in ("15m", "1h", "24h", "7d", "30d"):
+        raise HTTPException(422, "Unsupported backtest time range")
     events = await db.events.find({"org_id": org, "timestamp": {"$gte": _range_to_iso(time_range)}},
-                                  {"_id": 0}).limit(10000).to_list(10000)
+                                  {"_id": 0}).sort([("timestamp", -1), ("id", -1)]).limit(10000).to_list(10000)
+    events.reverse()  # Evaluate the bounded newest window in chronological order.
     alerts, matched = await evaluate_rule(r, events, org)
     return {"would_alert": len(alerts), "matched_events": len(matched),
             "sample": [{"title": a["title"], "severity": a["severity"], "event_count": a["event_count"]} for a in alerts[:10]]}
