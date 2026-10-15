@@ -157,8 +157,11 @@ async def evaluate_rule(rule, events, org_id):
         filtered = [e for e in events if event_matches(conds, e) and _valid_event_timestamp(e)]
         groups = {}
         for e in filtered:
-            key = e.get(group_by) or "unknown"
-            groups.setdefault(key, []).append(e)
+            raw_key = e.get(group_by)
+            # Normalized telemetry is usually scalar, but malformed or custom
+            # fields must not crash grouping when they contain dicts or lists.
+            key = raw_key if isinstance(raw_key, (str, int, float, bool)) and raw_key != "" else "unknown"
+            groups.setdefault(str(key), []).append(e)
         for key, evs in groups.items():
             evs.sort(key=lambda e: _parse_ts(e["timestamp"]))
             # sliding window
