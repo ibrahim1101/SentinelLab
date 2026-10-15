@@ -144,13 +144,16 @@ async def evaluate_rule(rule, events, org_id):
             evs.sort(key=lambda e: _parse_ts(e["timestamp"]))
             # sliding window
             i = 0
-            flagged = []
+            flagged_ids = set()
             for j in range(len(evs)):
                 while _parse_ts(evs[j]["timestamp"]) - _parse_ts(evs[i]["timestamp"]) > \
                         __import__("datetime").timedelta(minutes=window):
                     i += 1
                 if j - i + 1 >= threshold:
-                    flagged = evs[i:j + 1]
+                    flagged_ids.update(e["id"] for e in evs[i:j + 1])
+            # Preserve all events participating in any qualifying window,
+            # rather than reporting only the final window for this group.
+            flagged = [e for e in evs if e["id"] in flagged_ids]
             if flagged:
                 for e in flagged:
                     matched_ids.add(e["id"])
