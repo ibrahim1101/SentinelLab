@@ -139,8 +139,13 @@ async def evaluate_rule(rule, events, org_id):
     elif rtype in ("threshold", "frequency"):
         conds = params.get("conditions", [])
         group_by = params.get("group_by", "src_ip")
-        window = int(params.get("window_minutes", 5))
-        threshold = int(params.get("threshold", 5))
+        try:
+            window = int(params.get("window_minutes", 5))
+            threshold = int(params.get("threshold", 5))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("Threshold window and count must be integers") from exc
+        if not 1 <= window <= 1440 or not 1 <= threshold <= 10000:
+            raise ValueError("Threshold window must be 1-1440 minutes and count 1-10000")
         filtered = [e for e in events if event_matches(conds, e) and _valid_event_timestamp(e)]
         groups = {}
         for e in filtered:
