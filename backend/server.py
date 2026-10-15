@@ -513,7 +513,10 @@ async def ingest(body: IngestReq, request: Request, user=Depends(require_role("a
 @api.post("/ingest/upload")
 async def ingest_upload(request: Request, source_id: str = Query(...), format: str = Query("json"),
                         file: UploadFile = File(...), user=Depends(require_role("analyst"))):
-    content = (await file.read()).decode("utf-8", errors="replace")
+    content_bytes = await file.read(8 * 1024 * 1024 + 1)
+    if len(content_bytes) > 8 * 1024 * 1024:
+        raise HTTPException(413, "Uploaded telemetry exceeds the 8 MiB limit")
+    content = content_bytes.decode("utf-8", errors="replace")
     return await ingest(IngestReq(source_id=source_id, format=format, payload=content), request, user)
 
 
