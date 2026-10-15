@@ -51,4 +51,4 @@ async def test_upload_over_limit_is_rejected():
 
 @pytest.mark.asyncio
 async def test_upload_decodes_invalid_utf8_without_crashing():
-    assert await _reader()(FakeUpload(b"\\xff"), max_bytes=4) == "\\xff"
+    assert await _reader()(FakeUpload(bytes([255])), max_bytes=4) == "\uFFFD"
