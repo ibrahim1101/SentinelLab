@@ -2,6 +2,7 @@
 import ast
 import asyncio
 from pathlib import Path
+from datetime import datetime, timezone
 
 source = (Path(__file__).resolve().parents[1] / "detection.py").read_text()
 tree = ast.parse(source)
@@ -9,7 +10,7 @@ fn = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name
 namespace = {
     "event_matches": lambda conditions, event: True,
     "_valid_event_timestamp": lambda event: True,
-    "_parse_ts": lambda value: value,
+    "_parse_ts": lambda value: datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc),
     "_build_alert": lambda rule, org, events, title=None: {"title": title, "related_events": [e["id"] for e in events]},
     "db": None,
 }
