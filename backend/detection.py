@@ -83,8 +83,14 @@ def _build_alert(rule, org_id, events, title=None):
     sevs = ["info", "low", "medium", "high", "critical"]
     ev_sev = max((e.get("severity", "info") for e in events),
                  key=lambda s: sevs.index(s) if s in sevs else 0)
-    first = min(events, key=lambda e: _parse_ts(e["timestamp"]))
-    last = max(events, key=lambda e: _parse_ts(e["timestamp"]))
+    # Match and IOC rules may receive malformed timestamps from external sources.
+    # Keep the alert and its evidence rather than dropping the entire rule run.
+    dated = [e for e in events if _valid_event_timestamp(e)]
+    if dated:
+        first = min(dated, key=lambda e: _parse_ts(e["timestamp"]))
+        last = max(dated, key=lambda e: _parse_ts(e["timestamp"]))
+    else:
+        first = last = events[0]
     return {
         "id": new_id(),
         "org_id": org_id,
