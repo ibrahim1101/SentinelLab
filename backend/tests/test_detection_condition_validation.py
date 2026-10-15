@@ -20,8 +20,8 @@ event_matches = namespace["event_matches"]
     [{"field": "src_ip", "op": "unknown", "value": "1"}],
 ])
 def test_invalid_conditions_do_not_match(conditions):
-    # None is the valid empty-filter sentinel; all other malformed inputs fail closed.
-    assert event_matches(conditions, {"src_ip": "1"}) is (conditions is None)
+    # Malformed condition inputs fail closed, including null.
+    assert event_matches(conditions, {"src_ip": "1"}) is False
 
 
 def test_valid_condition_matches():
