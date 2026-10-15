@@ -187,14 +187,19 @@ async def evaluate_rule(rule, events, org_id):
             {"org_id": org_id, "active": True}, {"_id": 0}).to_list(2000)
         ioc_map = {}
         for ind in indicators:
-            ioc_map.setdefault(ind["ioc_type"], {})[str(ind["value"]).lower()] = ind
+            if not isinstance(ind, dict):
+                continue
+            ioc_type, value = ind.get("ioc_type"), ind.get("value")
+            if ioc_type not in ("ip", "domain", "hash") or not isinstance(value, str) or not value.strip():
+                continue
+            ioc_map.setdefault(ioc_type, {})[value.strip().casefold()] = ind
         fields = {"ip": ["src_ip", "dest_ip"], "domain": ["dns_query"],
                   "hash": ["file_hash"]}
         hits = []
         for e in events:
             # One event can match multiple IOC fields; it is still one event.
             is_match = any(
-                e.get(field) and str(e[field]).lower() in ioc_map.get(ioc_type, {})
+                isinstance(e.get(field), str) and e[field].strip().casefold() in ioc_map.get(ioc_type, {})
                 for ioc_type, ev_fields in fields.items()
                 for field in ev_fields
             )
