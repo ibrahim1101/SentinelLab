@@ -49,7 +49,9 @@ def _parse_ts(v):
 
 
 def _valid_event_timestamp(event):
-    """Exclude malformed timestamps from temporal correlation."""
+    """Exclude malformed timestamps and non-object telemetry from temporal correlation."""
+    if not isinstance(event, dict):
+        return False
     try:
         _parse_ts(event.get("timestamp"))
         return True
