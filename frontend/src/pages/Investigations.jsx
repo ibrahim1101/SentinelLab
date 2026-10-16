@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Upload, FileText, RefreshCw, ShieldCheck, AlertTriangle } from "lucide-react";
 import client from "@/lib/api";
+import { summarizeInvestigationLinkHealth } from "@/lib/investigationLinkHealth";
 import { Sev, Loading, PageHead, StatusPill, Empty, fmtTime } from "@/components/common";
 import Modal from "@/components/Modal";
 import { toast } from "sonner";
@@ -29,7 +30,7 @@ export default function Investigations() {
     setCheckingLinks(true);
     try {
       const { data } = await client.get(`/investigations/${sel.investigation.id}/link-health`);
-      setLinkHealth(data);
+      setLinkHealth(summarizeInvestigationLinkHealth(data));
     } catch (err) {
       toast.error(err.response?.status === 403
         ? "SOC manager access required for link health"
@@ -49,9 +50,10 @@ export default function Investigations() {
         client.get(`/investigations/${id}/link-health`),
       ]);
       setSel(details.data);
-      setLinkHealth(health.data);
+      const verified = summarizeInvestigationLinkHealth(health.data);
+      setLinkHealth(verified);
       await load();
-      if (health.data.consistent) {
+      if (verified.consistent) {
         toast.success("Investigation links reconciled");
       } else {
         toast.error("Some links remain inconsistent. Check again before proceeding.");
@@ -122,7 +124,7 @@ export default function Investigations() {
                       {linkHealth.consistent ? <ShieldCheck size={14} /> : <AlertTriangle size={14} />}
                       <span>{linkHealth.consistent ? "Links are consistent" : "Inconsistent alert links detected"}</span>
                     </div>
-                    <div style={{ color: "var(--text-2)" }}>Linked alerts: {linkHealth.linked_alerts} · Missing: {linkHealth.missing_from_investigation.length} · Stale: {linkHealth.stale_in_investigation.length}</div>
+                    <div style={{ color: "var(--text-2)" }}>Linked alerts: {linkHealth.linkedAlerts} · Missing: {linkHealth.missing} · Stale: {linkHealth.stale}</div>
                     {!linkHealth.consistent && (
                       <button className="btn btn-sm mt-2" onClick={repairLinks} disabled={checkingLinks} data-testid="inv-repair-links">Repair links</button>
                     )}
