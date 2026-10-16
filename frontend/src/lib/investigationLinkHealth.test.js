@@ -22,6 +22,18 @@ describe("investigation link-health response validation", () => {
     }).consistent).toBe(false);
   });
 
+  test.each([
+    { consistent: true, linked_alerts: -1, missing_from_investigation: [], stale_in_investigation: [] },
+    { consistent: true, linked_alerts: 1.5, missing_from_investigation: [], stale_in_investigation: [] },
+    { consistent: true, linked_alerts: NaN, missing_from_investigation: [], stale_in_investigation: [] },
+    { consistent: "true", linked_alerts: 1, missing_from_investigation: [], stale_in_investigation: [] },
+    { consistent: true, linked_alerts: 1, missing_from_investigation: [null], stale_in_investigation: [] },
+    { consistent: true, linked_alerts: 1, missing_from_investigation: [], stale_in_investigation: [" "] },
+  ])("rejects malformed integrity data: %p", (value) => {
+    expect(() => summarizeInvestigationLinkHealth(value)).toThrow(
+      "Invalid investigation link-health response");
+  });
+
   test.each([null, {}, { consistent: true, linked_alerts: 1 },
     { consistent: true, linked_alerts: "1",
       missing_from_investigation: [], stale_in_investigation: [] }])(
