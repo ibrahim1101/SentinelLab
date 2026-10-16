@@ -972,29 +972,25 @@ async def update_investigation(inv_id: str, body: InvUpdate, request: Request, u
     mu = {"$set": upd}
     if push: mu["$push"] = push
     if body.related_alerts is not None:
-        # Link updates must commit together; otherwise a failed write leaves
-        # alert.investigation_id inconsistent with related_alerts.
-        async with await db.client.start_session() as session:
-            async with session.start_transaction():
-                await db.investigations.update_one({"id": inv_id, "org_id": org}, mu, session=session)
-                requested = set(body.related_alerts)
-                previous = set(inv.get("related_alerts", []))
-                removed = list(previous - requested)
-                added = list(requested - previous)
-                if removed:
-                    await db.alerts.update_many(
-                        {"id": {"$in": removed}, "org_id": org, "investigation_id": inv_id},
-                        {"$set": {"investigation_id": None, "updated_at": now_iso()}},
-                        session=session)
-                if added:
-                    await db.alerts.update_many(
-                        {"id": {"$in": added}, "org_id": org},
-                        {"$set": {"investigation_id": inv_id, "updated_at": now_iso()}},
-                        session=session)
-                    await db.investigations.update_many(
-                        {"id": {"$ne": inv_id}, "org_id": org, "related_alerts": {"$in": added}},
-                        {"$pull": {"related_alerts": {"$in": added}},
-                         "$set": {"updated_at": now_iso()}}, session=session)
+        # Standalone MongoDB deployments cannot run multi-document transactions.
+        # Validate the complete link set before writing, then update references.
+        await db.investigations.update_one({"id": inv_id, "org_id": org}, mu)
+        requested = set(body.related_alerts)
+        previous = set(inv.get("related_alerts", []))
+        removed = list(previous - requested)
+        added = list(requested - previous)
+        if removed:
+            await db.alerts.update_many(
+                {"id": {"$in": removed}, "org_id": org, "investigation_id": inv_id},
+                {"$set": {"investigation_id": None, "updated_at": now_iso()}})
+        if added:
+            await db.alerts.update_many(
+                {"id": {"$in": added}, "org_id": org},
+                {"$set": {"investigation_id": inv_id, "updated_at": now_iso()}})
+            await db.investigations.update_many(
+                {"id": {"$ne": inv_id}, "org_id": org, "related_alerts": {"$in": added}},
+                {"$pull": {"related_alerts": {"$in": added}},
+                 "$set": {"updated_at": now_iso()}})
     else:
         await db.investigations.update_one({"id": inv_id, "org_id": org}, mu)
     await audit(org, user, "update", "investigation", inv_id)
