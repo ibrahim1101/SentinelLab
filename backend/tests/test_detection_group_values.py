@@ -51,3 +51,18 @@ def test_malformed_group_field_rejected(group_by):
             "params": {"group_by": group_by, "window_minutes": 5, "threshold": 2}}
     with pytest.raises(ValueError, match="group_by"):
         asyncio.run(evaluate_rule(rule, [], "org-1"))
+
+
+@pytest.mark.parametrize("bad_id", [None, "", 42, [], {}])
+def test_threshold_skips_malformed_event_identifiers(bad_id):
+    events = [
+        {"id": bad_id, "timestamp": "2026-10-15T00:00:00+00:00", "src_ip": "192.0.2.1"},
+        {"id": "valid-1", "timestamp": "2026-10-15T00:01:00+00:00", "src_ip": "192.0.2.1"},
+        {"id": "valid-2", "timestamp": "2026-10-15T00:02:00+00:00", "src_ip": "192.0.2.1"},
+    ]
+    rule = {"id": "r1", "name": "Grouped", "rule_type": "threshold",
+            "params": {"group_by": "src_ip", "window_minutes": 5, "threshold": 2}}
+    alerts, matched = asyncio.run(evaluate_rule(rule, events, "org-1"))
+    assert matched == {"valid-1", "valid-2"}
+    assert len(alerts) == 1
+    assert alerts[0]["related_events"] == ["valid-1", "valid-2"]
