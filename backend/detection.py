@@ -149,6 +149,8 @@ async def evaluate_rule(rule, events, org_id):
     elif rtype in ("threshold", "frequency"):
         conds = params.get("conditions", [])
         group_by = params.get("group_by", "src_ip")
+        if not isinstance(group_by, str) or not group_by.strip():
+            raise ValueError("Threshold group_by must be a non-empty field name")
         try:
             window = int(params.get("window_minutes", 5))
             threshold = int(params.get("threshold", 5))
