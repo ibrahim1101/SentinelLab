@@ -739,6 +739,12 @@ async def update_alert(alert_id: str, body: AlertUpdate, request: Request, user=
     a = await db.alerts.find_one({"id": alert_id, "org_id": org}, {"_id": 0})
     if not a:
         raise HTTPException(404, "Alert not found")
+    # An alert cannot reference a missing or cross-tenant investigation.
+    if body.investigation_id is not None and body.investigation_id != a.get("investigation_id"):
+        target = await db.investigations.find_one(
+            {"id": body.investigation_id, "org_id": org}, {"_id": 0})
+        if not target:
+            raise HTTPException(404, "Investigation not found")
     upd, audit_entries = {"updated_at": now_iso()}, []
     for field in ("status", "severity", "assigned_to", "investigation_id"):
         v = getattr(body, field)
@@ -757,6 +763,14 @@ async def update_alert(alert_id: str, body: AlertUpdate, request: Request, user=
     if push:
         mongo_upd.setdefault("$push", {}).update(push)
     await db.alerts.update_one({"id": alert_id, "org_id": org}, mongo_upd)
+    if body.investigation_id is not None and body.investigation_id != a.get("investigation_id"):
+        if a.get("investigation_id"):
+            await db.investigations.update_one(
+                {"id": a["investigation_id"], "org_id": org},
+                {"$pull": {"related_alerts": alert_id}, "$set": {"updated_at": now_iso()}})
+        await db.investigations.update_one(
+            {"id": body.investigation_id, "org_id": org},
+            {"$addToSet": {"related_alerts": alert_id}, "$set": {"updated_at": now_iso()}})
     await audit(org, user, "update", "alert", alert_id, upd)
     return clean(await db.alerts.find_one({"id": alert_id, "org_id": org}, {"_id": 0}))
 
