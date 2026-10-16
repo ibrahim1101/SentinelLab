@@ -7,8 +7,9 @@ import pytest
 from fastapi import HTTPException
 
 tree = ast.parse((Path(__file__).resolve().parents[1] / "server.py").read_text())
-fn = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef)
-          and n.name == "_repair_investigation_alert_links")
+functions = [n for n in tree.body if isinstance(n, ast.AsyncFunctionDef)
+             and n.name in ("_inspect_investigation_alert_links",
+                            "_repair_investigation_alert_links")]
 
 
 class Cursor:
@@ -44,12 +45,12 @@ def case(existing, alerts):
     alert_collection = Collection(alerts)
     ns = {"db": SimpleNamespace(investigations=investigations, alerts=alert_collection),
           "HTTPException": HTTPException, "now_iso": lambda: "now"}
-    exec(compile(ast.Module(body=[fn], type_ignores=[]), "<repair>", "exec"), ns)
-    return ns["_repair_investigation_alert_links"], investigations
+    exec(compile(ast.Module(body=functions, type_ignores=[]), "<repair>", "exec"), ns)
+    return ns["_repair_investigation_alert_links"], investigations, ns["_inspect_investigation_alert_links"]
 
 
 def test_repair_restores_missing_and_removes_stale_links():
-    repair, invs = case(["stale"], [
+    repair, invs, inspect = case(["stale"], [
         {"id": "good", "org_id": "org-a", "investigation_id": "inv"},
         {"id": "other", "org_id": "org-b", "investigation_id": "inv"},
         {"id": "wrong", "org_id": "org-a", "investigation_id": "different"},
@@ -73,3 +74,15 @@ def test_empty_links_can_be_repaired():
     result = asyncio.run(repair("org-a", "inv"))
     assert result["linked_alerts"] == 0
     assert invs.calls[0][1]["$set"]["related_alerts"] == []
+
+
+def test_link_health_reports_differences_without_writing():
+    repair, invs, inspect = case(["stale"], [
+        {"id": "good", "org_id": "org-a", "investigation_id": "inv"},
+        {"id": "foreign", "org_id": "org-b", "investigation_id": "inv"},
+    ])
+    result = asyncio.run(inspect("org-a", "inv"))
+    assert result["consistent"] is False
+    assert result["missing_from_investigation"] == ["good"]
+    assert result["stale_in_investigation"] == ["stale"]
+    assert not invs.calls
