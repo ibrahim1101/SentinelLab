@@ -926,7 +926,7 @@ async def _repair_investigation_alert_links(org: str, inv_id: str):
         raise HTTPException(409, "Investigation exceeds reconciliation limit")
     ids = list(dict.fromkeys(a["id"] for a in linked))
     current = inv.get("related_alerts", [])
-    if current != ids and set(current) != set(ids):
+    if set(current) != set(ids):
         await db.investigations.update_one(
             {"id": inv_id, "org_id": org},
             {"$set": {"related_alerts": ids, "updated_at": now_iso()}})
