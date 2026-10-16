@@ -165,17 +165,24 @@ async def evaluate_rule(rule, events, org_id):
         for key, evs in groups.items():
             evs.sort(key=lambda e: _parse_ts(e["timestamp"]))
             # sliding window
+            # Mark qualifying index intervals in O(n) instead of repeatedly
+            # adding every event in overlapping windows (quadratic at scale).
+            from datetime import timedelta
+            parsed_times = [_parse_ts(e["timestamp"]) for e in evs]
+            changes = [0] * (len(evs) + 1)
             i = 0
-            flagged_ids = set()
             for j in range(len(evs)):
-                while _parse_ts(evs[j]["timestamp"]) - _parse_ts(evs[i]["timestamp"]) > \
-                        __import__("datetime").timedelta(minutes=window):
+                while parsed_times[j] - parsed_times[i] > timedelta(minutes=window):
                     i += 1
                 if j - i + 1 >= threshold:
-                    flagged_ids.update(e["id"] for e in evs[i:j + 1])
-            # Preserve all events participating in any qualifying window,
-            # rather than reporting only the final window for this group.
-            flagged = [e for e in evs if e["id"] in flagged_ids]
+                    changes[i] += 1
+                    changes[j + 1] -= 1
+            active = 0
+            flagged = []
+            for index, event in enumerate(evs):
+                active += changes[index]
+                if active:
+                    flagged.append(event)
             if flagged:
                 for e in flagged:
                     matched_ids.add(e["id"])
