@@ -99,6 +99,8 @@ def _build_alert(rule, org_id, events, title=None):
         last = max(dated, key=lambda e: _parse_ts(e["timestamp"]))
     else:
         first = last = events[0]
+    first_seen = first["timestamp"] if dated else now_iso()
+    last_seen = last["timestamp"] if dated else first_seen
     return {
         "id": new_id(),
         "org_id": org_id,
@@ -113,10 +115,10 @@ def _build_alert(rule, org_id, events, title=None):
         "src_ip": first.get("src_ip"),
         "username": first.get("username"),
         "related_events": list(dict.fromkeys(e["id"] for e in events)),
-        "event_count": len(events),
+        "event_count": len(dict.fromkeys(e["id"] for e in events)),
         "mitre": rule.get("mitre", []),
-        "first_seen": first["timestamp"],
-        "last_seen": last["timestamp"],
+        "first_seen": first_seen,
+        "last_seen": last_seen,
         "assigned_to": None,
         "status": "new",
         "investigation_id": None,
