@@ -141,6 +141,10 @@ async def evaluate_rule(rule, events, org_id):
     matched_ids = set()
     rtype = rule.get("rule_type", "match")
     params = rule.get("params", {})
+    # Persisted or imported rules can contain malformed JSON values.
+    # Do not let a non-object params payload crash the evaluation loop.
+    if not isinstance(params, dict):
+        raise ValueError("Detection rule params must be a JSON object")
 
     if rtype == "match":
         hits = [e for e in events if event_matches(params.get("conditions", []), e)]
