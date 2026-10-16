@@ -62,7 +62,7 @@ def test_repair_restores_missing_and_removes_stale_links():
 
 
 def test_consistent_links_are_noop():
-    repair, invs = case(["good"], [
+    repair, invs, inspect = case(["good"], [
         {"id": "good", "org_id": "org-a", "investigation_id": "inv"}])
     result = asyncio.run(repair("org-a", "inv"))
     assert result["repaired"] is False
@@ -70,7 +70,7 @@ def test_consistent_links_are_noop():
 
 
 def test_empty_links_can_be_repaired():
-    repair, invs = case(["stale"], [])
+    repair, invs, inspect = case(["stale"], [])
     result = asyncio.run(repair("org-a", "inv"))
     assert result["linked_alerts"] == 0
     assert invs.calls[0][1]["$set"]["related_alerts"] == []
