@@ -913,6 +913,36 @@ async def delete_source(source_id: str, request: Request, user=Depends(require_r
 
 
 # ============================= INVESTIGATIONS =============================
+# Reconciliation treats each alert's investigation_id as authoritative.
+# This supports interrupted multi-document updates on standalone MongoDB.
+async def _repair_investigation_alert_links(org: str, inv_id: str):
+    inv = await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Investigation not found")
+    linked = await db.alerts.find(
+        {"org_id": org, "investigation_id": inv_id}, {"_id": 0, "id": 1}
+    ).to_list(10001)
+    if len(linked) > 10000:
+        raise HTTPException(409, "Investigation exceeds reconciliation limit")
+    ids = list(dict.fromkeys(a["id"] for a in linked))
+    current = inv.get("related_alerts", [])
+    if current != ids and set(current) != set(ids):
+        await db.investigations.update_one(
+            {"id": inv_id, "org_id": org},
+            {"$set": {"related_alerts": ids, "updated_at": now_iso()}})
+    return {"investigation_id": inv_id, "linked_alerts": len(ids),
+            "repaired": set(current) != set(ids)}
+
+
+@api.post("/investigations/{inv_id}/repair-links")
+async def repair_investigation_alert_links(
+        inv_id: str, request: Request, user=Depends(require_role("soc_manager"))):
+    org = active_org(user, request)
+    result = await _repair_investigation_alert_links(org, inv_id)
+    await audit(org, user, "repair_alert_links", "investigation", inv_id, result)
+    return result
+
+
 @api.get("/investigations")
 async def list_investigations(request: Request, user=Depends(get_current_user)):
     org = active_org(user, request)
