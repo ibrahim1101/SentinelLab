@@ -42,9 +42,20 @@ export default function Investigations() {
     if (!sel || !linkHealth || linkHealth.consistent) return;
     setCheckingLinks(true);
     try {
-      await client.post(`/investigations/${sel.investigation.id}/repair-links`);
-      await open(sel.investigation.id);
-      toast.success("Investigation links reconciled");
+      const id = sel.investigation.id;
+      await client.post(`/investigations/${id}/repair-links`);
+      const [details, health] = await Promise.all([
+        client.get(`/investigations/${id}`),
+        client.get(`/investigations/${id}/link-health`),
+      ]);
+      setSel(details.data);
+      setLinkHealth(health.data);
+      await load();
+      if (health.data.consistent) {
+        toast.success("Investigation links reconciled");
+      } else {
+        toast.error("Some links remain inconsistent. Check again before proceeding.");
+      }
     } catch (err) {
       toast.error(err.response?.status === 403
         ? "SOC manager access required to repair links"
