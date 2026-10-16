@@ -951,8 +951,9 @@ async def update_investigation(inv_id: str, body: InvUpdate, request: Request, u
     # Validate all requested alert links before mutating the investigation.
     if body.related_alerts is not None:
         ids = body.related_alerts
-        if (len(ids) > 500 or len(ids) != len(set(ids))
-                or any(not isinstance(item, str) or not item.strip() for item in ids)):
+        if (not isinstance(ids, list) or len(ids) > 500
+                or any(not isinstance(item, str) or not item.strip() for item in ids)
+                or len(ids) != len(set(ids))):
             raise HTTPException(422, "related_alerts must contain up to 500 unique alert IDs")
         if ids:
             valid = await db.alerts.count_documents({"id": {"$in": ids}, "org_id": org})
