@@ -948,6 +948,16 @@ async def update_investigation(inv_id: str, body: InvUpdate, request: Request, u
     inv = await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0})
     if not inv:
         raise HTTPException(404, "Investigation not found")
+    # Validate all requested alert links before mutating the investigation.
+    if body.related_alerts is not None:
+        ids = body.related_alerts
+        if (len(ids) > 500 or len(ids) != len(set(ids))
+                or any(not isinstance(item, str) or not item.strip() for item in ids)):
+            raise HTTPException(422, "related_alerts must contain up to 500 unique alert IDs")
+        if ids:
+            valid = await db.alerts.count_documents({"id": {"$in": ids}, "org_id": org})
+            if valid != len(ids):
+                raise HTTPException(422, "One or more alerts do not belong to this organization")
     upd = {"updated_at": now_iso()}
     for f in ("status", "priority", "findings", "related_alerts", "related_events"):
         v = getattr(body, f)
@@ -961,6 +971,24 @@ async def update_investigation(inv_id: str, body: InvUpdate, request: Request, u
     mu = {"$set": upd}
     if push: mu["$push"] = push
     await db.investigations.update_one({"id": inv_id, "org_id": org}, mu)
+    if body.related_alerts is not None:
+        requested = set(body.related_alerts)
+        previous = set(inv.get("related_alerts", []))
+        removed = list(previous - requested)
+        added = list(requested - previous)
+        if removed:
+            await db.alerts.update_many(
+                {"id": {"$in": removed}, "org_id": org, "investigation_id": inv_id},
+                {"$set": {"investigation_id": None, "updated_at": now_iso()}})
+        if added:
+            await db.alerts.update_many(
+                {"id": {"$in": added}, "org_id": org},
+                {"$set": {"investigation_id": inv_id, "updated_at": now_iso()}})
+            # Remove reassigned alerts from other investigations' lists.
+            await db.investigations.update_many(
+                {"id": {"$ne": inv_id}, "org_id": org, "related_alerts": {"$in": added}},
+                {"$pull": {"related_alerts": {"$in": added}},
+                 "$set": {"updated_at": now_iso()}})
     await audit(org, user, "update", "investigation", inv_id)
     return clean(await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0}))
 
