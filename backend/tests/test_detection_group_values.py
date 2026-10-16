@@ -1,6 +1,8 @@
 """Threshold grouping must tolerate non-scalar telemetry values."""
 import ast
 import asyncio
+
+import pytest
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -41,3 +43,11 @@ def test_valid_scalar_group_values_remain_distinct():
     alerts, matched = asyncio.run(evaluate_rule(rule, events, "org-1"))
     assert alerts == []
     assert matched == set()
+
+
+@pytest.mark.parametrize("group_by", [None, "", "  ", [], {}, 42, True])
+def test_malformed_group_field_rejected(group_by):
+    rule = {"id": "r1", "name": "Grouped", "rule_type": "threshold",
+            "params": {"group_by": group_by, "window_minutes": 5, "threshold": 2}}
+    with pytest.raises(ValueError, match="group_by"):
+        asyncio.run(evaluate_rule(rule, [], "org-1"))
