@@ -18,6 +18,10 @@ event_matches = namespace["event_matches"]
     [{"field": "", "op": "eq", "value": "1"}],
     [{"field": 123, "op": "eq", "value": "1"}],
     [{"field": "src_ip", "op": "unknown", "value": "1"}],
+    [{"field": "src_ip", "op": [], "value": "1"}],
+    [{"field": "src_ip", "op": {}, "value": "1"}],
+    [{"field": "src_ip", "op": None, "value": "1"}],
+    [{"field": "src_ip", "op": 42, "value": "1"}],
 ])
 def test_invalid_conditions_do_not_match(conditions):
     # Malformed condition inputs fail closed, including null.
