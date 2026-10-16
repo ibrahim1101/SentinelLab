@@ -971,25 +971,32 @@ async def update_investigation(inv_id: str, body: InvUpdate, request: Request, u
         push["tasks"] = {"id": new_id(), "text": body.task, "done": False, "ts": now_iso()}
     mu = {"$set": upd}
     if push: mu["$push"] = push
-    await db.investigations.update_one({"id": inv_id, "org_id": org}, mu)
     if body.related_alerts is not None:
-        requested = set(body.related_alerts)
-        previous = set(inv.get("related_alerts", []))
-        removed = list(previous - requested)
-        added = list(requested - previous)
-        if removed:
-            await db.alerts.update_many(
-                {"id": {"$in": removed}, "org_id": org, "investigation_id": inv_id},
-                {"$set": {"investigation_id": None, "updated_at": now_iso()}})
-        if added:
-            await db.alerts.update_many(
-                {"id": {"$in": added}, "org_id": org},
-                {"$set": {"investigation_id": inv_id, "updated_at": now_iso()}})
-            # Remove reassigned alerts from other investigations' lists.
-            await db.investigations.update_many(
-                {"id": {"$ne": inv_id}, "org_id": org, "related_alerts": {"$in": added}},
-                {"$pull": {"related_alerts": {"$in": added}},
-                 "$set": {"updated_at": now_iso()}})
+        # Link updates must commit together; otherwise a failed write leaves
+        # alert.investigation_id inconsistent with related_alerts.
+        async with await db.client.start_session() as session:
+            async with session.start_transaction():
+                await db.investigations.update_one({"id": inv_id, "org_id": org}, mu, session=session)
+                requested = set(body.related_alerts)
+                previous = set(inv.get("related_alerts", []))
+                removed = list(previous - requested)
+                added = list(requested - previous)
+                if removed:
+                    await db.alerts.update_many(
+                        {"id": {"$in": removed}, "org_id": org, "investigation_id": inv_id},
+                        {"$set": {"investigation_id": None, "updated_at": now_iso()}},
+                        session=session)
+                if added:
+                    await db.alerts.update_many(
+                        {"id": {"$in": added}, "org_id": org},
+                        {"$set": {"investigation_id": inv_id, "updated_at": now_iso()}},
+                        session=session)
+                    await db.investigations.update_many(
+                        {"id": {"$ne": inv_id}, "org_id": org, "related_alerts": {"$in": added}},
+                        {"$pull": {"related_alerts": {"$in": added}},
+                         "$set": {"updated_at": now_iso()}}, session=session)
+    else:
+        await db.investigations.update_one({"id": inv_id, "org_id": org}, mu)
     await audit(org, user, "update", "investigation", inv_id)
     return clean(await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0}))
 
