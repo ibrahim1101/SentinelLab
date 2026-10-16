@@ -58,3 +58,18 @@ def test_nonqualifying_events_do_not_enter_evidence():
     alerts, matched = asyncio.run(evaluate_rule(rule, events, "org-1"))
     assert matched == {"0", "1", "2"}
     assert alerts[0]["related_events"] == ["0", "1", "2"]
+
+
+def test_overlapping_threshold_windows_do_not_duplicate_evidence():
+    start = datetime(2026, 10, 15, tzinfo=timezone.utc)
+    events = [
+        {"id": str(i), "src_ip": "192.0.2.1",
+         "timestamp": (start + timedelta(seconds=i)).isoformat()}
+        for i in range(2000)
+    ]
+    rule = {"id": "threshold-1", "name": "Burst", "rule_type": "threshold",
+            "params": {"group_by": "src_ip", "window_minutes": 5, "threshold": 3}}
+    alerts, matched = asyncio.run(evaluate_rule(rule, events, "org-1"))
+    assert len(matched) == 2000
+    assert len(alerts) == 1
+    assert alerts[0]["related_events"] == [str(i) for i in range(2000)]
