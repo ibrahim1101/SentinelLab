@@ -23,11 +23,27 @@ class Collection:
     async def count_documents(self, query):
         return sum(d.get("org_id") == query["org_id"] and d.get("id") in query["id"]["$in"] for d in self.docs)
 
-    async def update_one(self, query, update):
+    async def update_one(self, query, update, session=None):
         self.calls.append((query, update))
 
-    async def update_many(self, query, update):
+    async def update_many(self, query, update, session=None):
         self.calls.append((query, update))
+
+
+class Session:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    def start_transaction(self):
+        return self
+
+
+class Client:
+    async def start_session(self):
+        return Session()
 
 
 def setup(ids):
@@ -36,7 +52,7 @@ def setup(ids):
                          {"id": "other", "org_id": "org-b"}])
     async def audit(*args, **kwargs):
         pass
-    ns = {"db": SimpleNamespace(investigations=invs, alerts=alerts),
+    ns = {"db": SimpleNamespace(investigations=invs, alerts=alerts, client=Client()),
           "active_org": lambda user, request: "org-a", "now_iso": lambda: "now",
           "new_id": lambda: "id", "audit": audit, "clean": lambda d: d,
           "HTTPException": HTTPException, "Depends": Depends, "Request": Request,
