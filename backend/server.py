@@ -915,7 +915,8 @@ async def delete_source(source_id: str, request: Request, user=Depends(require_r
 # ============================= INVESTIGATIONS =============================
 # Reconciliation treats each alert's investigation_id as authoritative.
 # This supports interrupted multi-document updates on standalone MongoDB.
-async def _repair_investigation_alert_links(org: str, inv_id: str):
+async def _inspect_investigation_alert_links(org: str, inv_id: str):
+    """Read-only, tenant-scoped consistency check for a single investigation."""
     inv = await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0})
     if not inv:
         raise HTTPException(404, "Investigation not found")
@@ -924,14 +925,35 @@ async def _repair_investigation_alert_links(org: str, inv_id: str):
     ).to_list(10001)
     if len(linked) > 10000:
         raise HTTPException(409, "Investigation exceeds reconciliation limit")
-    ids = list(dict.fromkeys(a["id"] for a in linked))
-    current = inv.get("related_alerts", [])
-    if set(current) != set(ids):
+    actual = {a["id"] for a in linked}
+    recorded = set(inv.get("related_alerts", []))
+    return {"investigation_id": inv_id, "linked_alerts": len(actual),
+            "missing_from_investigation": sorted(actual - recorded),
+            "stale_in_investigation": sorted(recorded - actual),
+            "consistent": actual == recorded}
+
+
+async def _repair_investigation_alert_links(org: str, inv_id: str):
+    inspection = await _inspect_investigation_alert_links(org, inv_id)
+    if not inspection["consistent"]:
+        # Re-read the authoritative set before replacing the stored list.
+        linked = await db.alerts.find(
+            {"org_id": org, "investigation_id": inv_id}, {"_id": 0, "id": 1}
+        ).to_list(10001)
+        if len(linked) > 10000:
+            raise HTTPException(409, "Investigation exceeds reconciliation limit")
+        ids = list(dict.fromkeys(a["id"] for a in linked))
         await db.investigations.update_one(
             {"id": inv_id, "org_id": org},
             {"$set": {"related_alerts": ids, "updated_at": now_iso()}})
-    return {"investigation_id": inv_id, "linked_alerts": len(ids),
-            "repaired": set(current) != set(ids)}
+    return {"investigation_id": inv_id, "linked_alerts": inspection["linked_alerts"],
+            "repaired": not inspection["consistent"]}
+
+
+@api.get("/investigations/{inv_id}/link-health")
+async def investigation_link_health(
+        inv_id: str, request: Request, user=Depends(require_role("soc_manager"))):
+    return await _inspect_investigation_alert_links(active_org(user, request), inv_id)
 
 
 @api.post("/investigations/{inv_id}/repair-links")
