@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Depends, Request
 
 source = (Path(__file__).resolve().parents[1] / "server.py").read_text()
 tree = ast.parse(source)
@@ -39,6 +39,10 @@ def run_case(target_exists=True):
         "audit": audit,
         "clean": lambda value: value,
         "HTTPException": HTTPException,
+        "Depends": Depends,
+        "Request": Request,
+        "AlertUpdate": object,
+        "require_role": lambda role: lambda: None,
     }
     exec(compile(ast.Module(body=[fn], type_ignores=[]), "<alert-update>", "exec"), namespace)
     body = SimpleNamespace(status=None, severity=None, assigned_to=None,
