@@ -30,29 +30,13 @@ class Collection:
         self.calls.append((query, update))
 
 
-class Session:
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    def start_transaction(self):
-        return self
-
-
-class Client:
-    async def start_session(self):
-        return Session()
-
-
 def setup(ids):
     invs = Collection([{"id": "inv", "org_id": "org-a", "related_alerts": ["old"]}])
     alerts = Collection([{"id": "old", "org_id": "org-a"}, {"id": "new", "org_id": "org-a"},
                          {"id": "other", "org_id": "org-b"}])
     async def audit(*args, **kwargs):
         pass
-    ns = {"db": SimpleNamespace(investigations=invs, alerts=alerts, client=Client()),
+    ns = {"db": SimpleNamespace(investigations=invs, alerts=alerts),
           "active_org": lambda user, request: "org-a", "now_iso": lambda: "now",
           "new_id": lambda: "id", "audit": audit, "clean": lambda d: d,
           "HTTPException": HTTPException, "Depends": Depends, "Request": Request,
