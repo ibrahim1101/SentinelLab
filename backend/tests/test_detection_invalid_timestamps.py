@@ -49,4 +49,14 @@ def test_all_invalid_timestamps_still_produce_alert():
     alert = build_alert(RULE, "org-1", events)
     assert alert["related_events"] == ["bad-1", "bad-2"]
     assert alert["event_count"] == 2
-    assert alert["first_seen"] == alert["last_seen"] == "invalid"
+    assert alert["first_seen"] == alert["last_seen"] == "2026-10-15T00:00:00+00:00"
+
+
+def test_duplicate_event_ids_count_once():
+    events = [
+        {"id": "same", "timestamp": "2026-10-15T12:00:00+00:00"},
+        {"id": "same", "timestamp": "2026-10-15T12:01:00+00:00"},
+    ]
+    alert = build_alert(RULE, "org-1", events)
+    assert alert["related_events"] == ["same"]
+    assert alert["event_count"] == 1
