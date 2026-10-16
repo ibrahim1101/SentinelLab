@@ -32,3 +32,11 @@ def test_invalid_threshold_settings_rejected(window, threshold):
 def test_valid_threshold_bounds_accepted():
     rule = {"rule_type": "frequency", "params": {"window_minutes": 1440, "threshold": 10000}}
     assert asyncio.run(evaluate_rule(rule, [], "org-1")) == ([], set())
+
+
+@pytest.mark.parametrize("rule_type", ["match", "threshold", "frequency", "indicator"])
+@pytest.mark.parametrize("params", [None, [], "bad", 42, True])
+def test_non_object_rule_params_rejected(rule_type, params):
+    rule = {"rule_type": rule_type, "params": params}
+    with pytest.raises(ValueError, match="params must be a JSON object"):
+        asyncio.run(evaluate_rule(rule, [], "org-1"))
