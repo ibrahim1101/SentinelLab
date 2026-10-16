@@ -149,7 +149,11 @@ async def evaluate_rule(rule, events, org_id):
         raise ValueError("Detection rule params must be a JSON object")
 
     if rtype == "match":
-        hits = [e for e in events if event_matches(params.get("conditions", []), e)]
+        hits = [
+            e for e in events
+            if isinstance(e, dict) and isinstance(e.get("id"), str)
+            and e["id"] and event_matches(params.get("conditions", []), e)
+        ]
         for e in hits:
             matched_ids.add(e["id"])
         if hits:
