@@ -15,6 +15,9 @@ class Cursor:
             {"ioc_type": "domain", "value": "Example.COM"},
             {"ioc_type": "ip", "value": None},
             {"ioc_type": "unknown", "value": "anything"},
+            {"ioc_type": [], "value": "192.0.2.5"},
+            {"ioc_type": {}, "value": "192.0.2.5"},
+            {"ioc_type": 7, "value": "192.0.2.5"},
             {"value": "no-type"},
             None,
         ]
