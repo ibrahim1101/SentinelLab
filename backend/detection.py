@@ -219,7 +219,7 @@ async def evaluate_rule(rule, events, org_id):
             if not isinstance(ind, dict):
                 continue
             ioc_type, value = ind.get("ioc_type"), ind.get("value")
-            if ioc_type not in ("ip", "domain", "hash") or not isinstance(value, str) or not value.strip():
+            if not isinstance(ioc_type, str) or ioc_type not in ("ip", "domain", "hash") or not isinstance(value, str) or not value.strip():
                 continue
             ioc_map.setdefault(ioc_type, {})[value.strip().casefold()] = ind
         fields = {"ip": ["src_ip", "dest_ip"], "domain": ["dns_query"],
