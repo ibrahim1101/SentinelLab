@@ -49,7 +49,9 @@ def _parse_ts(v):
 
 
 def _valid_event_timestamp(event):
-    """Exclude malformed timestamps from temporal correlation."""
+    """Exclude malformed timestamps and non-object telemetry from temporal correlation."""
+    if not isinstance(event, dict):
+        return False
     try:
         _parse_ts(event.get("timestamp"))
         return True
@@ -58,9 +60,21 @@ def _valid_event_timestamp(event):
 
 
 def event_matches(conditions, event) -> bool:
-    """All conditions (AND). Each: {field, op, value}."""
-    for c in conditions or []:
+    """All conditions (AND). Malformed conditions fail closed."""
+    if not isinstance(conditions, (list, tuple)):
+        return False
+    if not isinstance(event, dict):
+        return False
+    for c in conditions:
+        if not isinstance(c, dict):
+            return False
         field, op, value = c.get("field"), c.get("op", "eq"), c.get("value")
+        if not isinstance(field, str) or not field.strip() or len(field) > 128:
+            return False
+        # Reject unhashable operators (e.g. JSON arrays/objects) before
+        # dictionary lookup; malformed rules must never crash evaluation.
+        if not isinstance(op, str):
+            return False
         fn = OPS.get(op)
         if not fn:
             return False
@@ -83,8 +97,16 @@ def _build_alert(rule, org_id, events, title=None):
     sevs = ["info", "low", "medium", "high", "critical"]
     ev_sev = max((e.get("severity", "info") for e in events),
                  key=lambda s: sevs.index(s) if s in sevs else 0)
-    first = min(events, key=lambda e: _parse_ts(e["timestamp"]))
-    last = max(events, key=lambda e: _parse_ts(e["timestamp"]))
+    # Match and IOC rules may receive malformed timestamps from external sources.
+    # Keep the alert and its evidence rather than dropping the entire rule run.
+    dated = [e for e in events if _valid_event_timestamp(e)]
+    if dated:
+        first = min(dated, key=lambda e: _parse_ts(e["timestamp"]))
+        last = max(dated, key=lambda e: _parse_ts(e["timestamp"]))
+    else:
+        first = last = events[0]
+    first_seen = first["timestamp"] if dated else now_iso()
+    last_seen = last["timestamp"] if dated else first_seen
     return {
         "id": new_id(),
         "org_id": org_id,
@@ -99,10 +121,10 @@ def _build_alert(rule, org_id, events, title=None):
         "src_ip": first.get("src_ip"),
         "username": first.get("username"),
         "related_events": list(dict.fromkeys(e["id"] for e in events)),
-        "event_count": len(events),
+        "event_count": len(dict.fromkeys(e["id"] for e in events)),
         "mitre": rule.get("mitre", []),
-        "first_seen": first["timestamp"],
-        "last_seen": last["timestamp"],
+        "first_seen": first_seen,
+        "last_seen": last_seen,
         "assigned_to": None,
         "status": "new",
         "investigation_id": None,
@@ -121,9 +143,17 @@ async def evaluate_rule(rule, events, org_id):
     matched_ids = set()
     rtype = rule.get("rule_type", "match")
     params = rule.get("params", {})
+    # Persisted or imported rules can contain malformed JSON values.
+    # Do not let a non-object params payload crash the evaluation loop.
+    if not isinstance(params, dict):
+        raise ValueError("Detection rule params must be a JSON object")
 
     if rtype == "match":
-        hits = [e for e in events if event_matches(params.get("conditions", []), e)]
+        hits = [
+            e for e in events
+            if isinstance(e, dict) and isinstance(e.get("id"), str)
+            and e["id"] and event_matches(params.get("conditions", []), e)
+        ]
         for e in hits:
             matched_ids.add(e["id"])
         if hits:
@@ -133,24 +163,48 @@ async def evaluate_rule(rule, events, org_id):
     elif rtype in ("threshold", "frequency"):
         conds = params.get("conditions", [])
         group_by = params.get("group_by", "src_ip")
-        window = int(params.get("window_minutes", 5))
-        threshold = int(params.get("threshold", 5))
-        filtered = [e for e in events if event_matches(conds, e) and _valid_event_timestamp(e)]
+        if not isinstance(group_by, str) or not group_by.strip() or len(group_by) > 128:
+            raise ValueError("Threshold group_by must be a non-empty field name")
+        try:
+            window = int(params.get("window_minutes", 5))
+            threshold = int(params.get("threshold", 5))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("Threshold window and count must be integers") from exc
+        if not 1 <= window <= 1440 or not 1 <= threshold <= 10000:
+            raise ValueError("Threshold window must be 1-1440 minutes and count 1-10000")
+        filtered = [
+            e for e in events
+            if isinstance(e, dict) and isinstance(e.get("id"), str)
+            and e["id"] and event_matches(conds, e) and _valid_event_timestamp(e)
+        ]
         groups = {}
         for e in filtered:
-            key = e.get(group_by) or "unknown"
-            groups.setdefault(key, []).append(e)
+            raw_key = e.get(group_by)
+            # Normalized telemetry is usually scalar, but malformed or custom
+            # fields must not crash grouping when they contain dicts or lists.
+            key = raw_key if isinstance(raw_key, (str, int, float, bool)) and raw_key != "" else "unknown"
+            groups.setdefault(str(key), []).append(e)
         for key, evs in groups.items():
             evs.sort(key=lambda e: _parse_ts(e["timestamp"]))
             # sliding window
+            # Mark qualifying index intervals in O(n) instead of repeatedly
+            # adding every event in overlapping windows (quadratic at scale).
+            from datetime import timedelta
+            parsed_times = [_parse_ts(e["timestamp"]) for e in evs]
+            changes = [0] * (len(evs) + 1)
             i = 0
-            flagged = []
             for j in range(len(evs)):
-                while _parse_ts(evs[j]["timestamp"]) - _parse_ts(evs[i]["timestamp"]) > \
-                        __import__("datetime").timedelta(minutes=window):
+                while parsed_times[j] - parsed_times[i] > timedelta(minutes=window):
                     i += 1
                 if j - i + 1 >= threshold:
-                    flagged = evs[i:j + 1]
+                    changes[i] += 1
+                    changes[j + 1] -= 1
+            active = 0
+            flagged = []
+            for index, event in enumerate(evs):
+                active += changes[index]
+                if active:
+                    flagged.append(event)
             if flagged:
                 for e in flagged:
                     matched_ids.add(e["id"])
@@ -162,14 +216,22 @@ async def evaluate_rule(rule, events, org_id):
             {"org_id": org_id, "active": True}, {"_id": 0}).to_list(2000)
         ioc_map = {}
         for ind in indicators:
-            ioc_map.setdefault(ind["ioc_type"], {})[str(ind["value"]).lower()] = ind
+            if not isinstance(ind, dict):
+                continue
+            ioc_type, value = ind.get("ioc_type"), ind.get("value")
+            if not isinstance(ioc_type, str) or ioc_type not in ("ip", "domain", "hash") or not isinstance(value, str) or not value.strip():
+                continue
+            ioc_map.setdefault(ioc_type, {})[value.strip().casefold()] = ind
         fields = {"ip": ["src_ip", "dest_ip"], "domain": ["dns_query"],
                   "hash": ["file_hash"]}
         hits = []
         for e in events:
+            # External telemetry may contain malformed non-object records.
+            if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not e["id"]:
+                continue
             # One event can match multiple IOC fields; it is still one event.
             is_match = any(
-                e.get(field) and str(e[field]).lower() in ioc_map.get(ioc_type, {})
+                isinstance(e.get(field), str) and e[field].strip().casefold() in ioc_map.get(ioc_type, {})
                 for ioc_type, ev_fields in fields.items()
                 for field in ev_fields
             )

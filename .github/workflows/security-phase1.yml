@@ -38,7 +38,7 @@ jobs:
       - name: Install lightweight test dependencies
         run: python -m pip install pytest pytest-xdist pytest-asyncio python-dateutil motor pymongo PyJWT bcrypt fastapi python-dotenv python-multipart email-validator pydantic httpx cryptography
       - name: Run isolated regression tests
-        run: python -m pytest -q backend/tests/test_security_regressions.py backend/tests/test_detection_behavior.py backend/tests/test_detection_mongo_integration.py backend/tests/test_alert_tenant_integration.py
+        run: python -m pytest -q backend/tests/test_security_regressions.py backend/tests/test_detection_behavior.py backend/tests/test_detection_mongo_integration.py backend/tests/test_alert_tenant_integration.py backend/tests/test_ingest_upload_limit.py backend/tests/test_ingest_json_limit.py backend/tests/test_backtest_window.py backend/tests/test_threshold_window_evidence.py backend/tests/test_detection_invalid_timestamps.py backend/tests/test_threshold_parameter_bounds.py backend/tests/test_detection_condition_validation.py backend/tests/test_detection_group_values.py backend/tests/test_detection_timestamp_record_types.py backend/tests/test_detection_ioc_event_types.py backend/tests/test_detection_match_event_ids.py backend/tests/test_detection_ioc_validation.py backend/tests/test_alert_investigation_link.py backend/tests/test_investigation_alert_sync.py backend/tests/test_investigation_link_repair.py
       - name: Show MongoDB logs on failure
         if: failure()
         run: docker logs --tail=100 sentinellab-regression-mongo || true
@@ -46,15 +46,34 @@ jobs:
         if: always()
         run: docker rm -f sentinellab-regression-mongo || true
 
+  frontend-regression:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run investigation link-health regression tests
+        env:
+          CI: 'true'
+        run: npm test -- --watch=false --runInBand --runTestsByPath src/lib/investigationLinkHealth.test.js
+
   docker-smoke:
     runs-on: ubuntu-latest
     env:
       JWT_SECRET: ci-only-32-character-secret-value
       ADMIN_PASSWORD: ci-only-strong-admin-password
       MONGO_IMAGE: public.ecr.aws/docker/library/mongo:7
-      PYTHON_BASE_IMAGE: public.ecr.aws/docker/library/python:3.12-slim
-      NODE_BASE_IMAGE: public.ecr.aws/docker/library/node:22-alpine
-      NGINX_BASE_IMAGE: public.ecr.aws/docker/library/nginx:1.27-alpine
+      PYTHON_BASE_IMAGE: python:3.12-slim
+      NODE_BASE_IMAGE: node:22-alpine
+      NGINX_BASE_IMAGE: nginx:1.27-alpine
     steps:
       - uses: actions/checkout@v4
       - name: Validate Compose configuration
