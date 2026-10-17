@@ -227,7 +227,7 @@ async def evaluate_rule(rule, events, org_id):
         hits = []
         for e in events:
             # External telemetry may contain malformed non-object records.
-            if not isinstance(e, dict) or not isinstance(e.get("id"), str):
+            if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not e["id"]:
                 continue
             # One event can match multiple IOC fields; it is still one event.
             is_match = any(
