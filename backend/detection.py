@@ -69,7 +69,7 @@ def event_matches(conditions, event) -> bool:
         if not isinstance(c, dict):
             return False
         field, op, value = c.get("field"), c.get("op", "eq"), c.get("value")
-        if not isinstance(field, str) or not field:
+        if not isinstance(field, str) or not field.strip() or len(field) > 128:
             return False
         # Reject unhashable operators (e.g. JSON arrays/objects) before
         # dictionary lookup; malformed rules must never crash evaluation.
