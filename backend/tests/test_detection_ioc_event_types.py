@@ -32,6 +32,7 @@ exec(compile(ast.Module(body=[fn], type_ignores=[]), "<ioc>", "exec"), namespace
 def test_ioc_ignores_non_object_events_and_missing_identifiers():
     events = [None, [], "broken", 42, {"src_ip": "192.0.2.5"},
               {"id": None, "src_ip": "192.0.2.5"},
+              {"id": "", "src_ip": "192.0.2.5"},
               {"id": "valid", "src_ip": "192.0.2.5"}]
     rule = {"id": "ioc-1", "name": "IOC", "rule_type": "indicator", "params": {}}
     alerts, matched = asyncio.run(namespace["evaluate_rule"](rule, events, "org-1"))
