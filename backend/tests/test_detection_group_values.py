@@ -45,7 +45,7 @@ def test_valid_scalar_group_values_remain_distinct():
     assert matched == set()
 
 
-@pytest.mark.parametrize("group_by", [None, "", "  ", [], {}, 42, True])
+@pytest.mark.parametrize("group_by", [None, "", "  ", [], {}, 42, True, "x" * 129])
 def test_malformed_group_field_rejected(group_by):
     rule = {"id": "r1", "name": "Grouped", "rule_type": "threshold",
             "params": {"group_by": group_by, "window_minutes": 5, "threshold": 2}}
