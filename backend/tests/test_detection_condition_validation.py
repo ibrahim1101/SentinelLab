@@ -16,6 +16,8 @@ event_matches = namespace["event_matches"]
     None, "src_ip", {"field": "src_ip"}, [None], ["bad"],
     [{"field": None, "op": "eq", "value": "1"}],
     [{"field": "", "op": "eq", "value": "1"}],
+    [{"field": "  ", "op": "eq", "value": "1"}],
+    [{"field": "x" * 129, "op": "eq", "value": "1"}],
     [{"field": 123, "op": "eq", "value": "1"}],
     [{"field": "src_ip", "op": "unknown", "value": "1"}],
     [{"field": "src_ip", "op": [], "value": "1"}],
