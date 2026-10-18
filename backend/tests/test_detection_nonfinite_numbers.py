@@ -24,3 +24,11 @@ def test_nonfinite_values_are_rejected(value):
 def test_finite_numbers_still_compare():
     assert _num("6") > _num("5")
     assert _num("-2.5") < _num("0")
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_boolean_telemetry_is_not_numeric(value):
+    number = _num(value)
+    assert math.isnan(number)
+    assert not (number > 0)
+    assert not (number < 1)
