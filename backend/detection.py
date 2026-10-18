@@ -107,6 +107,8 @@ def _build_alert(rule, org_id, events, title=None):
         key=sevs.index,
         default="info",
     )
+    rule_sev = rule.get("severity")
+    alert_sev = rule_sev if isinstance(rule_sev, str) and rule_sev in sevs else ev_sev
     # Match and IOC rules may receive malformed timestamps from external sources.
     # Keep the alert and its evidence rather than dropping the entire rule run.
     dated = [e for e in events if _valid_event_timestamp(e)]
@@ -124,7 +126,7 @@ def _build_alert(rule, org_id, events, title=None):
         "rule_name": rule["name"],
         "title": title or rule["name"],
         "description": rule.get("description", ""),
-        "severity": rule.get("severity") or ev_sev,
+        "severity": alert_sev,
         "confidence": rule.get("confidence", 75),
         "source": first.get("source_name"),
         "host": first.get("host"),
