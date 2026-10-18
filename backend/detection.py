@@ -48,6 +48,8 @@ def _parse_ts(v):
         if not isinstance(v, (str, datetime)) or (isinstance(v, str) and (not v.strip() or len(v) > 128)):
             raise ValueError("Invalid event timestamp type or length")
         d = dtparse.parse(v) if isinstance(v, str) else v
+        if not 1 <= d.year <= 9999:
+            raise ValueError("Invalid timestamp year")
         if d.tzinfo is None:
             d = d.replace(tzinfo=timezone.utc)
         return d
