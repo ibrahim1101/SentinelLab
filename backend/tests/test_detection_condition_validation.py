@@ -78,7 +78,7 @@ def test_empty_conditions_fail_closed(conditions):
 
 
 @pytest.mark.parametrize("op", ["contains", "startswith"])
-@pytest.mark.parametrize("pattern", [" ", "\\t", "x" * 257])
+@pytest.mark.parametrize("pattern", [" ", "\t", "x" * 257])
 def test_blank_or_oversized_substring_patterns_rejected(op, pattern):
     assert event_matches([{"field": "message", "op": op, "value": pattern}], {"message": pattern + " failed login"}) is False
 
