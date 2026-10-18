@@ -102,8 +102,10 @@ def event_matches(conditions, event) -> bool:
 
 def _build_alert(rule, org_id, events, title=None):
     sevs = ["info", "low", "medium", "high", "critical"]
-    ev_sev = max((e.get("severity", "info") for e in events),
-                 key=lambda s: sevs.index(s) if s in sevs else 0)
+    ev_sev = max(
+        (e.get("severity", "info") for e in events),
+        key=lambda s: sevs.index(s) if isinstance(s, str) and s in sevs else 0,
+    )
     # Match and IOC rules may receive malformed timestamps from external sources.
     # Keep the alert and its evidence rather than dropping the entire rule run.
     dated = [e for e in events if _valid_event_timestamp(e)]
