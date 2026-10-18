@@ -9,7 +9,7 @@ from core import db, new_id, now_iso
 
 OPS = {
     "eq": lambda a, b: str(a).lower() == str(b).lower(),
-    "ne": lambda a, b: type(a) is type(b) and str(a).lower() != str(b).lower(),
+    "ne": lambda a, b: str(a).lower() != str(b).lower(),
     "contains": lambda a, b: isinstance(b, str) and bool(b) and b.lower() in str(a).lower(),
     "startswith": lambda a, b: isinstance(b, str) and bool(b) and str(a).lower().startswith(b.lower()),
     "gt": lambda a, b: _num(a) > _num(b),
@@ -68,7 +68,7 @@ def _valid_event_timestamp(event):
 
 def event_matches(conditions, event) -> bool:
     """All conditions (AND). Malformed conditions fail closed."""
-    if not isinstance(conditions, (list, tuple)):
+    if not isinstance(conditions, (list, tuple)) or len(conditions) > 64:
         return False
     if not isinstance(event, dict):
         return False
