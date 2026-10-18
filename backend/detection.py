@@ -109,6 +109,13 @@ def _build_alert(rule, org_id, events, title=None):
     )
     rule_sev = rule.get("severity")
     alert_sev = rule_sev if isinstance(rule_sev, str) and rule_sev in sevs else ev_sev
+    raw_confidence = rule.get("confidence", 75)
+    try:
+        confidence = int(raw_confidence) if not isinstance(raw_confidence, bool) else 75
+    except (TypeError, ValueError, OverflowError):
+        confidence = 75
+    if not 0 <= confidence <= 100:
+        confidence = 75
     # Match and IOC rules may receive malformed timestamps from external sources.
     # Keep the alert and its evidence rather than dropping the entire rule run.
     dated = [e for e in events if _valid_event_timestamp(e)]
@@ -127,7 +134,7 @@ def _build_alert(rule, org_id, events, title=None):
         "title": title or rule["name"],
         "description": rule.get("description", ""),
         "severity": alert_sev,
-        "confidence": rule.get("confidence", 75),
+        "confidence": confidence,
         "source": first.get("source_name"),
         "host": first.get("host"),
         "src_ip": first.get("src_ip"),
