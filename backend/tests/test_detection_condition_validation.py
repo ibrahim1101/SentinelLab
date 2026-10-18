@@ -75,3 +75,15 @@ def test_maximum_condition_count_allowed():
 @pytest.mark.parametrize("conditions", [[], ()])
 def test_empty_conditions_fail_closed(conditions):
     assert event_matches(conditions, {"id": "evt-1", "src_ip": "192.0.2.1"}) is False
+
+
+@pytest.mark.parametrize("op", ["contains", "startswith"])
+@pytest.mark.parametrize("pattern", [" ", "\\t", "x" * 257])
+def test_blank_or_oversized_substring_patterns_rejected(op, pattern):
+    assert event_matches([{"field": "message", "op": op, "value": pattern}], {"message": pattern + " failed login"}) is False
+
+
+@pytest.mark.parametrize("op", ["contains", "startswith"])
+def test_maximum_substring_pattern_length_allowed(op):
+    pattern = "x" * 256
+    assert event_matches([{"field": "message", "op": op, "value": pattern}], {"message": pattern + " failed login"}) is True
