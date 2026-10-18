@@ -33,6 +33,9 @@ def safe_regex_search(value, pattern):
 
 
 def _num(v):
+    # Python treats booleans as integers, but telemetry true/false is not a count.
+    if isinstance(v, bool):
+        return float("nan")
     try:
         number = float(v)
         return number if math.isfinite(number) else float("nan")
