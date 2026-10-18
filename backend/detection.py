@@ -87,7 +87,7 @@ def event_matches(conditions, event) -> bool:
             return False
         ev_val = event.get(field)
         if op == "exists":
-            if ev_val in (None, ""):
+            if ev_val is None or (isinstance(ev_val, str) and ev_val == ""):
                 return False
             continue
         if ev_val is None:
