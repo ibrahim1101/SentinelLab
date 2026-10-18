@@ -45,7 +45,9 @@ def _num(v):
 
 def _parse_ts(v):
     try:
-        d = dtparse.parse(str(v))
+        if not isinstance(v, (str, datetime)) or (isinstance(v, str) and (not v.strip() or len(v) > 128)):
+            raise ValueError("Invalid event timestamp type or length")
+        d = dtparse.parse(v) if isinstance(v, str) else v
         if d.tzinfo is None:
             d = d.replace(tzinfo=timezone.utc)
         return d
