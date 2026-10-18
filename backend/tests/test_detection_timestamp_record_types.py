@@ -8,9 +8,9 @@ source = (Path(__file__).resolve().parents[1] / "detection.py").read_text()
 tree = ast.parse(source)
 parse_fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_parse_ts")
 valid_fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_valid_event_timestamp")
-from datetime import timezone
+from datetime import datetime, timezone
 from dateutil import parser as dtparse
-namespace = {"dtparse": dtparse, "timezone": timezone}
+namespace = {"dtparse": dtparse, "timezone": timezone, "datetime": datetime}
 exec(compile(ast.Module(body=[parse_fn, valid_fn], type_ignores=[]), "<timestamp>", "exec"), namespace)
 valid = namespace["_valid_event_timestamp"]
 
@@ -22,3 +22,12 @@ def test_malformed_event_rejected_without_exception(event):
 
 def test_valid_event_timestamp_accepted():
     assert valid({"timestamp": "2026-10-16T12:00:00Z"}) is True
+
+
+@pytest.mark.parametrize("timestamp", [[], {}, 42, True, "x" * 129, "  "])
+def test_malformed_timestamp_types_and_lengths_rejected(timestamp):
+    assert valid({"timestamp": timestamp}) is False
+
+
+def test_datetime_timestamp_accepted():
+    assert valid({"timestamp": datetime(2026, 10, 16, tzinfo=timezone.utc)}) is True
