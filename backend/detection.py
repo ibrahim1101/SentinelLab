@@ -21,7 +21,7 @@ OPS = {
 
 def safe_regex_search(value, pattern):
     """Reject dangerous regex constructs and oversized input; fail closed."""
-    if not isinstance(pattern, str) or len(pattern) > 128 or len(str(value)) > 4096:
+    if not isinstance(pattern, str) or not pattern.strip() or len(pattern) > 128 or len(str(value)) > 4096:
         return False
     # No groups, lookarounds, backreferences or unbounded quantifiers in analyst patterns.
     if re.search(r"[(){}]|\\[1-9]|(?<!\\)[*+]", pattern):
@@ -48,8 +48,6 @@ def _parse_ts(v):
         if not isinstance(v, (str, datetime)) or (isinstance(v, str) and (not v.strip() or len(v) > 128)):
             raise ValueError("Invalid event timestamp type or length")
         d = dtparse.parse(v) if isinstance(v, str) else v
-        if not 1 <= d.year <= 9999:
-            raise ValueError("Invalid timestamp year")
         if d.tzinfo is None:
             d = d.replace(tzinfo=timezone.utc)
         return d
