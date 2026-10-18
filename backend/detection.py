@@ -68,7 +68,7 @@ def _valid_event_timestamp(event):
 
 def event_matches(conditions, event) -> bool:
     """All conditions (AND). Malformed conditions fail closed."""
-    if not isinstance(conditions, (list, tuple)) or len(conditions) > 64:
+    if not isinstance(conditions, (list, tuple)) or not conditions or len(conditions) > 64:
         return False
     if not isinstance(event, dict):
         return False
