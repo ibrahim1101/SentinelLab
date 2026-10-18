@@ -10,8 +10,8 @@ from core import db, new_id, now_iso
 OPS = {
     "eq": lambda a, b: str(a).lower() == str(b).lower(),
     "ne": lambda a, b: str(a).lower() != str(b).lower(),
-    "contains": lambda a, b: isinstance(b, str) and bool(b) and b.lower() in str(a).lower(),
-    "startswith": lambda a, b: isinstance(b, str) and bool(b) and str(a).lower().startswith(b.lower()),
+    "contains": lambda a, b: isinstance(b, str) and bool(b.strip()) and len(b) <= 256 and b.lower() in str(a).lower(),
+    "startswith": lambda a, b: isinstance(b, str) and bool(b.strip()) and len(b) <= 256 and str(a).lower().startswith(b.lower()),
     "gt": lambda a, b: _num(a) > _num(b),
     "lt": lambda a, b: _num(a) < _num(b),
     "exists": lambda a, b: a is not None and a != "",
