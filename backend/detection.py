@@ -111,7 +111,11 @@ def _build_alert(rule, org_id, events, title=None):
     alert_sev = rule_sev if isinstance(rule_sev, str) and rule_sev in sevs else ev_sev
     raw_confidence = rule.get("confidence", 75)
     try:
-        confidence = int(raw_confidence) if not isinstance(raw_confidence, bool) else 75
+        if isinstance(raw_confidence, bool) or not isinstance(raw_confidence, (int, float, str)):
+            raise ValueError("Invalid confidence type")
+        confidence = int(raw_confidence)
+        if isinstance(raw_confidence, float) and raw_confidence != confidence:
+            raise ValueError("Fractional confidence")
     except (TypeError, ValueError, OverflowError):
         confidence = 75
     if not 0 <= confidence <= 100:
