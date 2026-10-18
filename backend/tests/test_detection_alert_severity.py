@@ -37,7 +37,7 @@ def test_valid_rule_severity_overrides_event_severity():
     assert namespace["_build_alert"](rule, "org-1", events)["severity"] == "critical"
 
 
-@pytest.mark.parametrize("confidence", [None, "", "not-a-number", [], {}, True, False, -1, 101, float("inf")])
+@pytest.mark.parametrize("confidence", [None, "", "not-a-number", [], {}, True, False, -1, 101, float("inf"), 99.9, 0.5, -0.5])
 def test_invalid_rule_confidence_uses_default(confidence):
     rule = {"id": "rule-1", "name": "Test rule", "confidence": confidence}
     events = [{"id": "event-1", "severity": "low"}]
@@ -49,3 +49,9 @@ def test_valid_rule_confidence_preserved(confidence):
     rule = {"id": "rule-1", "name": "Test rule", "confidence": confidence}
     events = [{"id": "event-1", "severity": "low"}]
     assert namespace["_build_alert"](rule, "org-1", events)["confidence"] == confidence
+
+
+def test_integral_float_confidence_preserved():
+    rule = {"id": "rule-1", "name": "Test rule", "confidence": 42.0}
+    events = [{"id": "event-1", "severity": "low"}]
+    assert namespace["_build_alert"](rule, "org-1", events)["confidence"] == 42
