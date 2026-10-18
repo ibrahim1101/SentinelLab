@@ -3,6 +3,7 @@ and produces alerts. Supports match, threshold, frequency, indicator rule types.
 No arbitrary code execution: rules are declarative condition sets only."""
 from datetime import datetime, timezone
 import re
+import math
 from dateutil import parser as dtparse
 from core import db, new_id, now_iso
 
@@ -33,8 +34,9 @@ def safe_regex_search(value, pattern):
 
 def _num(v):
     try:
-        return float(v)
-    except (ValueError, TypeError):
+        number = float(v)
+        return number if math.isfinite(number) else float("nan")
+    except (ValueError, TypeError, OverflowError):
         return float("nan")
 
 
