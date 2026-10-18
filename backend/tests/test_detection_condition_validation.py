@@ -70,3 +70,8 @@ def test_excessive_condition_count_rejected():
 def test_maximum_condition_count_allowed():
     conditions = [{"field": "src_ip", "op": "eq", "value": "192.0.2.1"}] * 64
     assert event_matches(conditions, {"src_ip": "192.0.2.1"}) is True
+
+
+@pytest.mark.parametrize("conditions", [[], ()])
+def test_empty_conditions_fail_closed(conditions):
+    assert event_matches(conditions, {"id": "evt-1", "src_ip": "192.0.2.1"}) is False
