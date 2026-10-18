@@ -22,3 +22,16 @@ def test_highest_valid_event_severity_wins():
     rule = {"id": "rule-1", "name": "Test rule"}
     events = [{"id": "event-1", "severity": []}, {"id": "event-2", "severity": "high"}, {"id": "event-3", "severity": "low"}]
     assert namespace["_build_alert"](rule, "org-1", events)["severity"] == "high"
+
+
+@pytest.mark.parametrize("severity", [[], {}, None, 0, True, "unknown", "HIGH"])
+def test_invalid_rule_severity_uses_valid_event_severity(severity):
+    rule = {"id": "rule-1", "name": "Test rule", "severity": severity}
+    events = [{"id": "event-1", "severity": "medium"}]
+    assert namespace["_build_alert"](rule, "org-1", events)["severity"] == "medium"
+
+
+def test_valid_rule_severity_overrides_event_severity():
+    rule = {"id": "rule-1", "name": "Test rule", "severity": "critical"}
+    events = [{"id": "event-1", "severity": "low"}]
+    assert namespace["_build_alert"](rule, "org-1", events)["severity"] == "critical"
