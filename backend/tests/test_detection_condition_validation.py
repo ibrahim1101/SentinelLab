@@ -60,3 +60,13 @@ def test_empty_or_invalid_string_pattern_does_not_match(op, pattern):
 @pytest.mark.parametrize("op", ["contains", "startswith"])
 def test_valid_string_patterns_still_match(op):
     assert event_matches([{"field": "message", "op": op, "value": "failed"}], {"message": "Failed login"}) is True
+
+
+def test_excessive_condition_count_rejected():
+    conditions = [{"field": "src_ip", "op": "eq", "value": "192.0.2.1"}] * 65
+    assert event_matches(conditions, {"src_ip": "192.0.2.1"}) is False
+
+
+def test_maximum_condition_count_allowed():
+    conditions = [{"field": "src_ip", "op": "eq", "value": "192.0.2.1"}] * 64
+    assert event_matches(conditions, {"src_ip": "192.0.2.1"}) is True
