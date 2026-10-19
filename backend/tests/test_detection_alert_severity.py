@@ -92,3 +92,16 @@ def test_mitre_metadata_filters_invalid_and_duplicate_techniques():
     rule = {"id": "rule-1", "name": "Test rule", "mitre": ["T1059", None, [], " ", "T1059", "T1078"]}
     alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
     assert alert["mitre"] == ["T1059", "T1078"]
+
+
+@pytest.mark.parametrize("description", [None, [], {}, 42, True])
+def test_malformed_rule_description_falls_back_to_empty_text(description):
+    rule = {"id": "rule-1", "name": "Test rule", "description": description}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert alert["description"] == ""
+
+
+def test_valid_rule_description_preserved():
+    rule = {"id": "rule-1", "name": "Test rule", "description": "Multiple failed logins"}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert alert["description"] == "Multiple failed logins"
