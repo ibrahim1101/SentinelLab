@@ -171,3 +171,11 @@ def test_alert_handles_no_valid_event_objects():
     assert alert["related_events"] == []
     assert alert["event_count"] == 0
     assert alert["first_seen"] == alert["last_seen"]
+
+
+def test_alert_evidence_ignores_whitespace_only_ids():
+    rule = {"id": "rule-1", "name": "Test rule"}
+    events = [{"id": "  "}, {"id": "\t"}, {"id": "event-1"}, {"id": "event-1"}]
+    alert = namespace["_build_alert"](rule, "org-1", events)
+    assert alert["related_events"] == ["event-1"]
+    assert alert["event_count"] == 1
