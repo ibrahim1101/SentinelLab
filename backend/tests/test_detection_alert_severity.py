@@ -153,3 +153,21 @@ def test_valid_alert_title_override_is_preserved():
     alert = namespace["_build_alert"]({"id": "rule-1", "name": "Login anomalies"}, "org-1", [{"id": "event-1"}], title="Multiple failed logins")
     assert alert["rule_name"] == "Login anomalies"
     assert alert["title"] == "Multiple failed logins"
+
+
+@pytest.mark.parametrize("malformed", [None, [], "bad-event", 42])
+def test_alert_skips_malformed_event_entries(malformed):
+    rule = {"id": "rule-1", "name": "Test rule"}
+    alert = namespace["_build_alert"](rule, "org-1", [malformed, {"id": "event-1", "severity": "high"}])
+    assert alert["severity"] == "high"
+    assert alert["related_events"] == ["event-1"]
+    assert alert["event_count"] == 1
+
+
+def test_alert_handles_no_valid_event_objects():
+    rule = {"id": "rule-1", "name": "Test rule"}
+    alert = namespace["_build_alert"](rule, "org-1", [None, [], 42])
+    assert alert["severity"] == "info"
+    assert alert["related_events"] == []
+    assert alert["event_count"] == 0
+    assert alert["first_seen"] == alert["last_seen"]
