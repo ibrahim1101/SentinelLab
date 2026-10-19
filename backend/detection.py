@@ -113,6 +113,8 @@ def _build_alert(rule, org_id, events, title=None):
     try:
         if isinstance(raw_confidence, bool) or not isinstance(raw_confidence, (int, float, str)):
             raise ValueError("Invalid confidence type")
+        if isinstance(raw_confidence, str) and (not raw_confidence.strip() or len(raw_confidence) > 3):
+            raise ValueError("Invalid confidence string")
         confidence = int(raw_confidence)
         if isinstance(raw_confidence, float) and raw_confidence != confidence:
             raise ValueError("Fractional confidence")
