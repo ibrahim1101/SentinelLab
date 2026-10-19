@@ -141,6 +141,8 @@ def _build_alert(rule, org_id, events, title=None):
     )) if isinstance(raw_mitre, (list, tuple)) else []
     raw_description = rule.get("description", "")
     description = raw_description if isinstance(raw_description, str) else ""
+    raw_synthetic = first.get("is_synthetic", False)
+    is_synthetic = raw_synthetic if isinstance(raw_synthetic, bool) else False
     return {
         "id": new_id(),
         "org_id": org_id,
@@ -167,7 +169,7 @@ def _build_alert(rule, org_id, events, title=None):
         "audit": [{"ts": now_iso(), "action": "created", "by": "detection-engine"}],
         "created_at": now_iso(),
         "updated_at": now_iso(),
-        "is_synthetic": first.get("is_synthetic", False),
+        "is_synthetic": is_synthetic,
     }
 
 
