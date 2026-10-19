@@ -143,6 +143,15 @@ def _build_alert(rule, org_id, events, title=None):
     description = raw_description if isinstance(raw_description, str) else ""
     raw_synthetic = first.get("is_synthetic", False)
     is_synthetic = raw_synthetic if isinstance(raw_synthetic, bool) else False
+    source_fields = {
+        key: value if isinstance(value, str) and value.strip() else None
+        for key, value in (
+            ("source", first.get("source_name")),
+            ("host", first.get("host")),
+            ("src_ip", first.get("src_ip")),
+            ("username", first.get("username")),
+        )
+    }
     return {
         "id": new_id(),
         "org_id": org_id,
@@ -152,10 +161,10 @@ def _build_alert(rule, org_id, events, title=None):
         "description": description,
         "severity": alert_sev,
         "confidence": confidence,
-        "source": first.get("source_name"),
-        "host": first.get("host"),
-        "src_ip": first.get("src_ip"),
-        "username": first.get("username"),
+        "source": source_fields["source"],
+        "host": source_fields["host"],
+        "src_ip": source_fields["src_ip"],
+        "username": source_fields["username"],
         "related_events": related_event_ids,
         "event_count": len(related_event_ids),
         "mitre": mitre,
