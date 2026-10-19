@@ -1,5 +1,6 @@
 """Alert creation must tolerate malformed event severity telemetry."""
 import ast
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,7 @@ import pytest
 source = (Path(__file__).resolve().parents[1] / "detection.py").read_text()
 tree = ast.parse(source)
 fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_build_alert")
-namespace = {"new_id": lambda: "alert-1", "now_iso": lambda: "2026-01-01T00:00:00Z", "_valid_event_timestamp": lambda event: False}
+namespace = {"new_id": lambda: "alert-1", "now_iso": lambda: "2026-01-01T00:00:00Z", "_valid_event_timestamp": lambda event: isinstance(event.get("timestamp"), str), "_parse_ts": lambda value: datetime.fromisoformat(value).replace(tzinfo=timezone.utc) if datetime.fromisoformat(value).tzinfo is None else datetime.fromisoformat(value)}
 exec(compile(ast.Module(body=[fn], type_ignores=[]), "<alert>", "exec"), namespace)
 
 
@@ -62,3 +63,11 @@ def test_valid_string_confidence_preserved(confidence):
     rule = {"id": "rule-1", "name": "Test rule", "confidence": confidence}
     events = [{"id": "event-1", "severity": "low"}]
     assert namespace["_build_alert"](rule, "org-1", events)["confidence"] == int(confidence)
+
+
+def test_alert_timestamps_are_iso_strings_with_timezones():
+    rule = {"id": "rule-1", "name": "Test rule"}
+    events = [{"id": "event-1", "timestamp": "2026-01-02T12:00:00"}, {"id": "event-2", "timestamp": "2026-01-02T13:00:00+00:00"}]
+    alert = namespace["_build_alert"](rule, "org-1", events)
+    assert alert["first_seen"] == "2026-01-02T12:00:00+00:00"
+    assert alert["last_seen"] == "2026-01-02T13:00:00+00:00"
