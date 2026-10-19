@@ -124,12 +124,13 @@ def _build_alert(rule, org_id, events, title=None):
         confidence = 75
     # Match and IOC rules may receive malformed timestamps from external sources.
     # Keep the alert and its evidence rather than dropping the entire rule run.
-    dated = [e for e in events if _valid_event_timestamp(e)]
+    valid_events = [e for e in events if isinstance(e, dict)]
+    dated = [e for e in valid_events if _valid_event_timestamp(e)]
     if dated:
         first = min(dated, key=lambda e: _parse_ts(e["timestamp"]))
         last = max(dated, key=lambda e: _parse_ts(e["timestamp"]))
     else:
-        first = last = events[0]
+        first = last = valid_events[0] if valid_events else {}
     first_seen = _parse_ts(first["timestamp"]).isoformat() if dated else now_iso()
     last_seen = _parse_ts(last["timestamp"]).isoformat() if dated else first_seen
     related_event_ids = list(dict.fromkeys(
