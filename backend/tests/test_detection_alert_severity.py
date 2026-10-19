@@ -119,3 +119,18 @@ def test_boolean_synthetic_event_flag_is_preserved(synthetic):
     rule = {"id": "rule-1", "name": "Test rule"}
     alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1", "is_synthetic": synthetic}])
     assert alert["is_synthetic"] is synthetic
+
+
+@pytest.mark.parametrize("field,alert_field", [("source_name", "source"), ("host", "host"), ("src_ip", "src_ip"), ("username", "username")])
+@pytest.mark.parametrize("bad_value", [None, [], {}, 123, True, "  "])
+def test_alert_source_metadata_rejects_invalid_values(field, alert_field, bad_value):
+    rule = {"id": "rule-1", "name": "Test rule"}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1", field: bad_value}])
+    assert alert[alert_field] is None
+
+
+@pytest.mark.parametrize("field,alert_field", [("source_name", "source"), ("host", "host"), ("src_ip", "src_ip"), ("username", "username")])
+def test_alert_source_metadata_preserves_valid_text(field, alert_field):
+    rule = {"id": "rule-1", "name": "Test rule"}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1", field: "workstation-01"}])
+    assert alert[alert_field] == "workstation-01"
