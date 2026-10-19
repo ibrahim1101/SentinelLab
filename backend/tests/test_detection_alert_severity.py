@@ -105,3 +105,17 @@ def test_valid_rule_description_preserved():
     rule = {"id": "rule-1", "name": "Test rule", "description": "Multiple failed logins"}
     alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
     assert alert["description"] == "Multiple failed logins"
+
+
+@pytest.mark.parametrize("synthetic", [None, 0, 1, "false", "true", [], {}])
+def test_malformed_synthetic_event_flag_defaults_to_false(synthetic):
+    rule = {"id": "rule-1", "name": "Test rule"}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1", "is_synthetic": synthetic}])
+    assert alert["is_synthetic"] is False
+
+
+@pytest.mark.parametrize("synthetic", [True, False])
+def test_boolean_synthetic_event_flag_is_preserved(synthetic):
+    rule = {"id": "rule-1", "name": "Test rule"}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1", "is_synthetic": synthetic}])
+    assert alert["is_synthetic"] is synthetic
