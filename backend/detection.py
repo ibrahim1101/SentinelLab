@@ -135,6 +135,10 @@ def _build_alert(rule, org_id, events, title=None):
     related_event_ids = list(dict.fromkeys(
         e["id"] for e in events if isinstance(e, dict) and isinstance(e.get("id"), str) and e["id"]
     ))
+    raw_mitre = rule.get("mitre", [])
+    mitre = list(dict.fromkeys(
+        item for item in raw_mitre if isinstance(item, str) and item.strip()
+    )) if isinstance(raw_mitre, (list, tuple)) else []
     return {
         "id": new_id(),
         "org_id": org_id,
@@ -150,7 +154,7 @@ def _build_alert(rule, org_id, events, title=None):
         "username": first.get("username"),
         "related_events": related_event_ids,
         "event_count": len(related_event_ids),
-        "mitre": rule.get("mitre", []),
+        "mitre": mitre,
         "first_seen": first_seen,
         "last_seen": last_seen,
         "assigned_to": None,
