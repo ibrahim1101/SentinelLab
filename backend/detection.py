@@ -103,7 +103,7 @@ def event_matches(conditions, event) -> bool:
 def _build_alert(rule, org_id, events, title=None):
     sevs = ["info", "low", "medium", "high", "critical"]
     ev_sev = max(
-        (s for e in events for s in [e.get("severity")] if isinstance(s, str) and s in sevs),
+        (s for e in events if isinstance(e, dict) for s in [e.get("severity")] if isinstance(s, str) and s in sevs),
         key=sevs.index,
         default="info",
     )
