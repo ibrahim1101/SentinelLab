@@ -132,6 +132,9 @@ def _build_alert(rule, org_id, events, title=None):
         first = last = events[0]
     first_seen = _parse_ts(first["timestamp"]).isoformat() if dated else now_iso()
     last_seen = _parse_ts(last["timestamp"]).isoformat() if dated else first_seen
+    related_event_ids = list(dict.fromkeys(
+        e["id"] for e in events if isinstance(e, dict) and isinstance(e.get("id"), str) and e["id"]
+    ))
     return {
         "id": new_id(),
         "org_id": org_id,
@@ -145,8 +148,8 @@ def _build_alert(rule, org_id, events, title=None):
         "host": first.get("host"),
         "src_ip": first.get("src_ip"),
         "username": first.get("username"),
-        "related_events": list(dict.fromkeys(e["id"] for e in events)),
-        "event_count": len(dict.fromkeys(e["id"] for e in events)),
+        "related_events": related_event_ids,
+        "event_count": len(related_event_ids),
         "mitre": rule.get("mitre", []),
         "first_seen": first_seen,
         "last_seen": last_seen,
