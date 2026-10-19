@@ -134,3 +134,22 @@ def test_alert_source_metadata_preserves_valid_text(field, alert_field):
     rule = {"id": "rule-1", "name": "Test rule"}
     alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1", field: "workstation-01"}])
     assert alert[alert_field] == "workstation-01"
+
+
+@pytest.mark.parametrize("bad_name", [None, [], {}, 123, True, "  "])
+def test_alert_uses_fallback_for_malformed_rule_name(bad_name):
+    alert = namespace["_build_alert"]({"id": "rule-1", "name": bad_name}, "org-1", [{"id": "event-1"}])
+    assert alert["rule_name"] == "Unnamed detection rule"
+    assert alert["title"] == "Unnamed detection rule"
+
+
+@pytest.mark.parametrize("bad_title", [None, [], {}, 123, True, "  "])
+def test_alert_uses_rule_name_for_malformed_title(bad_title):
+    alert = namespace["_build_alert"]({"id": "rule-1", "name": "Login anomalies"}, "org-1", [{"id": "event-1"}], title=bad_title)
+    assert alert["title"] == "Login anomalies"
+
+
+def test_valid_alert_title_override_is_preserved():
+    alert = namespace["_build_alert"]({"id": "rule-1", "name": "Login anomalies"}, "org-1", [{"id": "event-1"}], title="Multiple failed logins")
+    assert alert["rule_name"] == "Login anomalies"
+    assert alert["title"] == "Multiple failed logins"
