@@ -130,8 +130,8 @@ def _build_alert(rule, org_id, events, title=None):
         last = max(dated, key=lambda e: _parse_ts(e["timestamp"]))
     else:
         first = last = events[0]
-    first_seen = first["timestamp"] if dated else now_iso()
-    last_seen = last["timestamp"] if dated else first_seen
+    first_seen = _parse_ts(first["timestamp"]).isoformat() if dated else now_iso()
+    last_seen = _parse_ts(last["timestamp"]).isoformat() if dated else first_seen
     return {
         "id": new_id(),
         "org_id": org_id,
