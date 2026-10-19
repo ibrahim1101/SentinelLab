@@ -79,3 +79,16 @@ def test_alert_evidence_excludes_invalid_ids_and_deduplicates():
     alert = namespace["_build_alert"](rule, "org-1", events)
     assert alert["related_events"] == ["event-1", "event-2"]
     assert alert["event_count"] == 2
+
+
+@pytest.mark.parametrize("mitre", [None, {}, "T1059", 42, True])
+def test_malformed_mitre_metadata_falls_back_to_empty_list(mitre):
+    rule = {"id": "rule-1", "name": "Test rule", "mitre": mitre}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert alert["mitre"] == []
+
+
+def test_mitre_metadata_filters_invalid_and_duplicate_techniques():
+    rule = {"id": "rule-1", "name": "Test rule", "mitre": ["T1059", None, [], " ", "T1059", "T1078"]}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert alert["mitre"] == ["T1059", "T1078"]
