@@ -71,3 +71,11 @@ def test_alert_timestamps_are_iso_strings_with_timezones():
     alert = namespace["_build_alert"](rule, "org-1", events)
     assert alert["first_seen"] == "2026-01-02T12:00:00+00:00"
     assert alert["last_seen"] == "2026-01-02T13:00:00+00:00"
+
+
+def test_alert_evidence_excludes_invalid_ids_and_deduplicates():
+    rule = {"id": "rule-1", "name": "Test rule"}
+    events = [{"id": "event-1"}, {"id": "event-1"}, {"id": []}, {"id": None}, {"id": ""}, {"id": "event-2"}]
+    alert = namespace["_build_alert"](rule, "org-1", events)
+    assert alert["related_events"] == ["event-1", "event-2"]
+    assert alert["event_count"] == 2
