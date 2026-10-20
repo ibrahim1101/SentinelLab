@@ -205,3 +205,20 @@ def test_alert_description_enforces_length_boundary():
     rule["description"] = "B" * 4097
     alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
     assert alert["description"] == ""
+
+
+def test_alert_rule_name_enforces_length_boundary():
+    rule = {"id": "rule-1", "name": "A" * 256}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert alert["rule_name"] == "A" * 256
+    rule["name"] = "B" * 257
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert alert["rule_name"] == "Unnamed detection rule"
+    assert alert["title"] == "Unnamed detection rule"
+
+
+def test_alert_custom_title_enforces_length_boundary():
+    rule = {"id": "rule-1", "name": "Test rule"}
+    events = [{"id": "event-1"}]
+    assert namespace["_build_alert"](rule, "org-1", events, title="A" * 256)["title"] == "A" * 256
+    assert namespace["_build_alert"](rule, "org-1", events, title="B" * 257)["title"] == "Test rule"
