@@ -145,8 +145,8 @@ def _build_alert(rule, org_id, events, title=None):
     raw_description = rule.get("description", "")
     description = raw_description if isinstance(raw_description, str) and len(raw_description) <= 4096 else ""
     rule_name = rule.get("name")
-    rule_name = rule_name if isinstance(rule_name, str) and rule_name.strip() else "Unnamed detection rule"
-    alert_title = title if isinstance(title, str) and title.strip() else rule_name
+    rule_name = rule_name if isinstance(rule_name, str) and rule_name.strip() and len(rule_name) <= 256 else "Unnamed detection rule"
+    alert_title = title if isinstance(title, str) and title.strip() and len(title) <= 256 else rule_name
     raw_synthetic = first.get("is_synthetic", False)
     is_synthetic = raw_synthetic if isinstance(raw_synthetic, bool) else False
     source_fields = {
