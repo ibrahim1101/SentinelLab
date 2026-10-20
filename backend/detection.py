@@ -203,7 +203,7 @@ async def evaluate_rule(rule, events, org_id):
         hits = [
             e for e in events
             if isinstance(e, dict) and isinstance(e.get("id"), str)
-            and e["id"] and event_matches(params.get("conditions", []), e)
+            and e["id"].strip() and len(e["id"]) <= 128 and event_matches(params.get("conditions", []), e)
         ]
         for e in hits:
             matched_ids.add(e["id"])
@@ -226,7 +226,7 @@ async def evaluate_rule(rule, events, org_id):
         filtered = [
             e for e in events
             if isinstance(e, dict) and isinstance(e.get("id"), str)
-            and e["id"] and event_matches(conds, e) and _valid_event_timestamp(e)
+            and e["id"].strip() and len(e["id"]) <= 128 and event_matches(conds, e) and _valid_event_timestamp(e)
         ]
         groups = {}
         for e in filtered:
@@ -278,7 +278,7 @@ async def evaluate_rule(rule, events, org_id):
         hits = []
         for e in events:
             # External telemetry may contain malformed non-object records.
-            if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not e["id"]:
+            if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not e["id"].strip() or len(e["id"]) > 128:
                 continue
             # One event can match multiple IOC fields; it is still one event.
             is_match = any(
