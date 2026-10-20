@@ -259,7 +259,13 @@ async def evaluate_rule(rule, events, org_id):
             if flagged:
                 for e in flagged:
                     matched_ids.add(e["id"])
-                title = f"{rule['name']} — {group_by}={key} ({len(flagged)} events)"
+                rule_label = rule.get("name")
+                rule_label = rule_label if isinstance(rule_label, str) and rule_label.strip() else "Unnamed detection rule"
+                suffix = f" — {group_by}={key} ({len(flagged)} events)"
+                # Preserve correlation context within the alert title limit.
+                if len(suffix) > 256:
+                    suffix = f" — {group_by} (correlated events)"
+                title = f"{rule_label[:max(0, 256 - len(suffix))]}{suffix}"
                 alerts.append(_build_alert(rule, org_id, flagged, title))
 
     elif rtype == "indicator":
