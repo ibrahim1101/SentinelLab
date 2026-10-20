@@ -134,7 +134,9 @@ def _build_alert(rule, org_id, events, title=None):
     first_seen = _parse_ts(first["timestamp"]).isoformat() if dated else now_iso()
     last_seen = _parse_ts(last["timestamp"]).isoformat() if dated else first_seen
     related_event_ids = list(dict.fromkeys(
-        e["id"] for e in events if isinstance(e, dict) and isinstance(e.get("id"), str) and e["id"].strip()
+        e["id"] for e in events
+        if isinstance(e, dict) and isinstance(e.get("id"), str)
+        and e["id"].strip() and len(e["id"]) <= 128
     ))
     raw_mitre = rule.get("mitre", [])
     mitre = list(dict.fromkeys(
