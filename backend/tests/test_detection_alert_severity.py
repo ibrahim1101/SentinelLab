@@ -196,3 +196,12 @@ def test_mitre_technique_metadata_enforces_length_boundary():
     rule = {"id": "rule-1", "name": "Test rule", "mitre": ["T1059", "A" * 128, "B" * 129, "T1059"]}
     alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
     assert alert["mitre"] == ["T1059", "A" * 128]
+
+
+def test_alert_description_enforces_length_boundary():
+    rule = {"id": "rule-1", "name": "Test rule", "description": "A" * 4096}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert alert["description"] == "A" * 4096
+    rule["description"] = "B" * 4097
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert alert["description"] == ""
