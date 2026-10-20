@@ -233,7 +233,7 @@ async def evaluate_rule(rule, events, org_id):
             raw_key = e.get(group_by)
             # Normalized telemetry is usually scalar, but malformed or custom
             # fields must not crash grouping when they contain dicts or lists.
-            key = raw_key if isinstance(raw_key, (str, int, float, bool)) and raw_key != "" else "unknown"
+            key = raw_key if isinstance(raw_key, (str, int, float, bool)) and raw_key != "" and (not isinstance(raw_key, str) or (raw_key.strip() and len(raw_key) <= 256)) and (not isinstance(raw_key, float) or math.isfinite(raw_key)) else "unknown"
             groups.setdefault(str(key), []).append(e)
         for key, evs in groups.items():
             evs.sort(key=lambda e: _parse_ts(e["timestamp"]))
