@@ -150,7 +150,7 @@ def _build_alert(rule, org_id, events, title=None):
     raw_synthetic = first.get("is_synthetic", False)
     is_synthetic = raw_synthetic if isinstance(raw_synthetic, bool) else False
     source_fields = {
-        key: value if isinstance(value, str) and value.strip() else None
+        key: value if isinstance(value, str) and value.strip() and len(value) <= 256 else None
         for key, value in (
             ("source", first.get("source_name")),
             ("host", first.get("host")),
