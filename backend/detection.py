@@ -140,7 +140,7 @@ def _build_alert(rule, org_id, events, title=None):
     ))
     raw_mitre = rule.get("mitre", [])
     mitre = list(dict.fromkeys(
-        item for item in raw_mitre if isinstance(item, str) and item.strip()
+        item for item in raw_mitre if isinstance(item, str) and item.strip() and len(item) <= 128
     )) if isinstance(raw_mitre, (list, tuple)) else []
     raw_description = rule.get("description", "")
     description = raw_description if isinstance(raw_description, str) else ""
