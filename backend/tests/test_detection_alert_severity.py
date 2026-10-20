@@ -231,3 +231,16 @@ def test_alert_source_metadata_enforces_length_boundary(field, alert_field):
     invalid = namespace["_build_alert"](rule, "org-1", [{"id": "event-1", field: "B" * 257}])
     assert valid[alert_field] == "A" * 256
     assert invalid[alert_field] is None
+
+
+def test_alert_mitre_metadata_limits_processed_entries():
+    rule = {"id": "rule-1", "name": "Test rule", "mitre": ["T1059"] * 63 + ["T1110", "T9999"]}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert alert["mitre"] == ["T1059", "T1110"]
+
+
+def test_alert_mitre_metadata_accepts_tuple_with_limit():
+    rule = {"id": "rule-1", "name": "Test rule", "mitre": tuple(f"T{i:04d}" for i in range(65))}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert len(alert["mitre"]) == 64
+    assert "T0064" not in alert["mitre"]
