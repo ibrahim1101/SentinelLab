@@ -179,3 +179,14 @@ def test_alert_evidence_ignores_whitespace_only_ids():
     alert = namespace["_build_alert"](rule, "org-1", events)
     assert alert["related_events"] == ["event-1"]
     assert alert["event_count"] == 1
+
+
+def test_alert_evidence_enforces_event_id_length_limit():
+    rule = {"id": "rule-1", "name": "Test rule"}
+    valid_id = "a" * 128
+    oversized_id = "b" * 129
+    alert = namespace["_build_alert"](rule, "org-1", [
+        {"id": valid_id}, {"id": oversized_id}, {"id": valid_id}
+    ])
+    assert alert["related_events"] == [valid_id]
+    assert alert["event_count"] == 1
