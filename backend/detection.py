@@ -143,7 +143,7 @@ def _build_alert(rule, org_id, events, title=None):
         item for item in raw_mitre if isinstance(item, str) and item.strip() and len(item) <= 128
     )) if isinstance(raw_mitre, (list, tuple)) else []
     raw_description = rule.get("description", "")
-    description = raw_description if isinstance(raw_description, str) else ""
+    description = raw_description if isinstance(raw_description, str) and len(raw_description) <= 4096 else ""
     rule_name = rule.get("name")
     rule_name = rule_name if isinstance(rule_name, str) and rule_name.strip() else "Unnamed detection rule"
     alert_title = title if isinstance(title, str) and title.strip() else rule_name
