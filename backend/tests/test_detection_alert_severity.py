@@ -190,3 +190,9 @@ def test_alert_evidence_enforces_event_id_length_limit():
     ])
     assert alert["related_events"] == [valid_id]
     assert alert["event_count"] == 1
+
+
+def test_mitre_technique_metadata_enforces_length_boundary():
+    rule = {"id": "rule-1", "name": "Test rule", "mitre": ["T1059", "A" * 128, "B" * 129, "T1059"]}
+    alert = namespace["_build_alert"](rule, "org-1", [{"id": "event-1"}])
+    assert alert["mitre"] == ["T1059", "A" * 128]
