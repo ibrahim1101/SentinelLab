@@ -222,3 +222,12 @@ def test_alert_custom_title_enforces_length_boundary():
     events = [{"id": "event-1"}]
     assert namespace["_build_alert"](rule, "org-1", events, title="A" * 256)["title"] == "A" * 256
     assert namespace["_build_alert"](rule, "org-1", events, title="B" * 257)["title"] == "Test rule"
+
+
+@pytest.mark.parametrize("field,alert_field", [("source_name", "source"), ("host", "host"), ("src_ip", "src_ip"), ("username", "username")])
+def test_alert_source_metadata_enforces_length_boundary(field, alert_field):
+    rule = {"id": "rule-1", "name": "Test rule"}
+    valid = namespace["_build_alert"](rule, "org-1", [{"id": "event-1", field: "A" * 256}])
+    invalid = namespace["_build_alert"](rule, "org-1", [{"id": "event-1", field: "B" * 257}])
+    assert valid[alert_field] == "A" * 256
+    assert invalid[alert_field] is None
