@@ -92,3 +92,30 @@ def test_indicator_rejects_oversized_ioc_values(indicator_value, event_value, ex
     alerts, matched = asyncio.run(namespace["evaluate_rule"](rule, events, "org-1"))
     assert bool(alerts) is expected
     assert bool(matched) is expected
+
+
+@pytest.mark.parametrize("rule_name", [None, [], " ", "R" * 300])
+def test_indicator_title_preserves_context_with_malformed_rule_names(rule_name):
+    class IndicatorCursor:
+        async def to_list(self, limit):
+            return [{"ioc_type": "domain", "value": "example.test"}]
+
+    class IndicatorCollection:
+        def find(self, *args, **kwargs):
+            return IndicatorCursor()
+
+    class FakeDb:
+        indicators = IndicatorCollection()
+
+    namespace["db"] = FakeDb()
+    original_builder = namespace["_build_alert"]
+    namespace["_build_alert"] = lambda rule, org_id, events, title=None: {"title": title}
+    try:
+        rule = {"id": "rule-1", "name": rule_name, "rule_type": "indicator", "params": {}}
+        alerts, matched = asyncio.run(namespace["evaluate_rule"](
+            rule, [{"id": "event-1", "dns_query": "example.test"}], "org-1"))
+        assert matched == {"event-1"}
+        assert len(alerts[0]["title"]) <= 256
+        assert "IOC match (1)" in alerts[0]["title"]
+    finally:
+        namespace["_build_alert"] = original_builder
