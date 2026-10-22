@@ -335,6 +335,8 @@ async def run_detection(org_id, events, persist=True):
                     or not isinstance(a.get("title"), str) or not a["title"].strip() or len(a["title"]) > 256
                     or "host" not in a or "src_ip" not in a
                     or not isinstance(a.get("related_events"), list)
+                    or any(not isinstance(event_id, str) or not event_id.strip() or len(event_id) > 128
+                           for event_id in a["related_events"])
                     or not isinstance(a.get("first_seen"), str) or not a["first_seen"].strip()
                     or not isinstance(a.get("last_seen"), str) or not a["last_seen"].strip()):
                 continue
