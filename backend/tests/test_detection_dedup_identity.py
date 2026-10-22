@@ -43,7 +43,19 @@ async def evaluate_rule(rule, events, org_id):
               "last_seen": "2026-01-01T03:00:00+00:00",
               "related_events": ["event-1"]}], {"event-1"})
 
-namespace = {"db": db, "evaluate_rule": evaluate_rule, "now_iso": lambda: "2026-01-01T00:00:00Z"}
+from datetime import datetime
+
+def parse_timestamp(value):
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+def valid_timestamp(event):
+    try:
+        return isinstance(event.get("timestamp"), str) and parse_timestamp(event["timestamp"]).tzinfo is not None
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+namespace = {"db": db, "evaluate_rule": evaluate_rule, "now_iso": lambda: "2026-01-01T00:00:00Z",
+             "_parse_ts": parse_timestamp, "_valid_event_timestamp": valid_timestamp}
 exec(compile(ast.Module(body=[fn], type_ignores=[]), "<run_detection>", "exec"), namespace)
 
 def test_dedup_lookup_includes_host_and_source_ip():
@@ -141,6 +153,8 @@ def test_malformed_alerts_are_skipped_and_valid_alerts_continue():
                  {"id": "alert-missing-host", "title": "Missing host", "src_ip": None, "related_events": [], "first_seen": "2026-01-01", "last_seen": "2026-01-01"},
                  {"id": "bad-related", "title": "Bad related events", "host": None, "src_ip": None, "related_events": [" ", 42], "first_seen": "2026-01-01", "last_seen": "2026-01-01"},
                  {"id": "oversized-related", "title": "Oversized related events", "host": None, "src_ip": None, "related_events": ["x" * 129], "first_seen": "2026-01-01", "last_seen": "2026-01-01"},
+                 {"id": "bad-time", "title": "Invalid time", "host": None, "src_ip": None, "related_events": [], "first_seen": "not-a-date", "last_seen": "2026-01-01T03:00:00+00:00"},
+                 {"id": "reversed-time", "title": "Reversed time", "host": None, "src_ip": None, "related_events": [], "first_seen": "2026-01-02T03:00:00+00:00", "last_seen": "2026-01-01T03:00:00+00:00"},
                  {"id": "alert-ok", "title": "Valid alert", "host": "host-a",
                   "src_ip": "192.0.2.1", "related_events": ["event-1"],
                   "first_seen": "2026-01-01T01:00:00+00:00",
