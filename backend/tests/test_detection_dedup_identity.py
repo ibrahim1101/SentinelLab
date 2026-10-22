@@ -83,7 +83,9 @@ def test_dedup_update_keeps_latest_seen_timestamp():
     try:
         asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
         assert len(db.alerts.updates) == 1
-        pipeline = db.alerts.updates[0][1]
+        update_filter, pipeline = db.alerts.updates[0]
+        assert update_filter["id"] == "existing-alert"
+        assert update_filter["status"] == {"$in": ["new", "triaged", "investigating"]}
         first_seen = pipeline[0]["$set"]["first_seen"]
         last_seen = pipeline[0]["$set"]["last_seen"]
         assert first_seen["$min"][0]["$ifNull"][0] == "$first_seen"
