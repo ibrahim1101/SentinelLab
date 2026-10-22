@@ -71,9 +71,7 @@ def test_dedup_update_keeps_latest_seen_timestamp():
         assert len(db.alerts.updates) == 1
         pipeline = db.alerts.updates[0][1]
         last_seen = pipeline[0]["$set"]["last_seen"]
-        assert last_seen == {"$max": [
-            {"$ifNull": ["$last_seen", None]}, None
-        ]} if False else last_seen["$max"][0]["$ifNull"][0] == "$last_seen"
-        assert last_seen["$max"][1] is not None if False else len(last_seen["$max"]) == 2
+        assert last_seen["$max"][0]["$ifNull"][0] == "$last_seen"
+        assert len(last_seen["$max"]) == 2
     finally:
         db.alerts = original_alerts
