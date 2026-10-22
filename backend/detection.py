@@ -338,7 +338,10 @@ async def run_detection(org_id, events, persist=True):
                     or any(not isinstance(event_id, str) or not event_id.strip() or len(event_id) > 128
                            for event_id in a["related_events"])
                     or not isinstance(a.get("first_seen"), str) or not a["first_seen"].strip()
-                    or not isinstance(a.get("last_seen"), str) or not a["last_seen"].strip()):
+                    or not isinstance(a.get("last_seen"), str) or not a["last_seen"].strip()
+                    or not _valid_event_timestamp({"timestamp": a["first_seen"]})
+                    or not _valid_event_timestamp({"timestamp": a["last_seen"]})
+                    or _parse_ts(a["first_seen"]) > _parse_ts(a["last_seen"])):
                 continue
             if persist:
                 # dedup: same rule + host + src_ip + title within open alerts
