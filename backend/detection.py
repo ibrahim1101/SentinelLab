@@ -341,7 +341,9 @@ async def run_detection(org_id, events, persist=True):
                             "related_events": {"$setUnion": [
                                 {"$ifNull": ["$related_events", []]},
                                 a["related_events"]]},
-                            "last_seen": a["last_seen"],
+                            "last_seen": {"$max": [
+                                {"$ifNull": ["$last_seen", a["last_seen"]]},
+                                a["last_seen"]]},
                             "updated_at": now_iso(),
                         }},
                          {"$set": {"event_count": {"$size": "$related_events"}}}])
