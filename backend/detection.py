@@ -320,7 +320,8 @@ async def run_detection(org_id, events, persist=True):
                 continue
             await db.detection_rules.update_one(
                 {"id": rule["id"], "org_id": org_id},
-                {"$set": {"last_error": str(ex), "last_run": now_iso()}})
+                {"$set": {"last_error": f"{type(ex).__name__}: detection evaluation failed",
+                          "last_run": now_iso()}})
             continue
         if matched and persist:
             await db.events.update_many(
