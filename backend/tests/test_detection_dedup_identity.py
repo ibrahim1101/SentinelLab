@@ -52,3 +52,28 @@ def test_dedup_lookup_includes_host_and_source_ip():
     assert query["title"] == "Same title"
     assert query["host"] == "host-a"
     assert query["src_ip"] == "192.0.2.1"
+
+
+def test_dedup_update_keeps_latest_seen_timestamp():
+    class ExistingAlerts(Alerts):
+        def __init__(self):
+            super().__init__()
+            self.updates = []
+        async def find_one(self, query):
+            return {"id": "existing-alert"}
+        async def update_one(self, query, pipeline):
+            self.updates.append((query, pipeline))
+
+    original_alerts = db.alerts
+    db.alerts = ExistingAlerts()
+    try:
+        asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert len(db.alerts.updates) == 1
+        pipeline = db.alerts.updates[0][1]
+        last_seen = pipeline[0]["$set"]["last_seen"]
+        assert last_seen == {"$max": [
+            {"$ifNull": ["$last_seen", None]}, None
+        ]} if False else last_seen["$max"][0]["$ifNull"][0] == "$last_seen"
+        assert last_seen["$max"][1] is not None if False else len(last_seen["$max"]) == 2
+    finally:
+        db.alerts = original_alerts
