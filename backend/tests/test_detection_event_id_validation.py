@@ -67,3 +67,28 @@ def test_threshold_alert_title_preserves_correlation_context_with_long_rule_name
         assert "1 events" in alerts[0]["title"]
     finally:
         namespace["_build_alert"] = original_builder
+
+
+@pytest.mark.parametrize("indicator_value,event_value,expected", [
+    ("a" * 256, "a" * 256, True),
+    ("a" * 257, "a" * 257, False),
+    ("a" * 256, "a" * 257, False),
+])
+def test_indicator_rejects_oversized_ioc_values(indicator_value, event_value, expected):
+    class IndicatorCursor:
+        async def to_list(self, limit):
+            return [{"ioc_type": "domain", "value": indicator_value}]
+
+    class IndicatorCollection:
+        def find(self, *args, **kwargs):
+            return IndicatorCursor()
+
+    class FakeDb:
+        indicators = IndicatorCollection()
+
+    namespace["db"] = FakeDb()
+    rule = {"id": "rule-1", "name": "IOC test", "rule_type": "indicator", "params": {}}
+    events = [{"id": "event-1", "dns_query": event_value}]
+    alerts, matched = asyncio.run(namespace["evaluate_rule"](rule, events, "org-1"))
+    assert bool(alerts) is expected
+    assert bool(matched) is expected
