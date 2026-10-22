@@ -356,7 +356,7 @@ async def run_detection(org_id, events, persist=True):
                 if existing:
                     # Atomic union makes repeated scans idempotent and avoids a
                     # second write racing with other detection workers.
-                    await db.alerts.update_one(
+                    update_result = await db.alerts.update_one(
                         {"id": existing["id"], "org_id": org_id,
                          "status": {"$in": ["new", "triaged", "investigating"]}},
                         [{"$set": {
@@ -372,7 +372,9 @@ async def run_detection(org_id, events, persist=True):
                             "updated_at": now_iso(),
                         }},
                          {"$set": {"event_count": {"$size": "$related_events"}}}])
-                    continue
+                    if update_result.matched_count:
+                        continue
+                    # The alert was closed after lookup; persist a new detection.
                 await db.alerts.insert_one(dict(a))
             new_alerts.append(a)
             created.append(a)
