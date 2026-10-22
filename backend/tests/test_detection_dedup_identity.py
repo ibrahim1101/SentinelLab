@@ -83,3 +83,26 @@ def test_dedup_update_keeps_latest_seen_timestamp():
         assert pipeline[1]["$set"]["event_count"] == {"$size": "$related_events"}
     finally:
         db.alerts = original_alerts
+
+
+def test_invalid_rule_ids_are_skipped_without_stopping_valid_rules():
+    class MixedRules(Rules):
+        def find(self, *args, **kwargs):
+            class MixedCursor:
+                async def to_list(self, limit):
+                    return [None, {}, {"id": " "}, {"id": 42},
+                            {"id": "x" * 129}, {"id": "rule-1"}]
+            return MixedCursor()
+
+    original_rules = db.detection_rules
+    original_alerts = db.alerts
+    db.detection_rules = MixedRules()
+    db.alerts = Alerts()
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert len(created) == 1
+        assert len(db.alerts.lookups) == 1
+        assert db.alerts.lookups[0]["rule_id"] == "rule-1"
+    finally:
+        db.detection_rules = original_rules
+        db.alerts = original_alerts
