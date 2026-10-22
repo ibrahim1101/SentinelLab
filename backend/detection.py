@@ -310,6 +310,9 @@ async def run_detection(org_id, events, persist=True):
         {"org_id": org_id, "enabled": True}, {"_id": 0}).to_list(500)
     created = []
     for rule in rules:
+        # Malformed stored rules must not abort the entire detection batch.
+        if not isinstance(rule, dict) or not isinstance(rule.get("id"), str) or not rule["id"].strip() or len(rule["id"]) > 128:
+            continue
         try:
             alerts, matched = await evaluate_rule(rule, events, org_id)
         except Exception as ex:
