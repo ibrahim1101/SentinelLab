@@ -276,7 +276,7 @@ async def evaluate_rule(rule, events, org_id):
             if not isinstance(ind, dict):
                 continue
             ioc_type, value = ind.get("ioc_type"), ind.get("value")
-            if not isinstance(ioc_type, str) or ioc_type not in ("ip", "domain", "hash") or not isinstance(value, str) or not value.strip():
+            if not isinstance(ioc_type, str) or ioc_type not in ("ip", "domain", "hash") or not isinstance(value, str) or not value.strip() or len(value) > 256:
                 continue
             ioc_map.setdefault(ioc_type, {})[value.strip().casefold()] = ind
         fields = {"ip": ["src_ip", "dest_ip"], "domain": ["dns_query"],
@@ -288,7 +288,7 @@ async def evaluate_rule(rule, events, org_id):
                 continue
             # One event can match multiple IOC fields; it is still one event.
             is_match = any(
-                isinstance(e.get(field), str) and e[field].strip().casefold() in ioc_map.get(ioc_type, {})
+                isinstance(e.get(field), str) and len(e[field]) <= 256 and e[field].strip().casefold() in ioc_map.get(ioc_type, {})
                 for ioc_type, ev_fields in fields.items()
                 for field in ev_fields
             )
