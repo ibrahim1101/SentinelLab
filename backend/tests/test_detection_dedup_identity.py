@@ -237,3 +237,27 @@ def test_changed_alert_identity_creates_fresh_alert():
         assert db.alerts.inserted[0]["id"] == created[0]["id"]
     finally:
         db.alerts = original_alerts
+
+
+def test_malformed_existing_alert_id_does_not_drop_detection():
+    for existing in ({}, {"id": None}, {"id": " "}, {"id": "x" * 129}):
+        class MalformedExistingAlerts(Alerts):
+            def __init__(self):
+                super().__init__()
+                self.inserted = []
+            async def find_one(self, query):
+                return existing
+            async def update_one(self, query, pipeline):
+                raise AssertionError("Malformed existing alert must not be updated")
+            async def insert_one(self, document):
+                self.inserted.append(document)
+
+        original_alerts = db.alerts
+        db.alerts = MalformedExistingAlerts()
+        try:
+            created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+            assert len(created) == 1
+            assert created[0]["id"] == "alert-1"
+            assert len(db.alerts.inserted) == 1
+        finally:
+            db.alerts = original_alerts
