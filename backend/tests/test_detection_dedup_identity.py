@@ -135,6 +135,10 @@ def test_rule_failure_does_not_persist_sensitive_exception_text():
 def test_malformed_alerts_are_skipped_and_valid_alerts_continue():
     async def mixed_alerts(rule, events, org_id):
         return ([None, {}, {"title": "incomplete"},
+                 {"title": "No ID", "host": None, "src_ip": None, "related_events": [], "first_seen": "2026-01-01", "last_seen": "2026-01-01"},
+                 {"id": " ", "title": "Blank ID", "host": None, "src_ip": None, "related_events": [], "first_seen": "2026-01-01", "last_seen": "2026-01-01"},
+                 {"id": "a" * 129, "title": "Long ID", "host": None, "src_ip": None, "related_events": [], "first_seen": "2026-01-01", "last_seen": "2026-01-01"},
+                 {"id": "alert-missing-host", "title": "Missing host", "src_ip": None, "related_events": [], "first_seen": "2026-01-01", "last_seen": "2026-01-01"},
                  {"id": "alert-ok", "title": "Valid alert", "host": "host-a",
                   "src_ip": "192.0.2.1", "related_events": ["event-1"],
                   "first_seen": "2026-01-01T01:00:00+00:00",
