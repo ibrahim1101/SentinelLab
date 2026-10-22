@@ -130,3 +130,25 @@ def test_rule_failure_does_not_persist_sensitive_exception_text():
     finally:
         db.detection_rules = original_rules
         namespace["evaluate_rule"] = original_evaluator
+
+
+def test_malformed_alerts_are_skipped_and_valid_alerts_continue():
+    async def mixed_alerts(rule, events, org_id):
+        return ([None, {}, {"title": "incomplete"},
+                 {"id": "alert-ok", "title": "Valid alert", "host": "host-a",
+                  "src_ip": "192.0.2.1", "related_events": ["event-1"],
+                  "first_seen": "2026-01-01T01:00:00+00:00",
+                  "last_seen": "2026-01-01T03:00:00+00:00"}], {"event-1"})
+
+    original_evaluator = namespace["evaluate_rule"]
+    original_alerts = db.alerts
+    namespace["evaluate_rule"] = mixed_alerts
+    db.alerts = Alerts()
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert len(created) == 1
+        assert created[0]["id"] == "alert-ok"
+        assert len(db.alerts.lookups) == 1
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.alerts = original_alerts
