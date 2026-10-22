@@ -86,6 +86,10 @@ def test_dedup_update_keeps_latest_seen_timestamp():
         assert len(db.alerts.updates) == 1
         update_filter, pipeline = db.alerts.updates[0]
         assert update_filter["id"] == "existing-alert"
+        assert update_filter["rule_id"] == "rule-1"
+        assert update_filter["title"] == "Same title"
+        assert update_filter["host"] == "host-a"
+        assert update_filter["src_ip"] == "192.0.2.1"
         assert update_filter["status"] == {"$in": ["new", "triaged", "investigating"]}
         first_seen = pipeline[0]["$set"]["first_seen"]
         last_seen = pipeline[0]["$set"]["last_seen"]
