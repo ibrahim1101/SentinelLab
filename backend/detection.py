@@ -329,6 +329,9 @@ async def run_detection(org_id, events, persist=True):
                 {"$addToSet": {"rule_matches": rule["id"]}})
         new_alerts = []
         for a in alerts:
+            # Invalid alert output must not interrupt persistence of valid alerts.
+            if not isinstance(a, dict) or not isinstance(a.get("title"), str) or not a["title"].strip() or not isinstance(a.get("related_events"), list) or not isinstance(a.get("first_seen"), str) or not isinstance(a.get("last_seen"), str):
+                continue
             if persist:
                 # dedup: same rule + host + src_ip + title within open alerts
                 existing = await db.alerts.find_one({
