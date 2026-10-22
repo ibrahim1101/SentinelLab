@@ -357,7 +357,8 @@ async def run_detection(org_id, events, persist=True):
                     # Atomic union makes repeated scans idempotent and avoids a
                     # second write racing with other detection workers.
                     await db.alerts.update_one(
-                        {"id": existing["id"], "org_id": org_id},
+                        {"id": existing["id"], "org_id": org_id,
+                         "status": {"$in": ["new", "triaged", "investigating"]}},
                         [{"$set": {
                             "related_events": {"$setUnion": [
                                 {"$ifNull": ["$related_events", []]},
