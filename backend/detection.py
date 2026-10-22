@@ -296,8 +296,11 @@ async def evaluate_rule(rule, events, org_id):
                 hits.append(e)
                 matched_ids.add(e["id"])
         if hits:
-            alerts.append(_build_alert(rule, org_id, hits,
-                                       title=f"{rule['name']} — IOC match ({len(hits)})"))
+            rule_label = rule.get("name")
+            rule_label = rule_label if isinstance(rule_label, str) and rule_label.strip() else "Unnamed detection rule"
+            suffix = f" — IOC match ({len(hits)})"
+            title = f"{rule_label[:256 - len(suffix)]}{suffix}"
+            alerts.append(_build_alert(rule, org_id, hits, title=title))
     return alerts, matched_ids
 
 
