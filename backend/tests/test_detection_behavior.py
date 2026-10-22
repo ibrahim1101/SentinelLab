@@ -95,6 +95,9 @@ async def test_duplicate_alert_merges_evidence_without_count_inflation(monkeypat
     assert fake.alerts.update_one.await_count == 1
     call = fake.alerts.update_one.await_args
     assert call.args[0] == {"id": "alert-1", "org_id": "org-1",
+                            "rule_id": "rule-1",
+                            "title": "Authentication failure",
+                            "host": None, "src_ip": None,
                             "status": {"$in": ["new", "triaged", "investigating"]}}
     pipeline = call.args[1]
     assert pipeline[0]["$set"]["related_events"] == {
