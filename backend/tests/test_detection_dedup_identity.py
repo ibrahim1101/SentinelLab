@@ -70,7 +70,10 @@ def test_dedup_update_keeps_latest_seen_timestamp():
         asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
         assert len(db.alerts.updates) == 1
         pipeline = db.alerts.updates[0][1]
+        first_seen = pipeline[0]["$set"]["first_seen"]
         last_seen = pipeline[0]["$set"]["last_seen"]
+        assert first_seen["$min"][0]["$ifNull"][0] == "$first_seen"
+        assert len(first_seen["$min"]) == 2
         assert last_seen["$max"][0]["$ifNull"][0] == "$last_seen"
         assert len(last_seen["$max"]) == 2
     finally:
