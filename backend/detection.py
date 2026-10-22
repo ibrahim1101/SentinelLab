@@ -334,6 +334,9 @@ async def run_detection(org_id, events, persist=True):
                     or not isinstance(a.get("id"), str) or not a["id"].strip() or len(a["id"]) > 128
                     or not isinstance(a.get("title"), str) or not a["title"].strip() or len(a["title"]) > 256
                     or "host" not in a or "src_ip" not in a
+                    or any(a[field] is not None and
+                           (not isinstance(a[field], str) or not a[field].strip() or len(a[field]) > 256)
+                           for field in ("host", "src_ip"))
                     or not isinstance(a.get("related_events"), list)
                     or any(not isinstance(event_id, str) or not event_id.strip() or len(event_id) > 128
                            for event_id in a["related_events"])
