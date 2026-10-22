@@ -353,7 +353,8 @@ async def run_detection(org_id, events, persist=True):
                     "host": a["host"], "src_ip": a["src_ip"],
                     "status": {"$in": ["new", "triaged", "investigating"]},
                 })
-                if existing:
+                if (isinstance(existing, dict) and isinstance(existing.get("id"), str)
+                        and existing["id"].strip() and len(existing["id"]) <= 128):
                     # Atomic union makes repeated scans idempotent and avoids a
                     # second write racing with other detection workers.
                     update_result = await db.alerts.update_one(
