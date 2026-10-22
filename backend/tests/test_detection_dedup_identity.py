@@ -207,3 +207,33 @@ def test_closed_alert_race_creates_fresh_alert():
         assert db.alerts.inserted[0]["id"] == "alert-1"
     finally:
         db.alerts = original_alerts
+
+
+def test_changed_alert_identity_creates_fresh_alert():
+    class ChangedIdentityAlerts(Alerts):
+        def __init__(self):
+            super().__init__()
+            self.inserted = []
+            self.update_filter = None
+        async def find_one(self, query):
+            return {"id": "old-alert", "rule_id": "rule-1",
+                    "title": "Same title", "host": "host-a", "src_ip": "192.0.2.1"}
+        async def update_one(self, query, pipeline):
+            self.update_filter = query
+            # Simulate a concurrent identity change: the guarded update matches nothing.
+            return type("UpdateResult", (), {"matched_count": 0})()
+        async def insert_one(self, document):
+            self.inserted.append(document)
+
+    original_alerts = db.alerts
+    db.alerts = ChangedIdentityAlerts()
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert db.alerts.update_filter["host"] == "host-a"
+        assert db.alerts.update_filter["src_ip"] == "192.0.2.1"
+        assert db.alerts.update_filter["title"] == "Same title"
+        assert len(created) == 1
+        assert len(db.alerts.inserted) == 1
+        assert db.alerts.inserted[0]["id"] == created[0]["id"]
+    finally:
+        db.alerts = original_alerts
