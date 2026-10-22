@@ -358,6 +358,8 @@ async def run_detection(org_id, events, persist=True):
                     # second write racing with other detection workers.
                     update_result = await db.alerts.update_one(
                         {"id": existing["id"], "org_id": org_id,
+                         "rule_id": rule["id"], "title": a["title"],
+                         "host": a["host"], "src_ip": a["src_ip"],
                          "status": {"$in": ["new", "triaged", "investigating"]}},
                         [{"$set": {
                             "related_events": {"$setUnion": [
