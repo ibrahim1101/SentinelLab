@@ -329,6 +329,7 @@ async def run_detection(org_id, events, persist=True):
                 # dedup: same rule + host + src_ip + title within open alerts
                 existing = await db.alerts.find_one({
                     "org_id": org_id, "rule_id": rule["id"], "title": a["title"],
+                    "host": a["host"], "src_ip": a["src_ip"],
                     "status": {"$in": ["new", "triaged", "investigating"]},
                 })
                 if existing:
