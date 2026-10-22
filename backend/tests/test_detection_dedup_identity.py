@@ -77,6 +77,7 @@ def test_dedup_update_keeps_latest_seen_timestamp():
             return {"id": "existing-alert"}
         async def update_one(self, query, pipeline):
             self.updates.append((query, pipeline))
+            return type("UpdateResult", (), {"matched_count": 1})()
 
     original_alerts = db.alerts
     db.alerts = ExistingAlerts()
@@ -177,4 +178,28 @@ def test_malformed_alerts_are_skipped_and_valid_alerts_continue():
         assert len(db.alerts.lookups) == 1
     finally:
         namespace["evaluate_rule"] = original_evaluator
+        db.alerts = original_alerts
+
+
+def test_closed_alert_race_creates_fresh_alert():
+    class ClosedAlerts(Alerts):
+        def __init__(self):
+            super().__init__()
+            self.inserted = []
+        async def find_one(self, query):
+            return {"id": "previously-open"}
+        async def update_one(self, query, pipeline):
+            return type("UpdateResult", (), {"matched_count": 0})()
+        async def insert_one(self, document):
+            self.inserted.append(document)
+
+    original_alerts = db.alerts
+    db.alerts = ClosedAlerts()
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert len(created) == 1
+        assert created[0]["id"] == "alert-1"
+        assert len(db.alerts.inserted) == 1
+        assert db.alerts.inserted[0]["id"] == "alert-1"
+    finally:
         db.alerts = original_alerts
