@@ -106,3 +106,27 @@ def test_invalid_rule_ids_are_skipped_without_stopping_valid_rules():
     finally:
         db.detection_rules = original_rules
         db.alerts = original_alerts
+
+
+def test_rule_failure_does_not_persist_sensitive_exception_text():
+    class RecordingRules(Rules):
+        def __init__(self):
+            self.updates = []
+        async def update_one(self, query, update):
+            self.updates.append(update)
+
+    async def failing_rule(rule, events, org_id):
+        raise ValueError("secret-token-" + "x" * 10000)
+
+    original_rules = db.detection_rules
+    original_evaluator = namespace["evaluate_rule"]
+    db.detection_rules = RecordingRules()
+    namespace["evaluate_rule"] = failing_rule
+    try:
+        assert asyncio.run(namespace["run_detection"]("org-1", [], persist=True)) == []
+        error = db.detection_rules.updates[0]["$set"]["last_error"]
+        assert error == "ValueError: detection evaluation failed"
+        assert "secret-token" not in error
+    finally:
+        db.detection_rules = original_rules
+        namespace["evaluate_rule"] = original_evaluator
