@@ -330,7 +330,13 @@ async def run_detection(org_id, events, persist=True):
         new_alerts = []
         for a in alerts:
             # Invalid alert output must not interrupt persistence of valid alerts.
-            if not isinstance(a, dict) or not isinstance(a.get("title"), str) or not a["title"].strip() or not isinstance(a.get("related_events"), list) or not isinstance(a.get("first_seen"), str) or not isinstance(a.get("last_seen"), str):
+            if (not isinstance(a, dict)
+                    or not isinstance(a.get("id"), str) or not a["id"].strip() or len(a["id"]) > 128
+                    or not isinstance(a.get("title"), str) or not a["title"].strip() or len(a["title"]) > 256
+                    or "host" not in a or "src_ip" not in a
+                    or not isinstance(a.get("related_events"), list)
+                    or not isinstance(a.get("first_seen"), str) or not a["first_seen"].strip()
+                    or not isinstance(a.get("last_seen"), str) or not a["last_seen"].strip()):
                 continue
             if persist:
                 # dedup: same rule + host + src_ip + title within open alerts
