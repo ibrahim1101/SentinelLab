@@ -39,6 +39,8 @@ class FakeDb:
 db = FakeDb()
 async def evaluate_rule(rule, events, org_id):
     return ([{"id": "alert-1", "title": "Same title", "host": "host-a", "src_ip": "192.0.2.1",
+              "first_seen": "2026-01-01T01:00:00+00:00",
+              "last_seen": "2026-01-01T03:00:00+00:00",
               "related_events": ["event-1"]}], {"event-1"})
 
 namespace = {"db": db, "evaluate_rule": evaluate_rule, "now_iso": lambda: "2026-01-01T00:00:00Z"}
@@ -73,8 +75,11 @@ def test_dedup_update_keeps_latest_seen_timestamp():
         first_seen = pipeline[0]["$set"]["first_seen"]
         last_seen = pipeline[0]["$set"]["last_seen"]
         assert first_seen["$min"][0]["$ifNull"][0] == "$first_seen"
-        assert len(first_seen["$min"]) == 2
+        assert first_seen["$min"][0]["$ifNull"][1] == "2026-01-01T01:00:00+00:00"
+        assert first_seen["$min"][1] == "2026-01-01T01:00:00+00:00"
         assert last_seen["$max"][0]["$ifNull"][0] == "$last_seen"
-        assert len(last_seen["$max"]) == 2
+        assert last_seen["$max"][0]["$ifNull"][1] == "2026-01-01T03:00:00+00:00"
+        assert last_seen["$max"][1] == "2026-01-01T03:00:00+00:00"
+        assert pipeline[1]["$set"]["event_count"] == {"$size": "$related_events"}
     finally:
         db.alerts = original_alerts
