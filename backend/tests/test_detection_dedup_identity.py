@@ -83,7 +83,8 @@ def test_dedup_update_keeps_latest_seen_timestamp():
     original_alerts = db.alerts
     db.alerts = ExistingAlerts()
     try:
-        asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert created == [], "Merged alerts must not be reported as newly created"
         assert len(db.alerts.updates) == 1
         assert db.alerts.inserted == []
         update_filter, pipeline = db.alerts.updates[0]
