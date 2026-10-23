@@ -24,11 +24,12 @@ class Events:
 class Alerts:
     def __init__(self):
         self.lookups = []
+        self.inserted = []
     async def find_one(self, query):
         self.lookups.append(query)
         return None
     async def insert_one(self, document):
-        pass
+        self.inserted.append(document)
 
 class FakeDb:
     def __init__(self):
@@ -84,6 +85,7 @@ def test_dedup_update_keeps_latest_seen_timestamp():
     try:
         asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
         assert len(db.alerts.updates) == 1
+        assert db.alerts.inserted == []
         update_filter, pipeline = db.alerts.updates[0]
         assert update_filter["id"] == "existing-alert"
         assert update_filter["rule_id"] == "rule-1"
