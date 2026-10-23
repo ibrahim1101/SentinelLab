@@ -215,6 +215,45 @@ def test_preview_failing_rule_does_not_block_later_valid_rule_or_write():
         db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
 
 
+def test_matched_events_without_alerts_update_rule_without_count_inflation():
+    class RecordingEvents(Events):
+        def __init__(self):
+            self.updates = []
+        async def update_many(self, query, update):
+            self.updates.append((query, update))
+
+    class RecordingRules(Rules):
+        def __init__(self):
+            self.updates = []
+        async def update_one(self, query, update):
+            self.updates.append((query, update))
+
+    async def matching_without_alerts(rule, events, org_id):
+        return [], {"event-1"}
+
+    original_rules, original_events, original_alerts = db.detection_rules, db.events, db.alerts
+    original_evaluator = namespace["evaluate_rule"]
+    db.detection_rules, db.events, db.alerts = RecordingRules(), RecordingEvents(), Alerts()
+    namespace["evaluate_rule"] = matching_without_alerts
+    try:
+        assert asyncio.run(namespace["run_detection"]("org-1", [], persist=True)) == []
+        assert len(db.events.updates) == 1
+        query, update = db.events.updates[0]
+        assert query == {"org_id": "org-1", "id": {"$in": ["event-1"]}}
+        assert update == {"$addToSet": {"rule_matches": "rule-1"}}
+        assert db.alerts.inserted == []
+        assert db.alerts.lookups == []
+        assert len(db.detection_rules.updates) == 1
+        rule_query, rule_update = db.detection_rules.updates[0]
+        assert rule_query == {"id": "rule-1", "org_id": "org-1"}
+        assert rule_update["$inc"]["match_count"] == 0
+        assert rule_update["$set"]["last_error"] is None
+        assert rule_update["$set"]["last_run"]
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
