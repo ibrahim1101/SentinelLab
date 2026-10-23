@@ -83,6 +83,34 @@ def test_new_alert_is_inserted_once_and_returned():
         db.alerts = original_alerts
 
 
+def test_preview_detection_does_not_persist_alerts_or_events():
+    class ReadOnlyAlerts(Alerts):
+        async def find_one(self, query):
+            raise AssertionError("Preview must not query existing alerts")
+        async def insert_one(self, document):
+            raise AssertionError("Preview must not insert alerts")
+        async def update_one(self, *args, **kwargs):
+            raise AssertionError("Preview must not update alerts")
+
+    class ReadOnlyEvents(Events):
+        async def update_many(self, *args, **kwargs):
+            raise AssertionError("Preview must not update events")
+
+    class ReadOnlyRules(Rules):
+        async def update_one(self, *args, **kwargs):
+            raise AssertionError("Preview must not update rule state")
+
+    original_alerts, original_events, original_rules = db.alerts, db.events, db.detection_rules
+    db.alerts, db.events, db.detection_rules = ReadOnlyAlerts(), ReadOnlyEvents(), ReadOnlyRules()
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=False))
+        assert len(created) == 1
+        assert created[0]["id"] == "alert-1"
+        assert db.alerts.lookups == []
+    finally:
+        db.alerts, db.events, db.detection_rules = original_alerts, original_events, original_rules
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
