@@ -172,6 +172,49 @@ def test_failing_rule_does_not_block_later_valid_rule():
         db.detection_rules, db.alerts = original_rules, original_alerts
 
 
+def test_preview_failing_rule_does_not_block_later_valid_rule_or_write():
+    class TwoRuleCursor:
+        async def to_list(self, limit):
+            return [{"id": "broken-rule"}, {"id": "rule-1"}]
+
+    class ReadOnlyRules(Rules):
+        def find(self, *args, **kwargs):
+            return TwoRuleCursor()
+        async def update_one(self, *args, **kwargs):
+            raise AssertionError("Preview must not write rule state")
+
+    class ReadOnlyEvents(Events):
+        async def update_many(self, *args, **kwargs):
+            raise AssertionError("Preview must not write event state")
+
+    class ReadOnlyAlerts(Alerts):
+        async def find_one(self, *args, **kwargs):
+            raise AssertionError("Preview must not query alerts")
+        async def insert_one(self, *args, **kwargs):
+            raise AssertionError("Preview must not insert alerts")
+
+    original_rules, original_events, original_alerts = db.detection_rules, db.events, db.alerts
+    original_evaluator = namespace["evaluate_rule"]
+    evaluated = []
+
+    async def mixed_evaluator(rule, events, org_id):
+        evaluated.append(rule["id"])
+        if rule["id"] == "broken-rule":
+            raise RuntimeError("evaluation failure")
+        return await original_evaluator(rule, events, org_id)
+
+    db.detection_rules, db.events, db.alerts = ReadOnlyRules(), ReadOnlyEvents(), ReadOnlyAlerts()
+    namespace["evaluate_rule"] = mixed_evaluator
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=False))
+        assert evaluated == ["broken-rule", "rule-1"]
+        assert len(created) == 1
+        assert created[0]["id"] == "alert-1"
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
