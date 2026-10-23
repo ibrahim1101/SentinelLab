@@ -111,6 +111,35 @@ def test_preview_detection_does_not_persist_alerts_or_events():
         db.alerts, db.events, db.detection_rules = original_alerts, original_events, original_rules
 
 
+def test_preview_rule_failure_does_not_persist_error_state():
+    class ReadOnlyRules(Rules):
+        async def update_one(self, *args, **kwargs):
+            raise AssertionError("Preview failure must not write rule error state")
+
+    class ReadOnlyEvents(Events):
+        async def update_many(self, *args, **kwargs):
+            raise AssertionError("Preview failure must not modify events")
+
+    class ReadOnlyAlerts(Alerts):
+        async def find_one(self, *args, **kwargs):
+            raise AssertionError("Preview failure must not query alerts")
+        async def insert_one(self, *args, **kwargs):
+            raise AssertionError("Preview failure must not insert alerts")
+
+    async def failing_rule(rule, events, org_id):
+        raise RuntimeError("sensitive evaluation details")
+
+    original_rules, original_events, original_alerts = db.detection_rules, db.events, db.alerts
+    original_evaluator = namespace["evaluate_rule"]
+    db.detection_rules, db.events, db.alerts = ReadOnlyRules(), ReadOnlyEvents(), ReadOnlyAlerts()
+    namespace["evaluate_rule"] = failing_rule
+    try:
+        assert asyncio.run(namespace["run_detection"]("org-1", [], persist=False)) == []
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
