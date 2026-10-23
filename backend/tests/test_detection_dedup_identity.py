@@ -69,6 +69,20 @@ def test_dedup_lookup_includes_host_and_source_ip():
     assert query["src_ip"] == "192.0.2.1"
 
 
+def test_new_alert_is_inserted_once_and_returned():
+    original_alerts = db.alerts
+    db.alerts = Alerts()
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert len(created) == 1
+        assert created[0]["id"] == "alert-1"
+        assert len(db.alerts.lookups) == 1
+        assert len(db.alerts.inserted) == 1
+        assert db.alerts.inserted[0] == created[0]
+    finally:
+        db.alerts = original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
