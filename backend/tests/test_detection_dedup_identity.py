@@ -254,6 +254,36 @@ def test_matched_events_without_alerts_update_rule_without_count_inflation():
         db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
 
 
+def test_preview_matched_events_without_alerts_does_not_write():
+    class ReadOnlyEvents(Events):
+        async def update_many(self, *args, **kwargs):
+            raise AssertionError("Preview must not tag matched events")
+
+    class ReadOnlyRules(Rules):
+        async def update_one(self, *args, **kwargs):
+            raise AssertionError("Preview must not update rule state")
+
+    class ReadOnlyAlerts(Alerts):
+        async def find_one(self, *args, **kwargs):
+            raise AssertionError("Preview must not query existing alerts")
+        async def insert_one(self, *args, **kwargs):
+            raise AssertionError("Preview must not insert alerts")
+
+    async def matching_without_alerts(rule, events, org_id):
+        return [], {"event-1"}
+
+    original_rules, original_events, original_alerts = db.detection_rules, db.events, db.alerts
+    original_evaluator = namespace["evaluate_rule"]
+    db.detection_rules, db.events, db.alerts = ReadOnlyRules(), ReadOnlyEvents(), ReadOnlyAlerts()
+    namespace["evaluate_rule"] = matching_without_alerts
+    try:
+        assert asyncio.run(namespace["run_detection"]("org-1", [], persist=False)) == []
+        assert db.alerts.inserted == []
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
