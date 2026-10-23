@@ -346,6 +346,11 @@ async def run_detection(org_id, events, persist=True):
                     or not _valid_event_timestamp({"timestamp": a["last_seen"]})
                     or _parse_ts(a["first_seen"]) > _parse_ts(a["last_seen"])):
                 continue
+            # MongoDB $min/$max on strings is lexical, so persist one UTC format.
+            # Copy the evaluated alert to avoid mutating rule output in place.
+            a = dict(a)
+            a["first_seen"] = _parse_ts(a["first_seen"]).astimezone(timezone.utc).isoformat()
+            a["last_seen"] = _parse_ts(a["last_seen"]).astimezone(timezone.utc).isoformat()
             if persist:
                 # dedup: same rule + host + src_ip + title within open alerts
                 existing = await db.alerts.find_one({
