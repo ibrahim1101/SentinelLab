@@ -44,7 +44,7 @@ async def evaluate_rule(rule, events, org_id):
               "last_seen": "2026-01-01T03:00:00+00:00",
               "related_events": ["event-1"]}], {"event-1"})
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 def parse_timestamp(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -56,7 +56,8 @@ def valid_timestamp(event):
         return False
 
 namespace = {"db": db, "evaluate_rule": evaluate_rule, "now_iso": lambda: "2026-01-01T00:00:00Z",
-             "_parse_ts": parse_timestamp, "_valid_event_timestamp": valid_timestamp}
+             "_parse_ts": parse_timestamp, "_valid_event_timestamp": valid_timestamp,
+             "timezone": timezone}
 exec(compile(ast.Module(body=[fn], type_ignores=[]), "<run_detection>", "exec"), namespace)
 
 def test_dedup_lookup_includes_host_and_source_ip():
@@ -282,6 +283,25 @@ def test_preview_matched_events_without_alerts_does_not_write():
     finally:
         namespace["evaluate_rule"] = original_evaluator
         db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
+
+
+def test_alert_timestamps_normalize_to_utc_before_persistence():
+    async def offset_alert(rule, events, org_id):
+        return ([{"id": "alert-offset", "title": "Offset alert", "host": None,
+                  "src_ip": None, "related_events": ["event-1"],
+                  "first_seen": "2026-01-01T06:30:00+05:30",
+                  "last_seen": "2025-12-31T21:00:00-05:00"}], {"event-1"})
+
+    original_evaluator, original_alerts = namespace["evaluate_rule"], db.alerts
+    namespace["evaluate_rule"], db.alerts = offset_alert, Alerts()
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert len(created) == 1
+        assert created[0]["first_seen"] == "2026-01-01T01:00:00+00:00"
+        assert created[0]["last_seen"] == "2026-01-01T02:00:00+00:00"
+        assert db.alerts.inserted[0] == created[0]
+    finally:
+        namespace["evaluate_rule"], db.alerts = original_evaluator, original_alerts
 
 
 def test_dedup_update_keeps_latest_seen_timestamp():
