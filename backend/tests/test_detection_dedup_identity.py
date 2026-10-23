@@ -140,6 +140,38 @@ def test_preview_rule_failure_does_not_persist_error_state():
         db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
 
 
+def test_failing_rule_does_not_block_later_valid_rule():
+    class TwoRuleCursor:
+        async def to_list(self, limit):
+            return [{"id": "broken-rule"}, {"id": "rule-1"}]
+
+    class TwoRules(Rules):
+        def find(self, *args, **kwargs):
+            return TwoRuleCursor()
+
+    original_rules, original_alerts = db.detection_rules, db.alerts
+    original_evaluator = namespace["evaluate_rule"]
+    evaluated = []
+
+    async def mixed_evaluator(rule, events, org_id):
+        evaluated.append(rule["id"])
+        if rule["id"] == "broken-rule":
+            raise ValueError("bad rule")
+        return await original_evaluator(rule, events, org_id)
+
+    db.detection_rules, db.alerts = TwoRules(), Alerts()
+    namespace["evaluate_rule"] = mixed_evaluator
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert evaluated == ["broken-rule", "rule-1"]
+        assert len(created) == 1
+        assert created[0]["id"] == "alert-1"
+        assert len(db.alerts.inserted) == 1
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.detection_rules, db.alerts = original_rules, original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
