@@ -386,6 +386,61 @@ def test_invalid_matched_event_identifiers_are_isolated():
         db.detection_rules = original_rules
 
 
+def test_oversized_evaluator_results_do_not_block_later_rule():
+    class TwoRuleCursor:
+        async def to_list(self, limit):
+            return [{"id": "oversized-rule"}, {"id": "rule-1"}]
+
+    class TwoRules(Rules):
+        def find(self, *args, **kwargs):
+            return TwoRuleCursor()
+
+    original_rules, original_evaluator = db.detection_rules, namespace["evaluate_rule"]
+    db.detection_rules = TwoRules()
+    evaluated = []
+
+    async def oversized_then_valid(rule, events, org_id):
+        evaluated.append(rule["id"])
+        if rule["id"] == "oversized-rule":
+            return [{}] * 501, set()
+        return await original_evaluator(rule, events, org_id)
+
+    namespace["evaluate_rule"] = oversized_then_valid
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=False))
+        assert evaluated == ["oversized-rule", "rule-1"]
+        assert len(created) == 1
+        assert created[0]["id"] == "alert-1"
+    finally:
+        namespace["evaluate_rule"], db.detection_rules = original_evaluator, original_rules
+
+
+def test_oversized_matched_event_ids_do_not_block_later_rule():
+    class TwoRuleCursor:
+        async def to_list(self, limit):
+            return [{"id": "oversized-rule"}, {"id": "rule-1"}]
+
+    class TwoRules(Rules):
+        def find(self, *args, **kwargs):
+            return TwoRuleCursor()
+
+    original_rules, original_evaluator = db.detection_rules, namespace["evaluate_rule"]
+    db.detection_rules = TwoRules()
+
+    async def oversized_then_valid(rule, events, org_id):
+        if rule["id"] == "oversized-rule":
+            return [], [f"event-{i}" for i in range(5001)]
+        return await original_evaluator(rule, events, org_id)
+
+    namespace["evaluate_rule"] = oversized_then_valid
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=False))
+        assert len(created) == 1
+        assert created[0]["id"] == "alert-1"
+    finally:
+        namespace["evaluate_rule"], db.detection_rules = original_evaluator, original_rules
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
