@@ -26,7 +26,7 @@ def test_detection_replay_is_read_only():
     assert "if matched and persist:" in source
     assert "if not persist:\\n                continue".replace("\\n", "\n") in source
     assert "if persist:\\n            await db.detection_rules.update_one".replace("\\n", "\n") in source
-    assert '"org_id": org_id, "id": {"$in": list(dict.fromkeys(matched))}' in source
+    assert '"org_id": org_id, "id": {"$in": sorted(set(matched))}' in source
 
 def test_regex_policy_is_bounded():
     source = (ROOT / "detection.py").read_text()
