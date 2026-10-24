@@ -449,7 +449,7 @@ def test_duplicate_matched_event_ids_are_deduplicated_before_update():
             self.updates.append((query, update))
 
     async def duplicated_matches(rule, events, org_id):
-        return [], ["event-1", "event-1", "event-2", "event-1"]
+        return [], ["event-2", "event-1", "event-2", "event-1"]
 
     original_events, original_evaluator = db.events, namespace["evaluate_rule"]
     db.events = RecordingEvents()
