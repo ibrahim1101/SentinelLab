@@ -483,7 +483,39 @@ async def _notify(org, ntype, text, ref=None):
     asyncio.create_task(wh.emit(org, category, ntype.replace("_", " ").title(), text))
 
 
+INGEST_JSON_MAX_BYTES = 8 * 1024 * 1024
+
+
+async def _read_bounded_ingest_json(request: Request, max_bytes: int = INGEST_JSON_MAX_BYTES) -> IngestReq:
+    """Enforce a byte cap while streaming, before parsing a telemetry JSON body."""
+    from pydantic import ValidationError
+
+    declared = request.headers.get("content-length")
+    if declared is not None:
+        try:
+            if int(declared) > max_bytes:
+                raise HTTPException(413, "Ingestion JSON exceeds the 8 MiB limit")
+        except ValueError:
+            raise HTTPException(400, "Invalid Content-Length")
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > max_bytes:
+            raise HTTPException(413, "Ingestion JSON exceeds the 8 MiB limit")
+        data.extend(chunk)
+    try:
+        return IngestReq.model_validate_json(bytes(data))
+    except ValidationError as exc:
+        raise HTTPException(422, detail=exc.errors(include_context=False, include_input=False))
+    except ValueError:
+        raise HTTPException(400, "Invalid ingestion JSON")
+
+
 @api.post("/ingest")
+async def ingest_json(request: Request, user=Depends(require_role("analyst"))):
+    body = await _read_bounded_ingest_json(request)
+    return await ingest(body, request, user)
+
+
 async def ingest(body: IngestReq, request: Request, user=Depends(require_role("analyst"))):
     org = active_org(user, request)
     source = await db.sources.find_one({"id": body.source_id, "org_id": org}, {"_id": 0})
@@ -510,10 +542,18 @@ async def ingest(body: IngestReq, request: Request, user=Depends(require_role("a
     return {"ingested": len(docs), "alerts_generated": len(alerts)}
 
 
+async def _read_bounded_telemetry(file, max_bytes=8 * 1024 * 1024):
+    """Read no more than the configured maximum plus one sentinel byte."""
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise HTTPException(413, "Uploaded telemetry exceeds the 8 MiB limit")
+    return content.decode("utf-8", errors="replace")
+
+
 @api.post("/ingest/upload")
 async def ingest_upload(request: Request, source_id: str = Query(...), format: str = Query("json"),
                         file: UploadFile = File(...), user=Depends(require_role("analyst"))):
-    content = (await file.read()).decode("utf-8", errors="replace")
+    content = await _read_bounded_telemetry(file)
     return await ingest(IngestReq(source_id=source_id, format=format, payload=content), request, user)
 
 
@@ -658,8 +698,11 @@ async def backtest_rule(rule_id: str, request: Request, time_range: str = "7d", 
     r = await db.detection_rules.find_one({"id": rule_id, "org_id": org}, {"_id": 0})
     if not r:
         raise HTTPException(404, "Rule not found")
+    if time_range not in ("15m", "1h", "24h", "7d", "30d"):
+        raise HTTPException(422, "Unsupported backtest time range")
     events = await db.events.find({"org_id": org, "timestamp": {"$gte": _range_to_iso(time_range)}},
-                                  {"_id": 0}).limit(10000).to_list(10000)
+                                  {"_id": 0}).sort([("timestamp", -1), ("id", -1)]).limit(10000).to_list(10000)
+    events.reverse()  # Evaluate the bounded newest window in chronological order.
     alerts, matched = await evaluate_rule(r, events, org)
     return {"would_alert": len(alerts), "matched_events": len(matched),
             "sample": [{"title": a["title"], "severity": a["severity"], "event_count": a["event_count"]} for a in alerts[:10]]}
@@ -696,6 +739,12 @@ async def update_alert(alert_id: str, body: AlertUpdate, request: Request, user=
     a = await db.alerts.find_one({"id": alert_id, "org_id": org}, {"_id": 0})
     if not a:
         raise HTTPException(404, "Alert not found")
+    # An alert cannot reference a missing or cross-tenant investigation.
+    if body.investigation_id is not None and body.investigation_id != a.get("investigation_id"):
+        target = await db.investigations.find_one(
+            {"id": body.investigation_id, "org_id": org}, {"_id": 0})
+        if not target:
+            raise HTTPException(404, "Investigation not found")
     upd, audit_entries = {"updated_at": now_iso()}, []
     for field in ("status", "severity", "assigned_to", "investigation_id"):
         v = getattr(body, field)
@@ -714,6 +763,14 @@ async def update_alert(alert_id: str, body: AlertUpdate, request: Request, user=
     if push:
         mongo_upd.setdefault("$push", {}).update(push)
     await db.alerts.update_one({"id": alert_id, "org_id": org}, mongo_upd)
+    if body.investigation_id is not None and body.investigation_id != a.get("investigation_id"):
+        if a.get("investigation_id"):
+            await db.investigations.update_one(
+                {"id": a["investigation_id"], "org_id": org},
+                {"$pull": {"related_alerts": alert_id}, "$set": {"updated_at": now_iso()}})
+        await db.investigations.update_one(
+            {"id": body.investigation_id, "org_id": org},
+            {"$addToSet": {"related_alerts": alert_id}, "$set": {"updated_at": now_iso()}})
     await audit(org, user, "update", "alert", alert_id, upd)
     return clean(await db.alerts.find_one({"id": alert_id, "org_id": org}, {"_id": 0}))
 
@@ -856,6 +913,58 @@ async def delete_source(source_id: str, request: Request, user=Depends(require_r
 
 
 # ============================= INVESTIGATIONS =============================
+# Reconciliation treats each alert's investigation_id as authoritative.
+# This supports interrupted multi-document updates on standalone MongoDB.
+async def _inspect_investigation_alert_links(org: str, inv_id: str):
+    """Read-only, tenant-scoped consistency check for a single investigation."""
+    inv = await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Investigation not found")
+    linked = await db.alerts.find(
+        {"org_id": org, "investigation_id": inv_id}, {"_id": 0, "id": 1}
+    ).to_list(10001)
+    if len(linked) > 10000:
+        raise HTTPException(409, "Investigation exceeds reconciliation limit")
+    actual = {a["id"] for a in linked}
+    recorded = set(inv.get("related_alerts", []))
+    return {"investigation_id": inv_id, "linked_alerts": len(actual),
+            "missing_from_investigation": sorted(actual - recorded),
+            "stale_in_investigation": sorted(recorded - actual),
+            "consistent": actual == recorded}
+
+
+async def _repair_investigation_alert_links(org: str, inv_id: str):
+    inspection = await _inspect_investigation_alert_links(org, inv_id)
+    if not inspection["consistent"]:
+        # Re-read the authoritative set before replacing the stored list.
+        linked = await db.alerts.find(
+            {"org_id": org, "investigation_id": inv_id}, {"_id": 0, "id": 1}
+        ).to_list(10001)
+        if len(linked) > 10000:
+            raise HTTPException(409, "Investigation exceeds reconciliation limit")
+        ids = list(dict.fromkeys(a["id"] for a in linked))
+        await db.investigations.update_one(
+            {"id": inv_id, "org_id": org},
+            {"$set": {"related_alerts": ids, "updated_at": now_iso()}})
+    return {"investigation_id": inv_id, "linked_alerts": inspection["linked_alerts"],
+            "repaired": not inspection["consistent"]}
+
+
+@api.get("/investigations/{inv_id}/link-health")
+async def investigation_link_health(
+        inv_id: str, request: Request, user=Depends(require_role("soc_manager"))):
+    return await _inspect_investigation_alert_links(active_org(user, request), inv_id)
+
+
+@api.post("/investigations/{inv_id}/repair-links")
+async def repair_investigation_alert_links(
+        inv_id: str, request: Request, user=Depends(require_role("soc_manager"))):
+    org = active_org(user, request)
+    result = await _repair_investigation_alert_links(org, inv_id)
+    await audit(org, user, "repair_alert_links", "investigation", inv_id, result)
+    return result
+
+
 @api.get("/investigations")
 async def list_investigations(request: Request, user=Depends(get_current_user)):
     org = active_org(user, request)
@@ -891,6 +1000,17 @@ async def update_investigation(inv_id: str, body: InvUpdate, request: Request, u
     inv = await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0})
     if not inv:
         raise HTTPException(404, "Investigation not found")
+    # Validate all requested alert links before mutating the investigation.
+    if body.related_alerts is not None:
+        ids = body.related_alerts
+        if (not isinstance(ids, list) or len(ids) > 500
+                or any(not isinstance(item, str) or not item.strip() for item in ids)
+                or len(ids) != len(set(ids))):
+            raise HTTPException(422, "related_alerts must contain up to 500 unique alert IDs")
+        if ids:
+            valid = await db.alerts.count_documents({"id": {"$in": ids}, "org_id": org})
+            if valid != len(ids):
+                raise HTTPException(422, "One or more alerts do not belong to this organization")
     upd = {"updated_at": now_iso()}
     for f in ("status", "priority", "findings", "related_alerts", "related_events"):
         v = getattr(body, f)
@@ -903,7 +1023,28 @@ async def update_investigation(inv_id: str, body: InvUpdate, request: Request, u
         push["tasks"] = {"id": new_id(), "text": body.task, "done": False, "ts": now_iso()}
     mu = {"$set": upd}
     if push: mu["$push"] = push
-    await db.investigations.update_one({"id": inv_id, "org_id": org}, mu)
+    if body.related_alerts is not None:
+        # Standalone MongoDB deployments cannot run multi-document transactions.
+        # Validate the complete link set before writing, then update references.
+        await db.investigations.update_one({"id": inv_id, "org_id": org}, mu)
+        requested = set(body.related_alerts)
+        previous = set(inv.get("related_alerts", []))
+        removed = list(previous - requested)
+        added = list(requested - previous)
+        if removed:
+            await db.alerts.update_many(
+                {"id": {"$in": removed}, "org_id": org, "investigation_id": inv_id},
+                {"$set": {"investigation_id": None, "updated_at": now_iso()}})
+        if added:
+            await db.alerts.update_many(
+                {"id": {"$in": added}, "org_id": org},
+                {"$set": {"investigation_id": inv_id, "updated_at": now_iso()}})
+            await db.investigations.update_many(
+                {"id": {"$ne": inv_id}, "org_id": org, "related_alerts": {"$in": added}},
+                {"$pull": {"related_alerts": {"$in": added}},
+                 "$set": {"updated_at": now_iso()}})
+    else:
+        await db.investigations.update_one({"id": inv_id, "org_id": org}, mu)
     await audit(org, user, "update", "investigation", inv_id)
     return clean(await db.investigations.find_one({"id": inv_id, "org_id": org}, {"_id": 0}))
 

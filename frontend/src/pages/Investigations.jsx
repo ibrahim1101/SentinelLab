@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Plus, Upload, FileText } from "lucide-react";
+import { Plus, Upload, FileText, RefreshCw, ShieldCheck, AlertTriangle } from "lucide-react";
 import client from "@/lib/api";
+import { summarizeInvestigationLinkHealth } from "@/lib/investigationLinkHealth";
 import { Sev, Loading, PageHead, StatusPill, Empty, fmtTime } from "@/components/common";
 import Modal from "@/components/Modal";
 import { toast } from "sonner";
@@ -13,11 +14,58 @@ export default function Investigations() {
   const [sel, setSel] = useState(null);
   const [note, setNote] = useState("");
   const [task, setTask] = useState("");
+  const [linkHealth, setLinkHealth] = useState(null);
+  const [checkingLinks, setCheckingLinks] = useState(false);
 
   const load = () => client.get("/investigations").then(({ data }) => setList(data.investigations));
   useEffect(() => { load(); }, []);
 
-  const open = async (id) => { const { data } = await client.get(`/investigations/${id}`); setSel(data); };
+  const open = async (id) => {
+    setLinkHealth(null);
+    const { data } = await client.get(`/investigations/${id}`);
+    setSel(data);
+  };
+  const checkLinks = async () => {
+    if (!sel) return;
+    setCheckingLinks(true);
+    try {
+      const { data } = await client.get(`/investigations/${sel.investigation.id}/link-health`);
+      setLinkHealth(summarizeInvestigationLinkHealth(data));
+    } catch (err) {
+      toast.error(err.response?.status === 403
+        ? "SOC manager access required for link health"
+        : "Unable to check investigation links");
+    } finally {
+      setCheckingLinks(false);
+    }
+  };
+  const repairLinks = async () => {
+    if (!sel || !linkHealth || linkHealth.consistent) return;
+    setCheckingLinks(true);
+    try {
+      const id = sel.investigation.id;
+      await client.post(`/investigations/${id}/repair-links`);
+      const [details, health] = await Promise.all([
+        client.get(`/investigations/${id}`),
+        client.get(`/investigations/${id}/link-health`),
+      ]);
+      setSel(details.data);
+      const verified = summarizeInvestigationLinkHealth(health.data);
+      setLinkHealth(verified);
+      await load();
+      if (verified.consistent) {
+        toast.success("Investigation links reconciled");
+      } else {
+        toast.error("Some links remain inconsistent. Check again before proceeding.");
+      }
+    } catch (err) {
+      toast.error(err.response?.status === 403
+        ? "SOC manager access required to repair links"
+        : "Unable to repair investigation links");
+    } finally {
+      setCheckingLinks(false);
+    }
+  };
   const create = async (f) => { await client.post("/investigations", f); setNewOpen(false); load(); toast.success("Investigation created"); };
   const update = async (patch) => { const { data } = await client.put(`/investigations/${sel.investigation.id}`, patch); setSel({ ...sel, investigation: data }); load(); };
   const upload = async (e) => {
@@ -65,6 +113,24 @@ export default function Investigations() {
               <textarea className="inp mb-3" rows={3} defaultValue={sel.investigation.findings} onBlur={(e) => update({ findings: e.target.value })} data-testid="inv-findings" />
               <div className="text-[11px] uppercase mb-1" style={{ color: "var(--text-3)" }}>Linked Alerts ({sel.alerts.length})</div>
               {sel.alerts.map((a) => <div key={a.id} className="flex items-center gap-2 py-1 border-b text-[12.5px]"><Sev s={a.severity} /><span style={{ color: "var(--text-2)" }}>{a.title}</span></div>)}
+              <div className="mt-3 border-t pt-3" data-testid="inv-link-health">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] uppercase" style={{ color: "var(--text-3)" }}>Alert link integrity</span>
+                  <button className="btn btn-sm" onClick={checkLinks} disabled={checkingLinks} data-testid="inv-check-links"><RefreshCw size={12} /> {checkingLinks ? "Checking…" : "Check links"}</button>
+                </div>
+                {linkHealth && (
+                  <div className="mt-2 text-[12px]" role="status">
+                    <div className="flex items-center gap-1.5">
+                      {linkHealth.consistent ? <ShieldCheck size={14} /> : <AlertTriangle size={14} />}
+                      <span>{linkHealth.consistent ? "Links are consistent" : "Inconsistent alert links detected"}</span>
+                    </div>
+                    <div style={{ color: "var(--text-2)" }}>Linked alerts: {linkHealth.linkedAlerts} · Missing: {linkHealth.missing} · Stale: {linkHealth.stale}</div>
+                    {!linkHealth.consistent && (
+                      <button className="btn btn-sm mt-2" onClick={repairLinks} disabled={checkingLinks} data-testid="inv-repair-links">Repair links</button>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="text-[11px] uppercase mt-3 mb-1" style={{ color: "var(--text-3)" }}>Notes</div>
               {sel.investigation.notes?.map((n) => <div key={n.id} className="text-[12px] py-1 border-b"><span style={{ color: "var(--cyan)" }}>{n.by}:</span> <span style={{ color: "var(--text-2)" }}>{n.text}</span></div>)}
               <div className="flex gap-2 mt-2"><input className="inp" placeholder="Add note…" value={note} onChange={(e) => setNote(e.target.value)} data-testid="inv-note-input" /><button className="btn btn-sm" onClick={() => { update({ note }); setNote(""); }} data-testid="inv-note-add">Add</button></div>
