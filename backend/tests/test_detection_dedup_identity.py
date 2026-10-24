@@ -327,6 +327,65 @@ def test_timestamp_normalization_does_not_mutate_evaluator_output():
         namespace["evaluate_rule"] = original_evaluator
 
 
+def test_malformed_evaluator_output_does_not_block_later_rule():
+    class TwoRuleCursor:
+        async def to_list(self, limit):
+            return [{"id": "broken-rule"}, {"id": "rule-1"}]
+
+    class TwoRules(Rules):
+        def find(self, *args, **kwargs):
+            return TwoRuleCursor()
+
+    original_rules = db.detection_rules
+    original_evaluator = namespace["evaluate_rule"]
+    db.detection_rules = TwoRules()
+    evaluated = []
+
+    async def malformed_then_valid(rule, events, org_id):
+        evaluated.append(rule["id"])
+        if rule["id"] == "broken-rule":
+            return None, {"event-1"}
+        return await original_evaluator(rule, events, org_id)
+
+    namespace["evaluate_rule"] = malformed_then_valid
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=False))
+        assert evaluated == ["broken-rule", "rule-1"]
+        assert len(created) == 1
+        assert created[0]["id"] == "alert-1"
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.detection_rules = original_rules
+
+
+def test_invalid_matched_event_identifiers_are_isolated():
+    class TwoRuleCursor:
+        async def to_list(self, limit):
+            return [{"id": "broken-rule"}, {"id": "rule-1"}]
+
+    class TwoRules(Rules):
+        def find(self, *args, **kwargs):
+            return TwoRuleCursor()
+
+    original_rules = db.detection_rules
+    original_evaluator = namespace["evaluate_rule"]
+    db.detection_rules = TwoRules()
+
+    async def malformed_then_valid(rule, events, org_id):
+        if rule["id"] == "broken-rule":
+            return [], {"event-1", None}
+        return await original_evaluator(rule, events, org_id)
+
+    namespace["evaluate_rule"] = malformed_then_valid
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=False))
+        assert len(created) == 1
+        assert created[0]["id"] == "alert-1"
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.detection_rules = original_rules
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
