@@ -441,6 +441,29 @@ def test_oversized_matched_event_ids_do_not_block_later_rule():
         namespace["evaluate_rule"], db.detection_rules = original_evaluator, original_rules
 
 
+def test_duplicate_matched_event_ids_are_deduplicated_before_update():
+    class RecordingEvents(Events):
+        def __init__(self):
+            self.updates = []
+        async def update_many(self, query, update):
+            self.updates.append((query, update))
+
+    async def duplicated_matches(rule, events, org_id):
+        return [], ["event-1", "event-1", "event-2", "event-1"]
+
+    original_events, original_evaluator = db.events, namespace["evaluate_rule"]
+    db.events = RecordingEvents()
+    namespace["evaluate_rule"] = duplicated_matches
+    try:
+        assert asyncio.run(namespace["run_detection"]("org-1", [], persist=True)) == []
+        assert len(db.events.updates) == 1
+        query, update = db.events.updates[0]
+        assert query == {"org_id": "org-1", "id": {"$in": ["event-1", "event-2"]}}
+        assert update == {"$addToSet": {"rule_matches": "rule-1"}}
+    finally:
+        namespace["evaluate_rule"], db.events = original_evaluator, original_events
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
