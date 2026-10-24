@@ -464,6 +464,32 @@ def test_duplicate_matched_event_ids_are_deduplicated_before_update():
         namespace["evaluate_rule"], db.events = original_evaluator, original_events
 
 
+def test_evaluator_limits_accept_exact_boundaries():
+    class RecordingEvents(Events):
+        def __init__(self):
+            self.updates = []
+        async def update_many(self, query, update):
+            self.updates.append((query, update))
+
+    original_evaluator, original_events = namespace["evaluate_rule"], db.events
+    db.events = RecordingEvents()
+
+    async def boundary_evaluator(rule, events, org_id):
+        alert = {"id": "alert-boundary", "title": "Boundary alert",
+                 "host": None, "src_ip": None, "related_events": ["event-0"],
+                 "first_seen": "2026-01-01T00:00:00+00:00",
+                 "last_seen": "2026-01-01T00:00:00+00:00"}
+        return [alert] * 500, [f"event-{i}" for i in range(5000)]
+
+    namespace["evaluate_rule"] = boundary_evaluator
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=False))
+        assert len(created) == 500
+        assert db.events.updates == []
+    finally:
+        namespace["evaluate_rule"], db.events = original_evaluator, original_events
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
