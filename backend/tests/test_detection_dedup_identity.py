@@ -490,6 +490,41 @@ def test_evaluator_limits_accept_exact_boundaries():
         namespace["evaluate_rule"], db.events = original_evaluator, original_events
 
 
+def test_persist_accepts_exactly_5000_matched_events_without_alerts():
+    class RecordingEvents(Events):
+        def __init__(self):
+            self.updates = []
+        async def update_many(self, query, update):
+            self.updates.append((query, update))
+
+    class RecordingRules(Rules):
+        def __init__(self):
+            self.updates = []
+        async def update_one(self, query, update):
+            self.updates.append((query, update))
+
+    async def boundary_matches(rule, events, org_id):
+        return [], [f"event-{i:04d}" for i in range(4999, -1, -1)]
+
+    original_events, original_rules = db.events, db.detection_rules
+    original_evaluator = namespace["evaluate_rule"]
+    db.events, db.detection_rules = RecordingEvents(), RecordingRules()
+    namespace["evaluate_rule"] = boundary_matches
+    try:
+        assert asyncio.run(namespace["run_detection"]("org-1", [], persist=True)) == []
+        assert len(db.events.updates) == 1
+        query, update = db.events.updates[0]
+        assert query["org_id"] == "org-1"
+        assert query["id"]["$in"] == [f"event-{i:04d}" for i in range(5000)]
+        assert update == {"$addToSet": {"rule_matches": "rule-1"}}
+        assert len(db.detection_rules.updates) == 1
+        assert db.detection_rules.updates[0][1]["$inc"]["match_count"] == 0
+        assert db.detection_rules.updates[0][1]["$set"]["last_error"] is None
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.events, db.detection_rules = original_events, original_rules
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
