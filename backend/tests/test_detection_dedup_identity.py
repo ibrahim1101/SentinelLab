@@ -304,6 +304,29 @@ def test_alert_timestamps_normalize_to_utc_before_persistence():
         namespace["evaluate_rule"], db.alerts = original_evaluator, original_alerts
 
 
+def test_timestamp_normalization_does_not_mutate_evaluator_output():
+    original_alert = {"id": "alert-offset", "title": "Offset alert",
+                      "host": None, "src_ip": None, "related_events": ["event-1"],
+                      "first_seen": "2026-01-01T06:30:00+05:30",
+                      "last_seen": "2025-12-31T21:00:00-05:00"}
+
+    async def offset_alert(rule, events, org_id):
+        return [original_alert], {"event-1"}
+
+    original_evaluator = namespace["evaluate_rule"]
+    namespace["evaluate_rule"] = offset_alert
+    try:
+        preview = asyncio.run(namespace["run_detection"]("org-1", [], persist=False))
+        assert len(preview) == 1
+        assert preview[0] is not original_alert
+        assert preview[0]["first_seen"] == "2026-01-01T01:00:00+00:00"
+        assert preview[0]["last_seen"] == "2026-01-01T02:00:00+00:00"
+        assert original_alert["first_seen"] == "2026-01-01T06:30:00+05:30"
+        assert original_alert["last_seen"] == "2025-12-31T21:00:00-05:00"
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
