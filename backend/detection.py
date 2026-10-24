@@ -332,7 +332,7 @@ async def run_detection(org_id, events, persist=True):
             continue
         if matched and persist:
             await db.events.update_many(
-                {"org_id": org_id, "id": {"$in": list(matched)}},
+                {"org_id": org_id, "id": {"$in": list(dict.fromkeys(matched))}},
                 {"$addToSet": {"rule_matches": rule["id"]}})
         new_alerts = []
         for a in alerts:
