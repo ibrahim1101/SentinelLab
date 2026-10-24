@@ -525,6 +525,54 @@ def test_persist_accepts_exactly_5000_matched_events_without_alerts():
         db.events, db.detection_rules = original_events, original_rules
 
 
+def test_persist_rejects_5001_matched_events_and_continues():
+    class TwoRuleCursor:
+        async def to_list(self, limit):
+            return [{"id": "oversized-rule"}, {"id": "rule-1"}]
+
+    class RecordingRules(Rules):
+        def __init__(self):
+            self.updates = []
+        def find(self, *args, **kwargs):
+            return TwoRuleCursor()
+        async def update_one(self, query, update):
+            self.updates.append((query, update))
+
+    class RecordingEvents(Events):
+        def __init__(self):
+            self.updates = []
+        async def update_many(self, query, update):
+            self.updates.append((query, update))
+
+    original_rules, original_events, original_alerts = db.detection_rules, db.events, db.alerts
+    original_evaluator = namespace["evaluate_rule"]
+    evaluated = []
+
+    async def oversized_then_valid(rule, events, org_id):
+        evaluated.append(rule["id"])
+        if rule["id"] == "oversized-rule":
+            return [], [f"event-{i}" for i in range(5001)]
+        return await original_evaluator(rule, events, org_id)
+
+    db.detection_rules, db.events, db.alerts = RecordingRules(), RecordingEvents(), Alerts()
+    namespace["evaluate_rule"] = oversized_then_valid
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert evaluated == ["oversized-rule", "rule-1"]
+        assert len(created) == 1
+        assert len(db.alerts.inserted) == 1
+        assert len(db.events.updates) == 1
+        assert db.events.updates[0][0]["id"]["$in"] == ["event-1"]
+        failed = [update for query, update in db.detection_rules.updates
+                  if query["id"] == "oversized-rule"]
+        assert len(failed) == 1
+        assert failed[0]["$set"]["last_error"] == "ValueError: detection evaluation failed"
+        assert "match_count" not in failed[0].get("$inc", {})
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
