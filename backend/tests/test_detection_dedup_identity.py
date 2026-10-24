@@ -621,6 +621,54 @@ def test_persist_rejects_501_alerts_without_partial_inserts():
         db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
 
 
+def test_persist_rejects_invalid_matched_ids_without_event_writes():
+    class TwoRuleCursor:
+        async def to_list(self, limit):
+            return [{"id": "broken-rule"}, {"id": "rule-1"}]
+
+    class RecordingRules(Rules):
+        def __init__(self):
+            self.updates = []
+        def find(self, *args, **kwargs):
+            return TwoRuleCursor()
+        async def update_one(self, query, update):
+            self.updates.append((query, update))
+
+    class RecordingEvents(Events):
+        def __init__(self):
+            self.updates = []
+        async def update_many(self, query, update):
+            self.updates.append((query, update))
+
+    original_rules, original_events, original_alerts = db.detection_rules, db.events, db.alerts
+    original_evaluator = namespace["evaluate_rule"]
+    evaluated = []
+
+    async def invalid_then_valid(rule, events, org_id):
+        evaluated.append(rule["id"])
+        if rule["id"] == "broken-rule":
+            return [], ["event-valid", "", None]
+        return await original_evaluator(rule, events, org_id)
+
+    db.detection_rules, db.events, db.alerts = RecordingRules(), RecordingEvents(), Alerts()
+    namespace["evaluate_rule"] = invalid_then_valid
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert evaluated == ["broken-rule", "rule-1"]
+        assert len(created) == 1 and created[0]["id"] == "alert-1"
+        assert len(db.alerts.inserted) == 1
+        assert len(db.events.updates) == 1
+        assert db.events.updates[0][0]["id"]["$in"] == ["event-1"]
+        failed = [update for query, update in db.detection_rules.updates
+                  if query["id"] == "broken-rule"]
+        assert len(failed) == 1
+        assert failed[0]["$set"]["last_error"] == "ValueError: detection evaluation failed"
+        assert "$inc" not in failed[0]
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
