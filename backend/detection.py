@@ -317,6 +317,8 @@ async def run_detection(org_id, events, persist=True):
             alerts, matched = await evaluate_rule(rule, events, org_id)
             if not isinstance(alerts, (list, tuple)) or not isinstance(matched, (set, list, tuple)):
                 raise ValueError("Invalid detection evaluator result")
+            if len(alerts) > 500 or len(matched) > 5000:
+                raise ValueError("Detection evaluator result exceeds per-rule limits")
             if any(not isinstance(event_id, str) or not event_id.strip() or len(event_id) > 128
                    for event_id in matched):
                 raise ValueError("Invalid matched event identifiers")
