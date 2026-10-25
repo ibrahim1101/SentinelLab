@@ -938,6 +938,55 @@ def test_persist_rejects_129_character_matched_event_id():
         db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
 
 
+def test_persist_accepts_128_character_stored_rule_id():
+    rule_id = "r" * 128
+
+    class BoundaryCursor:
+        async def to_list(self, limit):
+            return [{"id": rule_id, "enabled": True}]
+
+    class RecordingRules(Rules):
+        def __init__(self):
+            self.updates = []
+        def find(self, *args, **kwargs):
+            return BoundaryCursor()
+        async def update_one(self, query, update):
+            self.updates.append((query, update))
+
+    class RecordingEvents(Events):
+        def __init__(self):
+            self.updates = []
+        async def update_many(self, query, update):
+            self.updates.append((query, update))
+
+    original_rules, original_events, original_alerts = db.detection_rules, db.events, db.alerts
+    original_evaluator = namespace["evaluate_rule"]
+    evaluated = []
+
+    async def boundary_evaluator(rule, events, org_id):
+        evaluated.append(rule["id"])
+        return [], ["event-1"]
+
+    db.detection_rules, db.events, db.alerts = RecordingRules(), RecordingEvents(), Alerts()
+    namespace["evaluate_rule"] = boundary_evaluator
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert created == []
+        assert evaluated == [rule_id]
+        assert db.events.updates == [
+            ({"org_id": "org-1", "id": {"$in": ["event-1"]}},
+             {"$addToSet": {"rule_matches": rule_id}})
+        ]
+        assert len(db.detection_rules.updates) == 1
+        assert db.detection_rules.updates[0][0] == {"id": rule_id, "org_id": "org-1"}
+        assert db.detection_rules.updates[0][1]["$set"]["last_error"] is None
+        assert db.detection_rules.updates[0][1]["$inc"]["match_count"] == 0
+        assert db.alerts.inserted == []
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
