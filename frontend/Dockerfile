@@ -3,7 +3,9 @@ ARG NGINX_BASE_IMAGE=nginx:1.27-alpine
 FROM ${NODE_BASE_IMAGE} AS build
 WORKDIR /app
 COPY package.json ./
-RUN yarn install --non-interactive --no-lockfile
+# Use npm's canonical registry rather than the Yarn mirror for tarball downloads.
+RUN yarn config set registry https://registry.npmjs.org && \
+    yarn install --non-interactive --no-lockfile
 COPY . .
 ENV REACT_APP_BACKEND_URL=""
 ENV CI=false
