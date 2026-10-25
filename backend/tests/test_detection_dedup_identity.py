@@ -987,6 +987,30 @@ def test_persist_accepts_128_character_stored_rule_id():
         db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
 
 
+def test_persist_accepts_128_character_generated_alert_id():
+    original_alerts = db.alerts
+    original_evaluator = namespace["evaluate_rule"]
+    alert_id = "a" * 128
+
+    async def boundary_evaluator(rule, events, org_id):
+        alerts, matched = await original_evaluator(rule, events, org_id)
+        return [dict(alerts[0], id=alert_id)], matched
+
+    db.alerts = Alerts()
+    namespace["evaluate_rule"] = boundary_evaluator
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert len(created) == 1
+        assert created[0]["id"] == alert_id
+        assert len(db.alerts.lookups) == 1
+        assert len(db.alerts.inserted) == 1
+        assert db.alerts.inserted[0]["id"] == alert_id
+        assert db.alerts.inserted[0] == created[0]
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.alerts = original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
