@@ -860,6 +860,36 @@ def test_persist_skips_malformed_stored_rule_ids_without_writes():
         db.detection_rules, db.events, db.alerts = original_rules, original_events, original_alerts
 
 
+def test_persist_accepts_128_character_matched_event_id():
+    class RecordingEvents(Events):
+        def __init__(self):
+            self.updates = []
+        async def update_many(self, query, update):
+            self.updates.append((query, update))
+
+    original_events, original_alerts = db.events, db.alerts
+    original_evaluator = namespace["evaluate_rule"]
+    event_id = "e" * 128
+
+    async def boundary_evaluator(rule, events, org_id):
+        return [], [event_id]
+
+    db.events, db.alerts = RecordingEvents(), Alerts()
+    namespace["evaluate_rule"] = boundary_evaluator
+    try:
+        created = asyncio.run(namespace["run_detection"]("org-1", [], persist=True))
+        assert created == []
+        assert db.events.updates == [
+            ({"org_id": "org-1", "id": {"$in": [event_id]}},
+             {"$addToSet": {"rule_matches": "rule-1"}})
+        ]
+        assert db.alerts.inserted == []
+        assert db.alerts.lookups == []
+    finally:
+        namespace["evaluate_rule"] = original_evaluator
+        db.events, db.alerts = original_events, original_alerts
+
+
 def test_dedup_update_keeps_latest_seen_timestamp():
     class ExistingAlerts(Alerts):
         def __init__(self):
