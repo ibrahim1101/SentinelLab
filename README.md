@@ -68,3 +68,6 @@ SentinelLab's original project code is released under the **GNU General Public L
 You may use, modify and redistribute the GPL-covered code under GPLv3 terms, including commercially. When conveying covered modified versions, you must satisfy GPLv3 requirements, including providing corresponding source and preserving required notices. GPLv3 does not prohibit commercial use.
 
 **Third-party notices:** SentinelLab includes and depends on components, generated assets, and tooling with their own copyright and licensing terms. The GPL declaration applies only to code and assets that the project copyright holder is authorized to license. It does not relicense independently owned third-party materials. Review third-party notices and redistribution obligations before distributing desktop installers. See [Third-party licensing notes](docs/THIRD_PARTY_LICENSE_REVIEW.md).
+
+
+Optional demo accounts require `ENABLE_DEMO_ACCOUNTS=true` and a unique `DEMO_ACCOUNT_PASSWORD` of at least 12 characters. Newly created demo analysts can access only the training workspace. Existing demo accounts are not modified automatically; review their workspace membership and rotate their password. A warning is logged if the existing demo analyst has production access.
