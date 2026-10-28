@@ -24,6 +24,7 @@ from core import (db, new_id, now_iso, hash_password, verify_password, create_ac
 from parsers import parse_payload, normalize
 from detection import run_detection, evaluate_rule
 import seed as seedmod
+from demo_account import seed_demo_account
 import ai_assistant
 import playbooks as pbmod
 import webhooks as wh
@@ -1885,11 +1886,8 @@ async def startup():
                                    "theme": "obsidian_dark", "created_at": now_iso()})
     elif not existing.get("username") and not await db.users.find_one({"username": admin_username}):
         await db.users.update_one({"id": existing["id"]}, {"$set": {"username": admin_username}})
-    if os.environ.get("ENABLE_DEMO_ACCOUNTS") == "true" and not await db.users.find_one({"email": "analyst@sentinellab.io"}):
-        await db.users.insert_one({"id": new_id(), "email": "analyst@sentinellab.io", "name": "SOC Analyst",
-                                   "password_hash": hash_password("Analyst@2026"), "role": "analyst",
-                                   "org_ids": [PROD_ORG, TRAIN_ORG], "default_org": TRAIN_ORG,
-                                   "theme": "obsidian_dark", "created_at": now_iso()})
+    await seed_demo_account(db.users, os.environ.get("ENABLE_DEMO_ACCOUNTS") == "true",
+                            os.environ.get("DEMO_ACCOUNT_PASSWORD"), TRAIN_ORG, new_id, now_iso, hash_password, logger)
     if await db.detection_rules.count_documents({"org_id": PROD_ORG}) == 0:
         for r in seedmod.builtin_rules(PROD_ORG):
             await db.detection_rules.insert_one(r)
