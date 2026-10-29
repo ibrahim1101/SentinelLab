@@ -1,5 +1,15 @@
 # SentinelLab — Feature Matrix
 
+## Reading this matrix as of 30 October 2026
+
+The early milestone tables are historical. Their `Tested` labels and `Not Started` entries are not a current release certification; use the dated alpha override and exact source branch/commit.
+
+- `backend/server.py` implements summary downloads as JSON and CSV in this default snapshot. Do not claim native PDF export from that API; a separately authored investigation PDF is a different artifact.
+- `backend/playbooks.py` records external isolation, blocking, account-disable and notification steps as simulated without a live system, including after approval. Local indicator lookup is not a live reputation-provider integration.
+- Full installed-desktop ingest-to-report and tenant-boundary acceptance remain separate gates. Narrow tests, historical manual checks and packaging jobs do not establish complete SOC readiness.
+- CI outcomes are branch-specific. Review current Actions and the exact SHA rather than treating historical green status as a current repository-wide result.
+
+
 Statuses: `Not Started` · `In Progress` · `Implemented` · `Tested` · `Blocked`
 (Never mark `Tested` unless relevant tests passed.)
 
